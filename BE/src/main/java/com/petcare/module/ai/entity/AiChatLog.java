@@ -83,6 +83,11 @@ public class AiChatLog extends CreatedAtEntity {
     @Column(name = "used_pet_context", nullable = false)
     private boolean usedPetContext;
 
+    /** Ý định của lượt hỏi (V57, docs/adr/0136 D4): nhãn thống kê, không chứa nội dung. Dòng cũ là NULL. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "intent", length = 30)
+    private ChatIntent intent;
+
     /**
      * Một dòng nhật ký (BR-AI-24). {@code question} và {@code answer} phải là bản <b>đã che</b> (BR-AI-12); các kết quả
      * cá nhân và {@code NEED_LOGIN} truyền {@code null} cho mọi trường nội dung. Câu hỏi quá {@value #QUESTION_MAX_LENGTH}
@@ -90,7 +95,7 @@ public class AiChatLog extends CreatedAtEntity {
      */
     public static AiChatLog of(ChatResult result, ChatErrorKind errorKind, ChatSourceType sourceType, String question,
             String answer, BigDecimal topSimilarity, Long[] sourceDocumentIds, String llmModel, Integer inputTokens,
-            Integer outputTokens, Integer thoughtTokens, int latencyMs, boolean usedPetContext) {
+            Integer outputTokens, Integer thoughtTokens, int latencyMs, boolean usedPetContext, ChatIntent intent) {
         AiChatLog log = new AiChatLog();
         log.result = result;
         log.errorKind = errorKind;
@@ -106,6 +111,7 @@ public class AiChatLog extends CreatedAtEntity {
         log.thoughtTokens = thoughtTokens;
         log.latencyMs = latencyMs;
         log.usedPetContext = usedPetContext;
+        log.intent = intent;
         return log;
     }
 }

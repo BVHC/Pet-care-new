@@ -18,7 +18,9 @@ import com.petcare.module.ai.dto.ChatSource;
 import com.petcare.module.ai.dto.EmergencyBranch;
 import com.petcare.module.ai.entity.AiChatLog;
 import com.petcare.module.ai.entity.ChatErrorKind;
+import com.petcare.module.ai.entity.ChatIntent;
 import com.petcare.module.ai.entity.ChatResult;
+import com.petcare.module.ai.entity.ChatSourceType;
 import com.petcare.module.ai.exception.ChatValidationException;
 import com.petcare.module.ai.llm.AiProviderException;
 import com.petcare.module.ai.llm.EmbeddingClient;
@@ -130,13 +132,17 @@ public class ChatService {
         Trace trace = new Trace(withoutPetNames, started);
 
         if (emergency.isEmergency(masked)) {
+            trace.intent = ChatIntent.EMERGENCY;
             return finish(emergencyResponse(), trace, true);
         }
         if (router.isMedicalRecordQuestion(masked, petNames)) {
+            trace.intent = ChatIntent.MEDICAL_RECORD;
             return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_RECORD, false), trace, true);
         }
         Optional<PersonalIntent> intent = router.detect(masked, petNames);
         if (intent.isPresent()) {
+            trace.intent = intent.get() == PersonalIntent.APPOINTMENT_UPCOMING ? ChatIntent.APPOINTMENT_UPCOMING
+                    : ChatIntent.VACCINATION_SCHEDULE;
             // Câu cá nhân không ghi nội dung vào nhật ký (BR-AI-24).
             return finish(viewer.signedIn() ? personalResponse(intent.get(), viewer, masked)
                     : ChatResponse.canned(ChatResult.NEED_LOGIN, ChatTexts.NEED_LOGIN, false), trace, false);
@@ -145,18 +151,24 @@ public class ChatService {
             // BR-AI-31: giá dịch vụ và chi nhánh từ CSDL, trước hai lớp T92 và truy hồi; không nhúng, không gọi mô hình.
             Optional<String> reply = business.answer(withoutPetNames);
             if (reply.isPresent()) {
+                // Hỏi cả giá lẫn chi nhánh thì ghi giá; "phí" + tên dịch vụ cũng là giá.
+                trace.intent = BusinessIntents.isBranch(withoutPetNames) && !BusinessIntents.isPrice(withoutPetNames)
+                        ? ChatIntent.BUSINESS_BRANCH : ChatIntent.BUSINESS_PRICE;
                 return finish(ChatResponse.database(reply.get()), trace, true);
             }
         }
         boolean general = config.getBool(ConfigKey.AI_CHAT_GENERAL_KNOWLEDGE_ENABLED);
+        // Chế độ mở (docs/adr/0136 "Đã cài ở T92 (phần 2)"): chỉ khách đã đăng nhập, nên endpoint công khai không bao giờ đọc khóa.
+        boolean open = general && viewer.signedIn() && config.getBool(ConfigKey.AI_CHAT_OPEN_DOMAIN_ENABLED);
         if (general && GeneralKnowledgeGuards.isGreeting(masked)) {
             return finish(ChatResponse.canned(ChatResult.ANSWERED, ChatTexts.GREETING, false), trace, true);
         }
         if (general && GeneralKnowledgeGuards.isMedicalRisk(masked)) {
+            trace.intent = ChatIntent.MEDICAL_RISK;
             return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_REFUSAL, true), trace, true);
         }
         return retrieveAndAnswer(withoutPetNames, maskedPrevious.stream().map(text -> maskPetNames(text, petNames)).toList(),
-                trace, general, petContextOf(viewer, masked, withoutPetNames, petNames));
+                trace, general, open, petContextOf(viewer, masked, withoutPetNames, petNames));
     }
 
     /**
@@ -190,7 +202,7 @@ public class ChatService {
                 : ChatResponse.personal(reply.answer(), reply.bookingHint());
     }
 
-    private ChatResponse retrieveAndAnswer(String question, List<String> previous, Trace trace, boolean general,
+    private ChatResponse retrieveAndAnswer(String question, List<String> previous, Trace trace, boolean general, boolean open,
             String petContextBlock) {
         List<RetrievedChunk> nearest;
         try {
@@ -213,23 +225,46 @@ public class ChatService {
             // Công tắc bật (docs/adr/0136): lời nhắc v2, kể cả khi không có đoạn nào đạt τ (khối tài liệu rỗng).
             // Cờ nhật ký bật đúng lúc khối được gửi đi (BR-AI-32): nhánh OUT_OF_SCOPE ở trên không gửi gì nên ghi false.
             trace.usedPetContext = petContextBlock != null;
-            reply = llm.generate(ChatPrompt.system(general, petContextBlock != null),
-                    ChatPrompt.userBlock(hits, petContextBlock, previous, question));
+            String userBlock = ChatPrompt.userBlock(hits, petContextBlock, previous, question);
+            reply = open ? llm.generateCategorized(ChatPrompt.systemOpen(petContextBlock != null), userBlock)
+                    : llm.generate(ChatPrompt.system(general, petContextBlock != null), userBlock);
         } catch (AiProviderException e) {
             return unavailable(e, trace);
         }
         trace.llm = reply;
-        if (!reply.inScope() || ChatPrompt.leaksSystemPrompt(reply.answer())) {
+        CategoryMapper.Decision decision = open ? CategoryMapper.decide(reply.category(), !hits.isEmpty()) : null;
+        trace.intent = open ? decision.intent() : reply.inScope() ? ChatIntent.PET_CARE : ChatIntent.UNKNOWN;
+        if (open ? decision.verdict() == CategoryMapper.Verdict.REFUSE_SCOPE : !reply.inScope()) {
             return finish(outOfScope(), trace, true);
         }
-        if (doseGuard.violates(reply.answer())) {
+        if (ChatPrompt.leaksSystemPrompt(reply.answer())) {
+            trace.intent = ChatIntent.UNKNOWN;
+            return finish(outOfScope(), trace, true);
+        }
+        if (open && decision.verdict() == CategoryMapper.Verdict.REFUSE_MEDICAL || doseGuard.violates(reply.answer())) {
+            trace.intent = ChatIntent.MEDICAL_RISK;
             return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_REFUSAL, true), trace, true);
+        }
+        if (open && decision.verdict() == CategoryMapper.Verdict.OPEN) {
+            // Ngoài lĩnh vực thú cưng: không giả vờ lấy từ tài liệu của phòng khám dù có đoạn đạt τ; nguồn lấy từ category.
+            return finish(ChatResponse.answered(openAnswer(reply.answer()), List.of(), ChatTexts.OPEN_DISCLAIMER,
+                    ChatSourceType.GENERAL_KNOWLEDGE), trace, true);
         }
         String answer = reply.answer();
         if (hits.isEmpty() && !answer.startsWith(ChatTexts.GENERAL_PREFIX)) {
             answer = ChatTexts.GENERAL_PREFIX + " " + answer;   // không có tài liệu làm căn cứ: không giả vờ lấy từ tài liệu nội bộ
         }
         return finish(ChatResponse.answered(answer, sourcesOf(hits), ChatTexts.DISCLAIMER), trace, true);
+    }
+
+    /** Mở đầu đúng một lần bằng tiền tố của chế độ mở; tiền tố ngắn của kiến thức chung (nếu mô hình dùng) bị thay, không chồng. */
+    private static String openAnswer(String answer) {
+        if (answer.startsWith(ChatTexts.OPEN_PREFIX)) {
+            return answer;
+        }
+        String body = answer.startsWith(ChatTexts.GENERAL_PREFIX) ? answer.substring(ChatTexts.GENERAL_PREFIX.length()).strip()
+                : answer;
+        return ChatTexts.OPEN_PREFIX + " " + body;
     }
 
     /** Tối đa 3 tài liệu có đoạn tương đồng cao nhất, không trùng (BR-AI-05); {@code hits} đã sắp giảm dần. */
@@ -270,7 +305,7 @@ public class ChatService {
         logs.save(AiChatLog.of(response.result(), errorKind, response.sourceType(), logContent ? trace.question : null,
                 logContent ? PiiMasker.mask(response.answer()) : null, similarityOf(trace), sourceIds, trace.llmModel,
                 usage == null ? null : usage.inputTokens(), usage == null ? null : usage.outputTokens(),
-                usage == null ? null : usage.thoughtTokens(), trace.latencyMs(), trace.usedPetContext));
+                usage == null ? null : usage.thoughtTokens(), trace.latencyMs(), trace.usedPetContext, trace.intent));
         return response;
     }
 
@@ -323,6 +358,8 @@ public class ChatService {
         LlmAnswer llm;
         ChatErrorKind errorKind;
         boolean usedPetContext;
+        /** Ý định ghi vào nhật ký (V57); mỗi nhánh của {@code run} đặt lại khi biết, mặc định {@code UNKNOWN}. */
+        ChatIntent intent = ChatIntent.UNKNOWN;
 
         Trace(String question, long startedNanos) {
             this.question = question;

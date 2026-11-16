@@ -28,7 +28,8 @@ class ConfigKeyTest {
         // + 1 công tắc BOOL ai.chat.business_intent_enabled (V53, docs/adr/0134 "Đã cài ở T90") = 87
         // − 6 khóa complaint.* + 1 khóa feedback.retention_days (V51, docs/adr/0122, 0131) = 82
         // + 1 công tắc BOOL ai.chat.pet_context_enabled (V56, docs/adr/0135 "Đã cài ở T91") = 83
-        assertThat(ConfigKey.values()).hasSize(83);
+        // + 1 công tắc BOOL ai.chat.open_domain_enabled (V57, docs/adr/0136 "Đã cài ở T92 (phần 2)") = 84
+        assertThat(ConfigKey.values()).hasSize(84);
     }
 
     @Test
@@ -53,6 +54,6 @@ class ConfigKeyTest {
     @Test
     void aiKeysCoverSpec07Section46() {
         assertThat(Arrays.stream(ConfigKey.values()).map(ConfigKey::key).filter(key -> key.startsWith("ai.")))
-                .hasSize(21);
+                .hasSize(22); // + ai.chat.open_domain_enabled (V57)
     }
 }

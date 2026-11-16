@@ -200,7 +200,30 @@ class AiSchemaIT {
 
         assertThat(columns).containsExactlyInAnyOrder("id", "result", "error_kind", "question", "answer",
                 "top_similarity", "source_document_ids", "llm_model", "input_tokens", "output_tokens",
-                "thought_tokens", "latency_ms", "created_at", "source_type", "used_pet_context");
+                "thought_tokens", "latency_ms", "created_at", "source_type", "used_pet_context", "intent");
+    }
+
+    /** V57 (docs/adr/0136 D4): mười ý định của nhật ký và NULL (dòng cũ); giá trị khác bị CSDL từ chối. */
+    @ParameterizedTest
+    @CsvSource({"EMERGENCY", "MEDICAL_RECORD", "APPOINTMENT_UPCOMING", "VACCINATION_SCHEDULE", "BUSINESS_PRICE", "BUSINESS_BRANCH",
+            "PET_CARE", "MEDICAL_RISK", "OUT_OF_DOMAIN", "UNKNOWN"})
+    void chatLogIntentAcceptsTheTenIntentsOfAdr0136(String intent) {
+        assertThat(chatLogWithIntent("ANSWERED", intent)).isOne();
+    }
+
+    @Test
+    void chatLogIntentIsOptionalAndRejectsAnythingElse() {
+        assertThat(chatLogWithIntent("OUT_OF_SCOPE", null)).isOne();
+        assertThatThrownBy(() -> chatLogWithIntent("ANSWERED", "WEATHER")).hasMessageContaining("ck_ai_chat_logs_intent");
+        assertThatThrownBy(() -> chatLogWithIntent("ANSWERED", "pet_care")).hasMessageContaining("ck_ai_chat_logs_intent");
+    }
+
+    @Test
+    void theOpenDomainSwitchStartsOffAndIsABooleanConfig() {
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT value, value_type FROM system_configs WHERE key = 'ai.chat.open_domain_enabled'");
+
+        assertThat(row).containsEntry("value", "false").containsEntry("value_type", "BOOL");
     }
 
     /** V53 (BR-AI-34): năm nguồn của câu trả lời và NULL (OUT_OF_SCOPE, UNAVAILABLE, dòng cũ); giá trị khác bị CSDL từ chối. */
@@ -450,6 +473,12 @@ class AiSchemaIT {
         return jdbc.update("""
                 INSERT INTO ai_chat_logs (result, error_kind, question, answer, llm_model, latency_ms)
                 VALUES (?, ?, ?, ?, ?, 12)""", result, errorKind, question, answer, TAG);
+    }
+
+    private int chatLogWithIntent(String result, String intent) {
+        return jdbc.update("""
+                INSERT INTO ai_chat_logs (result, intent, llm_model, latency_ms) VALUES (?, ?, ?, 12)""",
+                result, intent, TAG);
     }
 
     private int chatLogWithSource(String result, String sourceType) {

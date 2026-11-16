@@ -27,6 +27,12 @@ public final class ChatTexts {
     public static final String DISCLAIMER = "Thông tin tham khảo, không thay thế khám thú y.";
     /** Tiền tố bắt buộc khi trả lời bằng kiến thức chung (không có tài liệu nội bộ làm căn cứ), BR-AI-33. */
     public static final String GENERAL_PREFIX = "Thông tin tham khảo chung:";
+    /**
+     * Chế độ mở (docs/adr/0136 "Đã cài ở T92 (phần 2)"): tiền tố bắt buộc của câu ngoài lĩnh vực thú cưng và câu lưu ý đi kèm.
+     * Cố ý KHÔNG bắt đầu bằng {@link #GENERAL_PREFIX} (dấu hai chấm nằm sau "ngoài lĩnh vực thú cưng") để hai tiền tố không nhầm nhau.
+     */
+    public static final String OPEN_PREFIX = "Thông tin tham khảo chung (ngoài lĩnh vực thú cưng):";
+    public static final String OPEN_DISCLAIMER = "Thông tin tham khảo chung, không thay thế ý kiến chuyên gia.";
     public static final String GREETING = "Chào bạn! Mình là trợ lý AI của Pet Care. Bạn cứ hỏi về chăm sóc, dinh dưỡng, "
             + "vệ sinh hay lịch tiêm của chó mèo nhé.";
     public static final String NEED_PET_CHOICE = "Bạn muốn xem lịch tiêm của bé nào?";

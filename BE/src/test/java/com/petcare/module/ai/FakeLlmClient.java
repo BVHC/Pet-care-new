@@ -5,6 +5,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
 import com.petcare.module.ai.llm.AiProviderException;
+import com.petcare.module.ai.llm.AnswerCategory;
 import com.petcare.module.ai.llm.LlmAnswer;
 import com.petcare.module.ai.llm.LlmClient;
 
@@ -17,8 +18,14 @@ public class FakeLlmClient implements LlmClient {
     public static final String MODEL = "fake-llm-it";
     public static final LlmAnswer DEFAULT_ANSWER = new LlmAnswer(true, "Câu trả lời thử nghiệm.", 120, 18, 0);
 
-    /** Một lệnh gọi đã nhận: đúng hai tham số của {@link LlmClient#generate}. */
-    public record Call(String systemPrompt, String userBlock) {
+    /**
+     * Một lệnh gọi đã nhận: hai tham số của {@link LlmClient#generate} cùng cờ {@code categorized} (đi qua
+     * {@link LlmClient#generateCategorized}, tức lược đồ {@code {category, answer}} của chế độ mở).
+     */
+    public record Call(String systemPrompt, String userBlock, boolean categorized) {
+        public Call(String systemPrompt, String userBlock) {
+            this(systemPrompt, userBlock, false);
+        }
     }
 
     private final List<Call> calls = new CopyOnWriteArrayList<>();
@@ -46,6 +53,12 @@ public class FakeLlmClient implements LlmClient {
         reply(new LlmAnswer(inScope, answer, 120, 18, 0));
     }
 
+    /** Câu trả lời của lược đồ {@code {category, answer}}; {@code category} {@code null} là giá trị thiếu hoặc lạ. */
+    public void reply(AnswerCategory category, String answer) {
+        reply(new LlmAnswer(category == AnswerCategory.PET_CARE || category == AnswerCategory.OUT_OF_DOMAIN, answer, 120, 18, 0,
+                category));
+    }
+
     /** Mọi lệnh gọi sau đó ném {@code error}. */
     public void failWith(AiProviderException error) {
         failure = error;
@@ -62,7 +75,15 @@ public class FakeLlmClient implements LlmClient {
 
     @Override
     public LlmAnswer generate(String systemPrompt, String userBlock) {
-        Call call = new Call(systemPrompt, userBlock);
+        return answer(new Call(systemPrompt, userBlock, false));
+    }
+
+    @Override
+    public LlmAnswer generateCategorized(String systemPrompt, String userBlock) {
+        return answer(new Call(systemPrompt, userBlock, true));
+    }
+
+    private LlmAnswer answer(Call call) {
         calls.add(call);
         beforeCall.run();
         if (failure != null) {
