@@ -1,0 +1,158 @@
+package com.petcare.module.workforce;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+
+import com.petcare.TestcontainersConfiguration;
+import com.petcare.module.workforce.entity.ShiftDefinition;
+import com.petcare.module.workforce.repository.ShiftAssignmentRepository;
+import com.petcare.module.workforce.repository.ShiftDefinitionRepository;
+import com.petcare.support.MutableClock;
+
+/**
+ * Truy vấn của repository workforce (docs/adr/0138): tên ca trùng không phân biệt hoa thường, đếm phân ca
+ * {@code SCHEDULED} từ hôm nay, "có phân ca bất kỳ", danh sách ca theo giờ, và entity {@code ShiftDefinition} ghi / đọc
+ * đúng cột (lần đầu {@code ddl-auto=validate} kiểm bảng V36 + V55 với entity). Era <b>năm 2044</b>.
+ */
+@SpringBootTest
+@ActiveProfiles("test")
+@Import({TestcontainersConfiguration.class, WorkforceRepositoryIT.TestBeans.class})
+class WorkforceRepositoryIT {
+
+    private static final Instant NOW = Instant.parse("2044-03-14T01:00:00Z");
+    private static final LocalDate TODAY = LocalDate.of(2044, 3, 14);
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class TestBeans {
+        @Bean
+        @Primary
+        MutableClock mutableClock() {
+            return new MutableClock(NOW);
+        }
+    }
+
+    @Autowired
+    private JdbcTemplate jdbc;
+    @Autowired
+    private PlatformTransactionManager transactionManager;
+    @Autowired
+    private ShiftDefinitionRepository definitions;
+    @Autowired
+    private ShiftAssignmentRepository assignments;
+    @Autowired
+    private MutableClock clock;
+
+    private WorkforceItSupport data;
+    private TransactionTemplate tx;
+    private long branch;
+    private long otherBranch;
+    private long staff;
+
+    @BeforeEach
+    void setUp() {
+        clock.set(NOW);
+        data = new WorkforceItSupport(jdbc);
+        tx = new TransactionTemplate(transactionManager);
+        branch = data.branch();
+        otherBranch = data.branch();
+        staff = data.staff("RECEPTIONIST", branch);
+    }
+
+    @AfterEach
+    void tearDown() {
+        data.cleanUp();
+    }
+
+    private ShiftDefinition save(long branchId, String name, LocalTime start, LocalTime end) {
+        return tx.execute(status -> definitions.saveAndFlush(ShiftDefinition.create(branchId, name, start, end)));
+    }
+
+    @Test
+    void entityRoundTripsThroughTheV36Table() {
+        ShiftDefinition saved = save(branch, "Ca sáng", LocalTime.of(8, 0), LocalTime.of(12, 0));
+
+        ShiftDefinition loaded = definitions.findById(saved.getId()).orElseThrow();
+        assertThat(loaded.getBranchId()).isEqualTo(branch);
+        assertThat(loaded.getName()).isEqualTo("Ca sáng");
+        assertThat(loaded.getStartTime()).isEqualTo(LocalTime.of(8, 0));
+        assertThat(loaded.getEndTime()).isEqualTo(LocalTime.of(12, 0));
+        assertThat(loaded.isActive()).isTrue();
+        assertThat(loaded.getCreatedAt()).isEqualTo(NOW);
+        assertThat(loaded.getUpdatedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void nameExistsIgnoresCaseAndHonoursBranchAndExclusion() {
+        ShiftDefinition saved = save(branch, "Ca Sáng", LocalTime.of(8, 0), LocalTime.of(12, 0));
+
+        assertThat(definitions.existsByBranchAndName(branch, "ca sáng", null)).isTrue();
+        assertThat(definitions.existsByBranchAndName(branch, "CA SÁNG", null)).isTrue();
+        assertThat(definitions.existsByBranchAndName(branch, "Ca chiều", null)).isFalse();
+        assertThat(definitions.existsByBranchAndName(otherBranch, "Ca Sáng", null)).isFalse();
+        assertThat(definitions.existsByBranchAndName(branch, "ca sáng", saved.getId())).isFalse();
+    }
+
+    @Test
+    void definitionsAreListedByStartTimeAndActiveOnlyFiltersStoppedOnes() {
+        ShiftDefinition evening = save(branch, "Tối", LocalTime.of(14, 0), LocalTime.of(19, 0));
+        ShiftDefinition morning = save(branch, "Sáng", LocalTime.of(8, 0), LocalTime.of(12, 0));
+        ShiftDefinition stopped = save(branch, "Cũ", LocalTime.of(6, 0), LocalTime.of(7, 0));
+        tx.executeWithoutResult(status -> definitions.findByIdForUpdate(stopped.getId()).orElseThrow().deactivate());
+        save(otherBranch, "Khác chi nhánh", LocalTime.of(5, 0), LocalTime.of(6, 0));
+
+        assertThat(definitions.findByBranch(branch, false)).extracting(ShiftDefinition::getId)
+                .containsExactly(stopped.getId(), morning.getId(), evening.getId());
+        assertThat(definitions.findByBranch(branch, true)).extracting(ShiftDefinition::getId)
+                .containsExactly(morning.getId(), evening.getId());
+    }
+
+    @Test
+    void scheduledCountStartsFromGivenDateAndIgnoresOtherStatuses() {
+        long definition = data.definition(branch, "Sáng", LocalTime.of(8, 0), LocalTime.of(12, 0), true);
+        data.assignment(branch, staff, definition, TODAY.minusDays(1), "SCHEDULED", "SELF", null);
+        data.assignment(branch, staff, definition, TODAY, "SCHEDULED", "SELF", null);
+        data.assignment(branch, staff, definition, TODAY.plusDays(1), "SCHEDULED", "MANAGER", null);
+        data.assignment(branch, staff, definition, TODAY.plusDays(2), "CANCELLED", "SELF", staff);
+        data.assignment(branch, staff, definition, TODAY.plusDays(3), "ON_LEAVE", "SELF", staff);
+
+        assertThat(assignments.countScheduledFrom(definition, TODAY)).isEqualTo(2);
+        assertThat(assignments.countScheduledFrom(definition, TODAY.plusDays(2))).isZero();
+    }
+
+    @Test
+    void anyAssignmentIncludesFinishedAndPastOnesButOnlyForThatDefinition() {
+        long used = data.definition(branch, "Đã dùng", LocalTime.of(8, 0), LocalTime.of(12, 0), true);
+        long unused = data.definition(branch, "Chưa dùng", LocalTime.of(14, 0), LocalTime.of(19, 0), true);
+        data.assignment(branch, staff, used, TODAY.minusDays(30), "CANCELLED", "SELF", staff);
+
+        assertThat(assignments.existsAnyForDefinition(branch, used)).isTrue();
+        assertThat(assignments.existsAnyForDefinition(branch, unused)).isFalse();
+    }
+
+    @Test
+    void definitionsOfOneBranchAreNotReturnedForAnother() {
+        save(branch, "Sáng", LocalTime.of(8, 0), LocalTime.of(12, 0));
+
+        List<ShiftDefinition> other = definitions.findByBranch(otherBranch, false);
+
+        assertThat(other).isEmpty();
+    }
+}

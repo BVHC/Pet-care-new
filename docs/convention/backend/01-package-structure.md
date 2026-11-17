@@ -27,9 +27,9 @@ com.petcare
 
 ## Module
 
-Một module = một mã module trong Bảng 2 của `docs/INDEX.md` (TK, QT, CN, KH…). Chỉ làm module **tầng 1 và 2**; tầng 3 (NS và các UC/ST liệt kê ở cuối Bảng 2) không có rule/model nên không tạo package.
+Một module = một mã module trong Bảng 2 của `docs/INDEX.md` (TK, QT, CN, KH…). Module tầng 3 đã được duyệt ở T54 (5/11/2026) và đã có rule / model / API riêng (`docs/07`–`09`), nên được tạo package khi tới task của nó (ví dụ `workforce` ở T58, ADR-0138).
 
-- Tên package: một danh từ tiếng Anh số ít, chữ thường, theo bảng `docs/06-module-contracts.md` §2 (`identity` = TK+QT, `branch`, `customer`, `catalog`, `appointment`, `visit` = TN+KB, `boarding`, `sales` = BH+TG, `inventory`, `content`, `care`, `report`). Module mới ghi vào `system-overview.md` §3.
+- Tên package: một danh từ tiếng Anh số ít, chữ thường, theo bảng `docs/06-module-contracts.md` §2 (`identity` = TK+QT, `branch`, `customer`, `catalog`, `appointment`, `visit` = TN+KB, `boarding`, `sales` = BH+TG, `inventory`, `content`, `care`, `report`, `workforce` = NS). Module mới ghi vào `system-overview.md` §3.
 - Phần công khai của module là package `api/` (interface, record, enum, sự kiện); module khác chỉ được import `module.<x>.api.*` (06 §1).
 - Aggregate thuộc module nào: theo cột *Nhóm* của `04-domain-model.md`. Một số nhóm dùng chung cho hai module (TK+QT, TN+KB, BH+TG); khi tạo package phải ghi rõ bảng nào thuộc package nào, để mỗi bảng chỉ có một module sở hữu entity/repository.
 

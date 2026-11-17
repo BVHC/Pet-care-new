@@ -118,6 +118,7 @@ class OpenApiContractParityIT {
         // + 1 ai #1 (POST /public/ai/chat, T77b, docs/adr/0141)
         // + 2 ai #2, #3 (POST /me/ai/chat, GET /me/ai/pets/{petId}/vaccination-summary, T77c, docs/adr/0142)
         // + 3 ai #4, #12, #13 (GET /me/ai/pets/{petId}/recommendations, GET và PUT /ai/item-profiles, T78, docs/adr/0133)
+<<<<<<< HEAD
         // + 1 ai #14 (POST /ai/documents/import, nạp tài liệu từ file, T89, docs/adr/0134)
         // + 2 fees #1–2 (task 115, docs/adr/0140)
         // + 4 shop cart (task 116, docs/adr/0143)
@@ -128,6 +129,13 @@ class OpenApiContractParityIT {
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop đã cài")
                 .hasSize(220);
+=======
+        // + 1 ai #14 (POST /ai/documents/import, nạp tài liệu từ file, T89, docs/adr/0134).
+        // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V56, docs/adr/0122, 0131): content còn 21.
+        assertThat(documentedOps())
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai đã cài")
+                .hasSize(200);
+>>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
     }
 
     @Test

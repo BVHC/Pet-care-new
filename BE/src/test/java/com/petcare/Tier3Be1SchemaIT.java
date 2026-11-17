@@ -77,7 +77,7 @@ class Tier3Be1SchemaIT {
             long staff = account("RECEPTIONIST");
             long shift = shiftDefinition(branch, "Ca sáng", 8, 12);
             Map<String, Object> base = row("branch_id", branch, "staff_id", staff, "shift_definition_id", shift,
-                    "work_date", DAY, "status", "SCHEDULED");
+                    "work_date", DAY, "status", "SCHEDULED", "source", "MANAGER");
 
             insert("shift_assignments", base);
             rejects("ck_shift_assignments_status", () -> insert("shift_assignments",
@@ -102,6 +102,13 @@ class Tier3Be1SchemaIT {
             insert("shift_assignments", with(base, "work_date", DAY.plusDays(3), "status", "CANCELLED",
                     "reason", "Đổi lịch", "status_changed_at", OffsetDateTime.now()));
             insert("shift_assignments", with(base, "work_date", DAY.plusDays(3)));
+
+            // ADR-0123: source chỉ nhận SELF | MANAGER; cả hai nguồn dùng chung ux_shift_assignments_scheduled
+            rejects("ck_shift_assignments_source", () -> insert("shift_assignments",
+                    with(base, "work_date", DAY.plusDays(4), "source", "ADMIN")));
+            insert("shift_assignments", with(base, "work_date", DAY.plusDays(4), "source", "SELF"));
+            rejects("ux_shift_assignments_scheduled", () -> insert("shift_assignments",
+                    with(base, "work_date", DAY.plusDays(4), "source", "MANAGER")));
         });
     }
 
@@ -114,7 +121,7 @@ class Tier3Be1SchemaIT {
             long morning = shiftDefinition(branch, "Ca sáng", 8, 12);
             long evening = shiftDefinition(branch, "Ca chiều", 13, 17);
             long assignment = insert("shift_assignments", row("branch_id", branch, "staff_id", staff,
-                    "shift_definition_id", morning, "work_date", DAY, "status", "SCHEDULED"));
+                    "shift_definition_id", morning, "work_date", DAY, "status", "SCHEDULED", "source", "MANAGER"));
             Map<String, Object> pending = row("assignment_id", assignment, "requester_id", staff,
                     "request_type", "LEAVE", "reason", "Việc gia đình", "status", "PENDING");
 

@@ -106,15 +106,19 @@ class SystemConfigIT {
         expect("ai.log.retention_days", "30", "INT", "1", "180");                 // BR-AI-24
         expect("ai.chat.general_knowledge_enabled", "false", "BOOL", "false", "true"); // BR-AI-33, V52 (min / max của BOOL không dùng)
         expect("ai.chat.business_intent_enabled", "false", "BOOL", "false", "true"); // BR-AI-31, V53
+<<<<<<< HEAD
         expect("ai.chat.pet_context_enabled", "false", "BOOL", "false", "true"); // BR-AI-32, V56
         expect("ai.chat.open_domain_enabled", "false", "BOOL", "false", "true"); // BR-AI-33 (chế độ mở), V57
         expect("ai.ingest.max_file_kb", "2048", "INT", "256", "10240");           // BR-AI-29, V59
+=======
+>>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
         // V51 (docs/adr/0122, 0131): 6 khóa complaint.* của V40 đã gỡ; thêm feedback.retention_days (BR-DG-05)
         expect("feedback.retention_days", "30", "INT", "7", "365");               // BR-DG-05
         // V40 (docs/adr/0113): 2 khóa workforce.* (docs/02 BR-NS-04, BR-NS-07). Giá trị mặc định theo đặc tả;
         // min–max là giả định của T55b (ADR-0113)
         expect("workforce.request_lead_hours", "24", "INT", "0", "168");          // BR-NS-04
         expect("workforce.absence_report_max_days", "7", "INT", "1", "30");       // BR-NS-07
+        expect("workforce.weekly_required_shifts", "10", "INT", "1", "30");       // BR-NS-12, V55 (docs/adr/0123)
         // V44, V45, V46, V48 (docs/adr/0117): 7 khóa của BE-2, docs/08 §G. Khoảng min–max do T55c chọn
         expect("shop.payment_window_hours", "24", "INT", "1", "168");             // BR-BH-12
         expect("shop.auto_confirm_days", "7", "INT", "1", "30");                  // BR-BH-12
@@ -146,7 +150,11 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
+<<<<<<< HEAD
         assertThat(EXPECTED).hasSize(85);
+=======
+        assertThat(EXPECTED).hasSize(83);
+>>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
         assertThat(actual).isEqualTo(EXPECTED);
     }
 
