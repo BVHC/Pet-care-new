@@ -29,3 +29,12 @@ export function isMockedRequest(method: string, pathname: string, rules: MockRul
       rule.segments.every((s, i) => s === '*' || s === path[i]),
   );
 }
+
+/**
+ * T67: `payment` chưa có controller (T65). Chỉ khi ĐẶT ĐƠN đi BE thật mà `pay` còn mock thì cổng thanh toán đóng: `pay` mock tra theo id của kho mock,
+ * không biết đơn thật (404, hoặc trùng id một đơn mock của khách mock có cùng account id). Toàn mock giữ cổng giả lập của T57; toàn thật gọi `pay` thật.
+ * Khi T65 xong và luật `pay` gỡ khỏi VITE_API_MOCK_ONLY thì điều kiện tự hết, không phải sửa mã.
+ */
+export function paymentClosedForRealOrders(apiMock: boolean, rules: MockRule[]): boolean {
+  return !apiMock && !isMockedRequest('POST', '/api/me/online-orders', rules) && isMockedRequest('POST', '/api/me/online-orders/0/pay', rules);
+}

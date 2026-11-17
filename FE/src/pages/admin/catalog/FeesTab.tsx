@@ -34,8 +34,8 @@ function ShippingFeeCard({ config, onNotice }: { config: ShippingFeeConfig; onNo
     onNotice(null);
     try {
       await save.mutateAsync(body);
-      // Chưa nói "đơn đặt từ bây giờ tính theo mức mới": checkout còn là mock, không đọc cấu hình này. Thêm lại khi `shop` thật có mã (T63 / T67).
-      onNotice({ kind: 'success', text: 'Đã lưu phí vận chuyển.' });
+      // BE `shop` thật gọi `ShippingFeeApi.quote` khi báo giá và đặt đơn (T67), nên đơn đặt từ lúc này tính theo mức mới.
+      onNotice({ kind: 'success', text: 'Đã lưu phí vận chuyển. Đơn đặt từ bây giờ tính theo mức mới.' });
     } catch (e) {
       setError(plainMessage(toApiError(e)));
     }

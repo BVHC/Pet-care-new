@@ -1,7 +1,11 @@
 // Bắt đầu thanh toán một đơn PENDING_PAYMENT (payment-v1 #1) rồi chuyển khách sang cổng. Dùng chung cho Checkout và chi tiết đơn ("Thanh toán lại").
 import { useNavigate } from 'react-router-dom';
+import { paymentGatewayClosed } from '@/shared/api/axios';
 import { paymentApi } from '@/shared/api/payment.api';
 import { usePaymentMutation } from '@/shared/hooks/usePayment';
+
+/** Đặt đơn đi BE thật mà `pay` còn mock (T65 chưa có): không gọi `pay`, xem `paymentClosedForRealOrders` ở mock-scope.ts. Khi T65 xong, điều kiện tự hết. */
+export const GATEWAY_CLOSED = 'Cổng thanh toán chưa mở (T65)';
 
 // shortcut: `redirectUrl` của cổng giả lập chỉ mang `code` và `amount`, không có mã giao dịch; nhớ tạm code -> transactionId ở sessionStorage để trang cổng chuyển về
 // `/payment?transactionId=`. Cổng thật (VNPay) tự quay về đúng URL do BE cấu hình nên bỏ phần này khi nối cổng thật (T65).
@@ -35,5 +39,5 @@ export function usePayOrder() {
     if (session.redirectUrl.startsWith('/')) navigate(session.redirectUrl);
     else window.location.assign(session.redirectUrl);
   };
-  return { pay, isPending: mutation.isPending };
+  return { pay, isPending: mutation.isPending, gatewayClosed: paymentGatewayClosed() };
 }

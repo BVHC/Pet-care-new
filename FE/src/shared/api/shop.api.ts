@@ -24,7 +24,7 @@ const del = async <T>(url: string): Promise<T> => (await apiClient.delete(url)).
 export const shopApi = {
   /** #1: sản phẩm ngừng kinh doanh tự bị loại. */
   getCart: () => get<Cart>('/api/me/cart'),
-  /** #2: đặt số lượng 1–99 (thêm nếu chưa có). 400 BR-BH-07 (không phải GOODS / thuốc kê đơn / quá 30 dòng / số lượng ngoài 1–99); 404 sản phẩm. */
+  /** #2: đặt số lượng 1–99 (thêm nếu chưa có). 400 VALIDATION_FAILED số lượng ngoài 1–99 / thiếu; 400 BR-BH-07 (không phải GOODS, kể cả thuốc thường và vaccine / quá 30 dòng); 404 sản phẩm. */
   setCartItem: (productId: number, body: SetCartItemRequest) => put<Cart>(`/api/me/cart/items/${productId}`, body),
   /** #3: sản phẩm không có trong giỏ vẫn trả giỏ hiện tại. */
   removeCartItem: (productId: number) => del<Cart>(`/api/me/cart/items/${productId}`),
@@ -34,15 +34,15 @@ export const shopApi = {
   },
   /** #5: chi nhánh ACTIVE còn đủ hàng cho mọi dòng của giỏ (đã trừ phần giữ). */
   listFulfillmentBranches: () => get<FulfillmentBranch[]>('/api/me/online-orders/fulfillment-branches'),
-  /** #6 (ST09): không giữ hàng. 400 BR-BH-08 giỏ rỗng / thiếu hàng / địa chỉ không phải của khách; 404 địa chỉ / chi nhánh. */
+  /** #6 (ST09): không giữ hàng. 400 BR-BH-08 giỏ rỗng / thiếu hàng / chi nhánh không nhận đơn; 404 địa chỉ (không có HOẶC của khách khác, kiểm TRƯỚC giỏ rỗng) / chi nhánh. */
   quote: (query: QuoteQuery) => get<OnlineOrderQuote>('/api/me/online-orders/quote', query),
-  /** #7: giữ hàng, chốt phí, dọn giỏ. 400 BR-BH-08; 201. Bước tiếp: paymentApi.pay. */
+  /** #7: giữ hàng, chốt phí, dọn giỏ. 400 BR-BH-08; 404 địa chỉ / chi nhánh; 201. Bước tiếp: paymentApi.pay (chưa có BE tới T65: xem `paymentGatewayClosed`). */
   placeOrder: (body: PlaceOnlineOrderRequest) => post<OnlineOrder>('/api/me/online-orders', body),
   /** #8: mới nhất trước. */
   listMyOrders: (query: OnlineOrderQuery = {}) => get<PageResponse<OnlineOrderSummary>>('/api/me/online-orders', query),
   /** #9: đơn của người khác = 404. */
   getMyOrder: (onlineOrderId: number) => get<OnlineOrder>(`/api/me/online-orders/${onlineOrderId}`),
-  /** #10: PENDING_PAYMENT / PAID / PROCESSING → CANCELLED; 409 từ trạng thái khác (từ SHIPPED khách không tự hủy). */
+  /** #10: CHỈ PENDING_PAYMENT → CANCELLED; PAID / PROCESSING và mọi trạng thái khác → 409 INVALID_STATE_TRANSITION cho tới task 138 (BE thật, ADR-0145 C1). */
   cancelMyOrder: (onlineOrderId: number, body: ReasonRequest) => post<OnlineOrder>(`/api/me/online-orders/${onlineOrderId}/cancel`, body),
   /** #11: DELIVERED → COMPLETED; 409 trạng thái khác. */
   confirmReceived: (onlineOrderId: number) => post<OnlineOrder>(`/api/me/online-orders/${onlineOrderId}/confirm-received`),

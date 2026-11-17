@@ -143,8 +143,14 @@ describe('giỏ hàng (UC61, BR-BH-07)', () => {
     expect((await data<Cart>('other', 'put', '/api/me/cart/items/2', { quantity: 99 })).items).toMatchObject([{ productId: 2, quantity: 99 }]);
   });
 
-  it('số lượng ngoài 1–99 → 400 BR-BH-07; thiếu → VALIDATION_FAILED; sai kiểu → MALFORMED_REQUEST', async () => {
-    for (const quantity of [0, 100, -1]) expectError(await fails('owner', 'put', '/api/me/cart/items/2', { quantity }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-07');
+  it('số lượng ngoài 1–99 → 400 VALIDATION_FAILED (Bean Validation, đo trên BE thật 17/11, chạy trước vai trò); thiếu → VALIDATION_FAILED; sai kiểu → MALFORMED_REQUEST', async () => {
+    for (const quantity of [0, 100, -1]) {
+      const res = await fails('owner', 'put', '/api/me/cart/items/2', { quantity });
+      expectError(res, 400, 'VALIDATION_FAILED');
+      expect(res.data.message).toBe('quantity: Số lượng phải từ 1 đến 99');
+    }
+    expectError(await fails('desk', 'put', '/api/me/cart/items/2', { quantity: 0 }), 400, 'VALIDATION_FAILED');
+    expect((await fails('owner', 'put', '/api/me/cart/items/2', {})).data.message).toBe('quantity: Số lượng là bắt buộc');
     expectError(await fails('owner', 'put', '/api/me/cart/items/2', {}), 400, 'VALIDATION_FAILED');
     expectError(await fails('owner', 'put', '/api/me/cart/items/2', { quantity: null }), 400, 'VALIDATION_FAILED');
     for (const quantity of [1.5, '2', true]) expectError(await fails('owner', 'put', '/api/me/cart/items/2', { quantity }), 400, 'MALFORMED_REQUEST');
@@ -154,12 +160,14 @@ describe('giỏ hàng (UC61, BR-BH-07)', () => {
 
   it('chỉ nhận GOODS không kê đơn đang kinh doanh: thuốc kê đơn, thuốc thường, vaccine → 400 BR-BH-07; ngừng kinh doanh / không có → 404', async () => {
     for (const productId of [3, 4, 5, 6]) expectError(await fails('owner', 'put', `/api/me/cart/items/${productId}`, { quantity: 1 }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-07');
-    expect((await fails('owner', 'put', '/api/me/cart/items/3', { quantity: 1 })).data.message).toContain('kê đơn');
-    expect((await fails('owner', 'put', '/api/me/cart/items/5', { quantity: 1 })).data.message).toContain('vaccine');
+    // BE thật (đo 17/11) dùng MỘT thông báo cho thuốc kê đơn, thuốc thường và vaccine.
+    for (const productId of [3, 4, 5, 6]) {
+      expect((await fails('owner', 'put', `/api/me/cart/items/${productId}`, { quantity: 1 })).data.message).toBe('Chỉ bán online hàng hóa thường, không bán thuốc hay vaccine (BR-BH-07)');
+    }
     expectError(await fails('owner', 'put', '/api/me/cart/items/7', { quantity: 1 }), 404, 'RESOURCE_NOT_FOUND');
     expectError(await fails('owner', 'put', '/api/me/cart/items/999', { quantity: 1 }), 404, 'RESOURCE_NOT_FOUND');
-    // 404 sản phẩm đứng trước 400 số lượng (tồn tại → guard nghiệp vụ).
-    expectError(await fails('owner', 'put', '/api/me/cart/items/999', { quantity: 0 }), 404, 'RESOURCE_NOT_FOUND');
+    // 400 số lượng (@Valid của body) đứng trước 404 sản phẩm: validation chạy trước service (BE thật).
+    expectError(await fails('owner', 'put', '/api/me/cart/items/999', { quantity: 0 }), 400, 'VALIDATION_FAILED');
   });
 
   it('tối đa 30 dòng: dòng thứ 31 → 400 BR-BH-07, nhưng sửa số lượng dòng có sẵn vẫn được', async () => {
@@ -260,10 +268,12 @@ describe('báo giá (#6, ST09)', () => {
     expectError(await fails('desk', 'get', '/api/me/online-orders/quote', undefined, { branchId: 1, addressId: 1 }), 403, 'ACCESS_DENIED');
   });
 
-  it('404 địa chỉ / chi nhánh không có; 400 BR-BH-08 địa chỉ của khách khác, giỏ rỗng, chi nhánh không ACTIVE, thiếu hàng', async () => {
+  it('404 địa chỉ không có HOẶC của khách khác (BE thật 17/11, ADR-0144) / chi nhánh không có; 400 BR-BH-08 giỏ rỗng, chi nhánh không ACTIVE, thiếu hàng', async () => {
     expectError(await fails('owner', 'get', '/api/me/online-orders/quote', undefined, { branchId: 1, addressId: 999 }), 404, 'RESOURCE_NOT_FOUND');
     expectError(await fails('owner', 'get', '/api/me/online-orders/quote', undefined, { branchId: 99, addressId: 1 }), 404, 'RESOURCE_NOT_FOUND');
-    expectError(await fails('owner', 'get', '/api/me/online-orders/quote', undefined, { branchId: 1, addressId: 3 }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-08');
+    const foreign = await fails('owner', 'get', '/api/me/online-orders/quote', undefined, { branchId: 1, addressId: 3 });
+    expectError(foreign, 404, 'RESOURCE_NOT_FOUND');
+    expect(foreign.data.message).toBe('Không tìm thấy địa chỉ giao hàng #3');
     expectError(await fails('other', 'get', '/api/me/online-orders/quote', undefined, { branchId: 1, addressId: 3 }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-08');
     expect((await fails('other', 'get', '/api/me/online-orders/quote', undefined, { branchId: 1, addressId: 3 })).data.message).toContain('trống');
     // 404 chi nhánh đứng trước 400 giỏ rỗng.
@@ -330,9 +340,11 @@ describe('đặt hàng online (#7, Đơn hàng online#1)', () => {
     expectError(await fails('desk', 'post', '/api/me/online-orders', {}), 400, 'VALIDATION_FAILED');
     expectError(await fails('owner', 'post', '/api/me/online-orders', { branchId: 1, addressId: 999 }), 404, 'RESOURCE_NOT_FOUND');
     expectError(await fails('owner', 'post', '/api/me/online-orders', { branchId: 99, addressId: 1 }), 404, 'RESOURCE_NOT_FOUND');
-    expectError(await fails('owner', 'post', '/api/me/online-orders', { branchId: 1, addressId: 3 }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-08');
+    expectError(await fails('owner', 'post', '/api/me/online-orders', { branchId: 1, addressId: 3 }), 404, 'RESOURCE_NOT_FOUND'); // địa chỉ của khách khác: 404 như BE thật
     expectError(await fails('owner', 'post', '/api/me/online-orders', { branchId: 2, addressId: 1 }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-08');
-    expectError(await fails('other', 'post', '/api/me/online-orders', { branchId: 1, addressId: 3 }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-08');
+    const empty = await fails('other', 'post', '/api/me/online-orders', { branchId: 1, addressId: 3 });
+    expectError(empty, 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-08');
+    expect(empty.data.message).toBe('Giỏ hàng trống hoặc không còn sản phẩm bán được (BR-BH-08)'); // nguyên văn BE thật (17/11)
     expect((await data<PageResponse<OnlineOrderSummary>>('owner', 'get', '/api/me/online-orders')).totalElements).toBe(8);
   });
 });
@@ -354,6 +366,7 @@ describe('đơn của tôi (UC64)', () => {
     expect(second).toMatchObject({ page: 1, size: 3, totalElements: 8, totalPages: 3 });
     expect(ids(second)).toEqual([2, 6, 9]);
     expect(await data('owner', 'get', '/api/me/online-orders', undefined, { size: 500, page: -2 })).toMatchObject({ page: 0, size: 100 });
+    expect(await data('owner', 'get', '/api/me/online-orders', undefined, { size: 0 })).toMatchObject({ size: 1 }); // BE thật: kẹp 1 đến 100 (đo 17/11)
     expectError(await fails('owner', 'get', '/api/me/online-orders', undefined, { status: 'DONE' }), 400, 'MALFORMED_REQUEST');
     expectError(await fails('owner', 'get', '/api/me/online-orders', undefined, { page: 'x' }), 400, 'MALFORMED_REQUEST');
     expectError(await fails('desk', 'get', '/api/me/online-orders', undefined, { size: 'x' }), 400, 'MALFORMED_REQUEST');
@@ -364,6 +377,8 @@ describe('đơn của tôi (UC64)', () => {
     expect(order).toMatchObject({ status: 'SHIPPED', carrier: 'Viettel Post', trackingCode: 'VTP2611055', branchName: expect.any(String), total: 138_000 });
     expect(order).not.toHaveProperty('failReason');
     expect(order).not.toHaveProperty('customerId');
+    expect(order).toHaveProperty('refundStatus', null); // BE thật có trường, null khi chưa có hoàn tiền (shop-v1 OnlineOrder.refundStatus)
+    expect((await orderOf('owner', 10)).refundStatus).toBe('SUCCEEDED'); // hủy sau PAID, hoàn tiền xong (dữ liệu mẫu)
     const foreign = await fails('other', 'get', '/api/me/online-orders/3');
     expectError(foreign, 404, 'RESOURCE_NOT_FOUND');
     expect(foreign.data.message).toBe((await fails('other', 'get', '/api/me/online-orders/999')).data.message.replace('999', '3'));
@@ -379,15 +394,17 @@ describe('đơn của tôi (UC64)', () => {
       expect(await data<unknown[]>('owner', 'get', '/api/me/online-orders/fulfillment-branches')).toHaveLength(1);
     });
 
-    it('PAID: CANCELLED và sinh hoàn tiền GATEWAY toàn bộ gồm phí vận chuyển (BR-TG-12)', async () => {
-      expect((await data<OnlineOrder>('owner', 'post', '/api/me/online-orders/5/cancel', { reason: 'Không cần nữa' })).status).toBe('CANCELLED');
-      const refunds = await data<PageResponse<{ onlineOrderId: number | null; method: string; amount: number; status: string }>>('desk', 'get', '/api/refunds', undefined, { method: 'GATEWAY' });
-      expect(refunds.content.find((r) => r.onlineOrderId === 5)).toMatchObject({ method: 'GATEWAY', amount: 498_000, status: 'REQUESTED' });
+    it('PAID và PROCESSING: 409 INVALID_STATE_TRANSITION, đơn giữ nguyên, không sinh hoàn tiền (khách chỉ hủy ở PENDING_PAYMENT tới task 138, ADR-0145 C1)', async () => {
+      expectError(await fails('owner', 'post', '/api/me/online-orders/5/cancel', { reason: 'Không cần nữa' }), 409, 'INVALID_STATE_TRANSITION');
+      expectError(await fails('other', 'post', '/api/me/online-orders/4/cancel', { reason: 'Hủy' }), 409, 'INVALID_STATE_TRANSITION');
+      expect((await orderOf('owner', 5)).status).toBe('PAID');
+      expect((await orderOf('other', 4)).status).toBe('PROCESSING');
+      const refunds = await data<PageResponse<{ onlineOrderId: number | null }>>('desk', 'get', '/api/refunds', undefined, { method: 'GATEWAY' });
+      expect(refunds.content.some((r) => r.onlineOrderId === 5 || r.onlineOrderId === 4)).toBe(false);
     });
 
-    it('PROCESSING hủy được; SHIPPED, DELIVERY_FAILED, DELIVERED, COMPLETED, CANCELLED → 409', async () => {
-      expect((await data<OnlineOrder>('other', 'post', '/api/me/online-orders/4/cancel', { reason: 'Hủy' })).status).toBe('CANCELLED');
-      for (const [who, id] of [['owner', 3], ['owner', 6], ['owner', 2], ['owner', 1], ['owner', 9], ['other', 4]] as [Who, number][]) {
+    it('SHIPPED, DELIVERY_FAILED, DELIVERED, COMPLETED, CANCELLED → 409', async () => {
+      for (const [who, id] of [['owner', 3], ['owner', 6], ['owner', 2], ['owner', 1], ['owner', 9]] as [Who, number][]) {
         expectError(await fails(who, 'post', `/api/me/online-orders/${id}/cancel`, { reason: 'Hủy' }), 409, 'INVALID_STATE_TRANSITION');
       }
     });
@@ -566,7 +583,8 @@ describe('đọc chéo cho luồng chính', () => {
     expect(pendingRefundCount(2)).toBe(0);
     await call('owner', 'post', '/api/me/online-orders/8/cancel', { reason: 'Đổi ý' });
     expect(openOnlineOrderCount(1)).toBe(6);
-    await call('owner', 'post', '/api/me/online-orders/5/cancel', { reason: 'Đổi ý' }); // đã thanh toán → sinh hoàn tiền
+    // Khách không tự hủy được đơn đã thanh toán (ADR-0145 C1): hoàn tiền mới sinh ở nhánh lễ tân hủy sau giao thất bại (#19, đơn #7).
+    await call('desk', 'post', '/api/online-orders/7/cancel-failed', { reason: 'Khách không nhận' });
     expect(openOnlineOrderCount(1)).toBe(5);
     expect(pendingRefundCount(1)).toBe(3);
   });

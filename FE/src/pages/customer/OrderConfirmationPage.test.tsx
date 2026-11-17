@@ -3,11 +3,15 @@ import { Route } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loginAs, renderRoutes } from '@/components/customer/shop/testing';
 import { ApiError } from '@/shared/api/api-error';
-import { apiClient } from '@/shared/api/axios';
+import { apiClient, paymentGatewayClosed } from '@/shared/api/axios';
 import { installMockApi } from '@/shared/api/mock/mock-api';
 import { paymentApi } from '@/shared/api/payment.api';
 import { shopApi } from '@/shared/api/shop.api';
 import { OrderConfirmationPage } from './OrderConfirmationPage';
+
+// Điều kiện "cổng thanh toán đóng" (đặt đơn đi BE thật, pay còn mock) đọc biến môi trường lúc nạp mô-đun; Vitest luôn chạy VITE_API_MOCK=true nên ở đây thay hàm đó.
+// Ba chế độ thật sự được kiểm ở hàm thuần `paymentClosedForRealOrders` (mock-scope.test.ts), kể cả dòng VITE_API_MOCK_ONLY đã commit trong .env.example.
+vi.mock('@/shared/api/axios', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/shared/api/axios')>()), paymentGatewayClosed: vi.fn(() => false) }));
 
 // UC64, shop-v1 #9–11 + payment-v1 #1. Đơn mẫu của khach@: #8 PENDING_PAYMENT (1 túi hạt, 480.000 đ), #5 PAID, #3 SHIPPED (Viettel Post VTP2611055), #2 DELIVERED,
 // #6 DELIVERY_FAILED (đã giao lại 2 lần), #1 COMPLETED, #9 CANCELLED ("Đặt nhầm sản phẩm"). Đơn #4 thuộc khachmoi@ nên khach@ thấy 404.
@@ -15,6 +19,7 @@ import { OrderConfirmationPage } from './OrderConfirmationPage';
 beforeAll(() => installMockApi(apiClient));
 beforeEach(async () => {
   sessionStorage.clear();
+  vi.mocked(paymentGatewayClosed).mockReturnValue(false);
   await loginAs();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -79,14 +84,11 @@ describe('OrderConfirmationPage (UC64): chi tiết đơn', () => {
     expect(actions()).not.toBeInTheDocument();
   });
 
-  it('hủy đơn đã thanh toán (#5): cảnh báo hoàn tiền qua cổng; lý do quá 300 ký tự bị chặn trước khi gửi', async () => {
+  it('lý do hủy quá 300 ký tự bị chặn trước khi gửi', async () => {
     const cancel = vi.spyOn(shopApi, 'cancelMyOrder');
-    const { user } = renderOrder('5');
-    expect(within(await statusLine()).getByText('Đã thanh toán')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Hủy đơn' }));
+    const { user } = renderOrder('8');
+    await user.click(await screen.findByRole('button', { name: 'Hủy đơn' }));
     const dialog = await screen.findByRole('dialog');
-    expect(dialog).toHaveTextContent('được hoàn qua cổng thanh toán');
-
     await user.click(within(dialog).getByLabelText('Lý do hủy'));
     await user.paste('x'.repeat(301));
     await user.click(within(dialog).getByRole('button', { name: 'Xác nhận hủy' }));
@@ -94,11 +96,39 @@ describe('OrderConfirmationPage (UC64): chi tiết đơn', () => {
     expect(cancel).not.toHaveBeenCalled();
   });
 
+  // BE thật (ADR-0145 C1): khách chỉ hủy ở PENDING_PAYMENT; PAID / PROCESSING trả 409 cho tới task 138 (hoàn hàng, hoàn tiền).
+  it('đơn đã thanh toán (#5): KHÔNG có nút Hủy đơn, có lời hướng dẫn liên hệ chi nhánh', async () => {
+    renderOrder('5');
+    expect(within(await statusLine()).getByText('Đã thanh toán')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hủy đơn' })).not.toBeInTheDocument();
+    expect(actions()).toHaveTextContent('liên hệ chi nhánh');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('đơn đang chuẩn bị hàng (#4 của khachmoi@): KHÔNG có nút Hủy đơn, có lời hướng dẫn liên hệ chi nhánh', async () => {
+    await loginAs('khachmoi@petcare.vn');
+    renderOrder('4');
+    expect(within(await statusLine()).getByText('Đang chuẩn bị hàng')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hủy đơn' })).not.toBeInTheDocument();
+    expect(actions()).toHaveTextContent('liên hệ chi nhánh');
+  });
+
+  it('cổng thanh toán chưa mở (đặt đơn thật, pay còn mock): bấm Thanh toán báo "Cổng thanh toán chưa mở (T65)", không gọi pay', async () => {
+    vi.mocked(paymentGatewayClosed).mockReturnValue(true);
+    const pay = vi.spyOn(paymentApi, 'pay');
+    const { user } = renderOrder('8');
+    await user.click(await screen.findByRole('button', { name: 'Thanh toán' }));
+    expect(await within(await screen.findByRole('region', { name: 'Thao tác với đơn' })).findByRole('alert')).toHaveTextContent('Cổng thanh toán chưa mở (T65)');
+    expect(pay).not.toHaveBeenCalled();
+    expect(screen.getByTestId('url')).toHaveTextContent('/order/8');
+    expect(actions()).toHaveTextContent('Đơn được giữ hàng đến');
+  });
+
   it('đơn vừa đổi trạng thái ở nơi khác (409): lỗi hiện trong hộp thoại, màn hình tải lại theo trạng thái mới', async () => {
-    const { user } = renderOrder('5');
+    const { user } = renderOrder('8');
     await user.click(await screen.findByRole('button', { name: 'Hủy đơn' }));
     const dialog = await screen.findByRole('dialog');
-    await shopApi.cancelMyOrder(5, { reason: 'Hủy ở thiết bị khác' });
+    await shopApi.cancelMyOrder(8, { reason: 'Hủy ở thiết bị khác' });
     await user.type(within(dialog).getByLabelText('Lý do hủy'), 'Đổi ý');
     await user.click(within(dialog).getByRole('button', { name: 'Xác nhận hủy' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái');
