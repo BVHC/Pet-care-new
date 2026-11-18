@@ -47,6 +47,71 @@ abstract class ShiftAssignmentItSupport extends ShiftDefinitionItSupport {
                 staffId);
     }
 
+    // ---------------------------------------------------------------- hủy phân ca (#6) và lịch của tôi (#8)
+
+    protected static final String MINE = "/api/me/shift-assignments";
+    protected static final List<String> CONTRACT_KEYS = List.of("shiftAssignmentId", "branchId", "staffId",
+            "staffName", "shiftDefinitionId", "shiftName", "startTime", "endTime", "workDate", "status", "source",
+            "reason", "pendingRequestId");
+
+    protected static String cancelPath(long assignmentId) {
+        return ASSIGNMENTS + "/" + assignmentId + "/cancel";
+    }
+
+    /** Body JSON thô {@code {"reason": ...}} (dấu nháy đơn, đổi sang nháy kép trong {@code call}). */
+    protected static String reasonBody(String reason) {
+        return "{'reason':'" + reason + "'}";
+    }
+
+    protected long pendingRequest(long assignmentId, long requesterId) {
+        return data.leaveRequest(assignmentId, requesterId, "PENDING", null);
+    }
+
+    protected Map<String, Object> requestRow(long requestId) {
+        return jdbc.queryForMap("""
+                SELECT status, decided_by, decision_note, closed_at FROM shift_requests WHERE id = ?""", requestId);
+    }
+
+    protected int cancelAuditCount(long assignmentId) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_type = 'shift_assignments' AND entity_id = ? AND action = 'SHIFT_ASSIGNMENT_CANCELLED'""",
+                Integer.class, assignmentId);
+    }
+
+    /** Dòng outbox hủy phân ca của một nhân viên: IN_APP theo id tài khoản, EMAIL theo email (không có FK tới tài khoản). */
+    protected List<Map<String, Object>> cancelOutbox(long staffId) {
+        return jdbc.queryForList("""
+                SELECT o.channel, o.template_code, o.recipient_account_id, o.recipient_email, o.payload::text AS payload
+                FROM notification_outbox o
+                WHERE o.template_code IN ('SHIFT_ASSIGNMENT_CANCELLED', 'SHIFT_ASSIGNMENT_CANCELLED_APP')
+                  AND (o.recipient_account_id = ? OR o.recipient_email = (SELECT email FROM accounts WHERE id = ?))
+                ORDER BY o.id""", staffId, staffId);
+    }
+
+    /** Xóa dòng outbox hủy phân ca của các nhân viên; gọi <b>trước</b> {@code finish()} (EMAIL không có FK nên không tự dọn). */
+    protected void purgeCancelOutbox(long... staffIds) {
+        for (long staffId : staffIds) {
+            jdbc.update("""
+                    DELETE FROM notification_outbox
+                    WHERE template_code IN ('SHIFT_ASSIGNMENT_CANCELLED', 'SHIFT_ASSIGNMENT_CANCELLED_APP')
+                      AND (recipient_account_id = ? OR recipient_email = (SELECT email FROM accounts WHERE id = ?))""",
+                    staffId, staffId);
+        }
+    }
+
+    /**
+     * Ảnh chụp mọi dấu vết của một lần hủy: dòng phân ca, các yêu cầu của nó, số dòng audit và outbox. Hai ảnh bằng nhau
+     * nghĩa là lệnh gọi không để lại gì (404 / 403 / 409 / 400 / rollback).
+     */
+    protected String footprint(long assignmentId, long staffId) {
+        return assignmentRow(assignmentId) + "|requests="
+                + jdbc.queryForList("""
+                        SELECT status || ':' || coalesce(decision_note, '') || ':' || coalesce(closed_at::text, '')
+                        FROM shift_requests WHERE assignment_id = ? ORDER BY id""", String.class, assignmentId)
+                + "|audit=" + cancelAuditCount(assignmentId) + "|outbox=" + cancelOutbox(staffId).size();
+    }
+
     protected static long idOf(Map<String, Object> data, String key) {
         return ((Number) data.get(key)).longValue();
     }

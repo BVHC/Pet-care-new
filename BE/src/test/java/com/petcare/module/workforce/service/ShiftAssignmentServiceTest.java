@@ -35,18 +35,31 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.branch.api.BranchQueryApi;
+import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
+import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
+import com.petcare.module.care.api.NotificationApi;
+import com.petcare.module.care.api.NotificationApi.Channel;
+import com.petcare.module.care.api.NotificationApi.NotificationRequest;
+import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.module.workforce.dto.CreateShiftAssignmentRequest;
 import com.petcare.module.workforce.dto.ShiftAssignmentAuditSnapshot;
 import com.petcare.module.workforce.dto.ShiftAssignmentResponse;
+import com.petcare.module.workforce.dto.ShiftReasonRequest;
 import com.petcare.module.workforce.entity.ShiftAssignment;
 import com.petcare.module.workforce.entity.ShiftAssignmentSource;
 import com.petcare.module.workforce.entity.ShiftAssignmentStatus;
 import com.petcare.module.workforce.entity.ShiftDefinition;
+import com.petcare.module.workforce.entity.ShiftRequest;
+import com.petcare.module.workforce.entity.ShiftRequestStatus;
+import com.petcare.module.workforce.entity.ShiftRequestType;
+import com.petcare.module.workforce.fsm.ShiftAssignmentTransitionHandler;
 import com.petcare.module.workforce.mapper.ShiftAssignmentMapper;
 import com.petcare.module.workforce.repository.ShiftAssignmentRepository;
+import com.petcare.module.workforce.repository.ShiftAssignmentRepository.AssignmentScope;
 import com.petcare.module.workforce.repository.ShiftAssignmentRepository.OverlappingShift;
 import com.petcare.module.workforce.repository.ShiftDefinitionRepository;
 import com.petcare.module.workforce.repository.ShiftRequestRepository;
@@ -56,6 +69,7 @@ import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.model.PageResponse;
 import com.petcare.platform.security.BranchScope;
@@ -73,6 +87,8 @@ class ShiftAssignmentServiceTest {
     private static final long STAFF = 12L;
     private static final long DEFINITION = 7L;
     private static final long ASSIGNMENT = 31L;
+    private static final long MANAGER = 99L;
+    private static final long REQUEST = 900L;
     private static final LocalDate TODAY = LocalDate.of(2026, 11, 17);
     private static final LocalDate WORK_DAY = LocalDate.of(2026, 11, 24);
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-11-17T03:00:00Z"), TimeConfig.BUSINESS_ZONE);
@@ -83,6 +99,9 @@ class ShiftAssignmentServiceTest {
     private final ShiftAssignmentRepository assignments = mock(ShiftAssignmentRepository.class);
     private final ShiftRequestRepository requests = mock(ShiftRequestRepository.class);
     private final ShiftAssignmentMapper mapper = spy(Mappers.getMapper(ShiftAssignmentMapper.class));
+    private final ShiftAssignmentTransitionHandler transitions = new ShiftAssignmentTransitionHandler();
+    private final NotificationApi notifications = mock(NotificationApi.class);
+    private final BranchQueryApi branches = mock(BranchQueryApi.class);
     private final AuditRecorder audit = mock(AuditRecorder.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
 
@@ -91,9 +110,10 @@ class ShiftAssignmentServiceTest {
     @BeforeEach
     void setUp() {
         service = new ShiftAssignmentService(branchScope, staffDirectory, definitions, assignments, requests, mapper,
-                audit, CLOCK);
+                transitions, notifications, branches, audit, CLOCK);
         when(branchScope.current()).thenReturn(principal);
         when(principal.branchId()).thenReturn(BRANCH);
+        when(principal.accountId()).thenReturn(MANAGER);
         when(staffDirectory.findStaff(STAFF)).thenReturn(Optional.of(staff(STAFF, Role.RECEPTIONIST, BRANCH, true)));
         when(staffDirectory.findStaffForUpdate(STAFF))
                 .thenReturn(Optional.of(staff(STAFF, Role.RECEPTIONIST, BRANCH, true)));
@@ -411,7 +431,368 @@ class ShiftAssignmentServiceTest {
         assertThat(list.isolation()).isEqualTo(Isolation.REPEATABLE_READ);
     }
 
+    // ---------------------------------------------------------------- cancel (#6): thứ tự và kết quả
+
+    @Test
+    void cancelChecksScopeBeforeAnyLockThenLocksAccountsAssignmentRequestThenWritesAuditsAndNotifies() {
+        givenAssignment(WORK_DAY);
+
+        ShiftAssignmentResponse response = service.cancelShiftAssignment(ASSIGNMENT, reason("  Quản lý đổi lịch  "));
+
+        InOrder order = inOrder(branchScope, staffDirectory, definitions, assignments, requests, audit, notifications);
+        order.verify(assignments).findScopeById(ASSIGNMENT);
+        order.verify(branchScope).check(BRANCH);
+        order.verify(staffDirectory).findStaffForUpdate(STAFF);
+        order.verify(assignments).findByIdForUpdate(ASSIGNMENT);
+        order.verify(requests).findPendingByAssignmentIdForUpdate(ASSIGNMENT);
+        order.verify(definitions).findById(DEFINITION);
+        order.verify(assignments).saveAndFlush(any(ShiftAssignment.class));
+        order.verify(audit).record(any(AuditEntry.class));
+        order.verify(notifications, times(2)).enqueue(any(NotificationRequest.class));
+        assertThat(response).isEqualTo(new ShiftAssignmentResponse(ASSIGNMENT, BRANCH, STAFF, "Nhân viên 12",
+                DEFINITION, "Ca sáng", LocalTime.of(8, 0), LocalTime.of(12, 0), WORK_DAY,
+                ShiftAssignmentStatus.CANCELLED, ShiftAssignmentSource.SELF, "Quản lý đổi lịch", null));
+    }
+
+    @Test
+    void cancelRecordsTheManagerAndTheInstantAndAuditsBeforeAndAfterWithTheStrippedReason() {
+        ShiftAssignment row = givenAssignment(WORK_DAY);
+
+        service.cancelShiftAssignment(ASSIGNMENT, reason("  Quản lý đổi lịch  "));
+
+        assertThat(row.getStatus()).isEqualTo(ShiftAssignmentStatus.CANCELLED);
+        assertThat(row.getReason()).isEqualTo("Quản lý đổi lịch");
+        assertThat(row.getStatusChangedBy()).as("người thực hiện lấy từ principal").isEqualTo(MANAGER);
+        assertThat(row.getStatusChangedAt()).isEqualTo(CLOCK.instant());
+        AuditEntry entry = capturedAudit();
+        assertThat(entry.action()).isEqualTo("SHIFT_ASSIGNMENT_CANCELLED");
+        assertThat(entry.entityType()).isEqualTo("shift_assignments");
+        assertThat(entry.entityId()).isEqualTo(ASSIGNMENT);
+        assertThat(entry.before()).as("chụp trước khi đổi").isEqualTo(new ShiftAssignmentAuditSnapshot(STAFF,
+                DEFINITION, "2026-11-24", "SCHEDULED", "SELF", null));
+        assertThat(entry.after()).isEqualTo(new ShiftAssignmentAuditSnapshot(STAFF, DEFINITION, "2026-11-24",
+                "CANCELLED", "SELF", "Quản lý đổi lịch"));
+        assertThat(entry.reason()).isEqualTo("Quản lý đổi lịch");
+    }
+
+    @Test
+    void cancelRejectsThePendingRequestBySystemInTheSameInstantAndWithoutADecider() {
+        ShiftAssignment row = givenAssignment(WORK_DAY);
+        ShiftRequest pending = pendingRequest();
+        when(requests.findPendingByAssignmentIdForUpdate(ASSIGNMENT)).thenReturn(Optional.of(pending));
+
+        service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ"));
+
+        assertThat(pending.getStatus()).isEqualTo(ShiftRequestStatus.REJECTED);
+        assertThat(pending.getDecidedBy()).as("hệ thống tự từ chối, không có người quyết định").isNull();
+        assertThat(pending.getDecisionNote()).isEqualTo(ShiftAssignmentService.PENDING_REQUEST_CLOSED_NOTE);
+        assertThat(pending.getClosedAt()).isEqualTo(row.getStatusChangedAt()).isEqualTo(CLOCK.instant());
+        verify(requests).saveAndFlush(pending);
+    }
+
+    @Test
+    void cancelWithoutAPendingRequestWritesNoRequestRow() {
+        givenAssignment(WORK_DAY);
+
+        service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ"));
+
+        verify(requests, never()).saveAndFlush(any(ShiftRequest.class));
+    }
+
+    @Test
+    void cancelEnqueuesInAppThenEmailWithTheStrippedReasonAndTheCurrentShift() {
+        givenAssignment(WORK_DAY);
+
+        service.cancelShiftAssignment(ASSIGNMENT, reason("  Nghỉ lễ  "));
+
+        ArgumentCaptor<NotificationRequest> captor = ArgumentCaptor.forClass(NotificationRequest.class);
+        verify(notifications, times(2)).enqueue(captor.capture());
+        NotificationRequest inApp = captor.getAllValues().get(0);
+        NotificationRequest email = captor.getAllValues().get(1);
+        assertThat(inApp.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_ASSIGNMENT_CANCELLED_APP);
+        assertThat(inApp.channel()).isEqualTo(Channel.IN_APP);
+        assertThat(inApp.recipientAccountId()).as("tới nhân viên của phân ca, không phải quản lý").isEqualTo(STAFF);
+        assertThat(inApp.payload()).containsEntry("ly_do", "Nghỉ lễ").containsEntry("ten_ca", "Ca sáng")
+                .containsEntry("ngay_lam", "24/11/2026").containsEntry("gio_bat_dau", "08:00")
+                .containsEntry("gio_ket_thuc", "12:00").containsEntry("chi_nhanh", "Chi nhánh Quận 1");
+        assertThat(email.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_ASSIGNMENT_CANCELLED);
+        assertThat(email.channel()).isEqualTo(Channel.EMAIL);
+        assertThat(email.recipientEmail()).isEqualTo("an@example.com");
+        assertThat(email.payload()).containsEntry("ten_nhan_vien", "Nhân viên 12");
+    }
+
+    @Test
+    void aStaffMemberWithoutAnEmailGetsOnlyTheInAppNoticeAndTheCancelStillSucceeds() {
+        givenAssignment(WORK_DAY);
+        when(staffDirectory.findEmail(STAFF)).thenReturn(Optional.empty());
+
+        service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ"));
+
+        ArgumentCaptor<NotificationRequest> captor = ArgumentCaptor.forClass(NotificationRequest.class);
+        verify(notifications).enqueue(captor.capture());
+        assertThat(captor.getValue().channel()).isEqualTo(Channel.IN_APP);
+    }
+
+    @Test
+    void aLockedOrDisabledStaffMemberStillGetsTheNotice() {
+        givenAssignment(WORK_DAY);
+        when(staffDirectory.findStaffForUpdate(STAFF))
+                .thenReturn(Optional.of(staff(STAFF, Role.VET, BRANCH, false)));
+
+        service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ"));
+
+        verify(notifications, times(2)).enqueue(any(NotificationRequest.class));
+    }
+
+    @Test
+    void aShiftThatStartsLaterTodayCanStillBeCancelled() {
+        ShiftAssignment row = givenAssignment(TODAY);
+        when(definitions.findById(DEFINITION)).thenReturn(Optional.of(definition(DEFINITION, BRANCH, true, "Ca chiều",
+                LocalTime.of(13, 0), LocalTime.of(17, 0))));
+
+        service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ"));
+
+        assertThat(row.getStatus()).isEqualTo(ShiftAssignmentStatus.CANCELLED);
+    }
+
+    @Test
+    void theStartInstantItselfCountsAsStartedAndOneMinuteBeforeDoesNot() {
+        givenAssignment(TODAY);
+        Clock atStart = Clock.fixed(Instant.parse("2026-11-17T01:00:00Z"), TimeConfig.BUSINESS_ZONE); // 08:00 VN
+        Clock oneMinuteBefore = Clock.fixed(Instant.parse("2026-11-17T00:59:00Z"), TimeConfig.BUSINESS_ZONE);
+
+        assertThatThrownBy(() -> serviceAt(atStart).cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-NS-02");
+        verify(assignments, never()).saveAndFlush(any(ShiftAssignment.class));
+
+        ShiftAssignment row = givenAssignment(TODAY);
+        serviceAt(oneMinuteBefore).cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ"));
+        assertThat(row.getStatus()).isEqualTo(ShiftAssignmentStatus.CANCELLED);
+    }
+
+    // ---------------------------------------------------------------- cancel (#6): lỗi không ghi, không audit
+
+    @Test
+    void cancelOfAnUnknownAssignmentIs404BeforeAnyLockOrWrite() {
+        when(assignments.findScopeById(ASSIGNMENT)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        assertCancelLockedOrWrittenNothing();
+    }
+
+    @Test
+    void cancelOfAnotherBranchsAssignmentIs403AndNeverLocksThatStaffAccount() {
+        when(assignments.findScopeById(ASSIGNMENT)).thenReturn(Optional.of(scope(STAFF, OTHER_BRANCH)));
+        org.mockito.Mockito.doThrow(new AccessDeniedScopeException("branch:" + OTHER_BRANCH, "branch:" + BRANCH))
+                .when(branchScope).check(OTHER_BRANCH);
+
+        assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        assertCancelLockedOrWrittenNothing();
+    }
+
+    @Test
+    void aCallerWithoutABranchIsRefusedBeforeEvenReadingTheAssignment() {
+        when(principal.branchId()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(AccessDeniedScopeException.class);
+
+        verify(assignments, never()).findScopeById(anyLong());
+        assertCancelLockedOrWrittenNothing();
+    }
+
+    @Test
+    void everyFinalStatusIs409EvenWhenTheShiftIsAlreadyOverSoStateBeatsTheStartedGuard() {
+        for (ShiftAssignmentStatus finalStatus : List.of(ShiftAssignmentStatus.CANCELLED,
+                ShiftAssignmentStatus.ON_LEAVE, ShiftAssignmentStatus.ABSENT)) {
+            ShiftAssignment row = givenAssignment(TODAY.minusDays(3)); // ca đã qua
+            switch (finalStatus) {
+                case CANCELLED -> row.cancel("Đã hủy", MANAGER, CLOCK.instant());
+                case ON_LEAVE -> row.markOnLeave("Nghỉ phép", MANAGER, CLOCK.instant());
+                case ABSENT -> row.markAbsent("Vắng", MANAGER, CLOCK.instant());
+                default -> throw new IllegalStateException();
+            }
+
+            assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                    .as(finalStatus.name()).isInstanceOf(InvalidStateTransitionException.class);
+        }
+
+        verify(assignments, never()).saveAndFlush(any(ShiftAssignment.class));
+        verifyNoInteractions(audit, notifications);
+        verify(requests, never()).saveAndFlush(any(ShiftRequest.class));
+    }
+
+    @Test
+    void aShiftThatAlreadyStartedIs400AndWritesNothing() {
+        givenAssignment(TODAY); // ca 08:00, bây giờ 10:00
+
+        assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-NS-02");
+
+        verify(assignments, never()).saveAndFlush(any(ShiftAssignment.class));
+        verify(requests, never()).saveAndFlush(any(ShiftRequest.class));
+        verifyNoInteractions(audit, notifications);
+    }
+
+    @Test
+    void aStartedShiftKeepsItsPendingRequestUntouched() {
+        givenAssignment(TODAY);
+        ShiftRequest pending = pendingRequest();
+        when(requests.findPendingByAssignmentIdForUpdate(ASSIGNMENT)).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(BusinessRuleViolationException.class);
+
+        assertThat(pending.getStatus()).isEqualTo(ShiftRequestStatus.PENDING);
+    }
+
+    @Test
+    void anAssignmentPointingAtANonStaffAccountIsADataErrorNotA404() {
+        givenAssignment(WORK_DAY);
+        when(staffDirectory.findStaffForUpdate(STAFF)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(assignments, never()).saveAndFlush(any(ShiftAssignment.class));
+    }
+
+    @Test
+    void aMissingBranchIsADataErrorAfterTheWriteSoTheTransactionRollsBackEverything() {
+        givenAssignment(WORK_DAY);
+        when(branches.findBranch(BRANCH)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancelShiftAssignment(ASSIGNMENT, reason("Nghỉ lễ")))
+                .isInstanceOf(IllegalStateException.class);
+
+        verify(notifications, never()).enqueue(any(NotificationRequest.class));
+    }
+
+    // ---------------------------------------------------------------- my schedule (#8)
+
+    @Test
+    void myScheduleReadsTheCallersOwnRowsOnlyWhateverTheBranchAndNeverChecksScope() {
+        ShiftAssignment row = assignment(1L, MANAGER, DEFINITION);
+        when(assignments.findStaffSchedule(MANAGER, WORK_DAY, WORK_DAY.plusDays(6))).thenReturn(List.of(row));
+        when(staffDirectory.findStaffByIds(anyCollection())).thenReturn(List.of(staff(MANAGER, Role.VET, BRANCH, true)));
+        when(definitions.findAllById(anyCollection())).thenReturn(List.of(definition(DEFINITION, BRANCH, true)));
+        when(requests.findPendingByAssignmentIds(anyCollection())).thenReturn(List.of(pending(1L, REQUEST)));
+
+        List<ShiftAssignmentResponse> result = service.listMyShiftAssignments(WORK_DAY, WORK_DAY.plusDays(6));
+
+        assertThat(result).singleElement().satisfies(response -> {
+            assertThat(response.staffId()).isEqualTo(MANAGER);
+            assertThat(response.staffName()).isEqualTo("Nhân viên 99");
+            assertThat(response.pendingRequestId()).isEqualTo(REQUEST);
+        });
+        verify(assignments, never()).findBranchSchedule(any(), any(), any(), any(), any(), any());
+        verify(branchScope, never()).check(any());
+        verify(branchScope, never()).resolve(any());
+    }
+
+    @Test
+    void myScheduleOfNothingReturnsAnEmptyListWithoutBatchLookups() {
+        when(assignments.findStaffSchedule(anyLong(), any(), any())).thenReturn(List.of());
+
+        assertThat(service.listMyShiftAssignments(WORK_DAY, WORK_DAY)).isEmpty();
+
+        verifyNoInteractions(requests);
+        verify(staffDirectory, never()).findStaffByIds(anyCollection());
+    }
+
+    @Test
+    void myScheduleRangeRulesAreTheSameAsTheBranchList() {
+        assertThatThrownBy(() -> service.listMyShiftAssignments(WORK_DAY, WORK_DAY.minusDays(1)))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-NS-03");
+        assertThatThrownBy(() -> service.listMyShiftAssignments(WORK_DAY, WORK_DAY.plusDays(62)))
+                .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-NS-03");
+        when(assignments.findStaffSchedule(anyLong(), any(), any())).thenReturn(List.of());
+
+        assertThat(service.listMyShiftAssignments(WORK_DAY, WORK_DAY.plusDays(61))).isEmpty(); // đúng 62 ngày
+    }
+
+    // ---------------------------------------------------------------- cấu hình transaction (docs/adr/0138)
+
+    @Test
+    void cancelRunsInAWriteTransactionAtReadCommittedBecauseItRereadsAfterWaitingForTheLocks() throws Exception {
+        Transactional cancel = ShiftAssignmentService.class.getMethod("cancelShiftAssignment", Long.class,
+                ShiftReasonRequest.class).getAnnotation(Transactional.class);
+
+        assertThat(cancel.readOnly()).isFalse();
+        assertThat(cancel.isolation()).isEqualTo(Isolation.DEFAULT);
+        assertThat(cancel.noRollbackFor()).as("mọi lỗi rút cả bốn hiệu ứng").isEmpty();
+        assertThat(cancel.propagation()).isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRED);
+    }
+
+    @Test
+    void myScheduleIsReadOnlyAtRepeatableRead() throws Exception {
+        Transactional mine = ShiftAssignmentService.class.getMethod("listMyShiftAssignments", LocalDate.class,
+                LocalDate.class).getAnnotation(Transactional.class);
+
+        assertThat(mine.readOnly()).isTrue();
+        assertThat(mine.isolation()).isEqualTo(Isolation.REPEATABLE_READ);
+    }
+
     // ---------------------------------------------------------------- helpers
+
+    private ShiftAssignmentService serviceAt(Clock clock) {
+        return new ShiftAssignmentService(branchScope, staffDirectory, definitions, assignments, requests, mapper,
+                transitions, notifications, branches, audit, clock);
+    }
+
+    /** Dựng toàn bộ dữ liệu một lần hủy hợp lệ của phân ca {@code SELF} ở ngày {@code day}, ca 08:00–12:00. */
+    private ShiftAssignment givenAssignment(LocalDate day) {
+        ShiftAssignment row = ShiftAssignment.schedule(BRANCH, STAFF, DEFINITION, day, ShiftAssignmentSource.SELF);
+        ReflectionTestUtils.setField(row, "id", ASSIGNMENT);
+        when(assignments.findScopeById(ASSIGNMENT)).thenReturn(Optional.of(scope(STAFF, BRANCH)));
+        when(assignments.findByIdForUpdate(ASSIGNMENT)).thenReturn(Optional.of(row));
+        when(requests.findPendingByAssignmentIdForUpdate(ASSIGNMENT)).thenReturn(Optional.empty());
+        when(requests.saveAndFlush(any(ShiftRequest.class))).thenAnswer(call -> call.getArgument(0));
+        when(definitions.findById(DEFINITION)).thenReturn(Optional.of(definition(DEFINITION, BRANCH, true)));
+        when(staffDirectory.findEmail(STAFF)).thenReturn(Optional.of("an@example.com"));
+        when(branches.findBranch(BRANCH)).thenReturn(Optional.of(new BranchSummary(BRANCH, "Chi nhánh Quận 1",
+                "1 Lê Lợi", "0900000000", BranchStatus.ACTIVE, false)));
+        return row;
+    }
+
+    private static ShiftReasonRequest reason(String text) {
+        return new ShiftReasonRequest(text);
+    }
+
+    private static ShiftRequest pendingRequest() {
+        ShiftRequest request = ShiftRequest.submit(ASSIGNMENT, STAFF, DEFINITION, ShiftRequestType.LEAVE, null,
+                "Xin nghỉ ốm");
+        ReflectionTestUtils.setField(request, "id", REQUEST);
+        return request;
+    }
+
+    /** Lớp ẩn danh, không dùng mock (cùng lý do {@link #overlap}). */
+    private static AssignmentScope scope(long staffId, long branchId) {
+        return new AssignmentScope() {
+            @Override
+            public Long getStaffId() {
+                return staffId;
+            }
+
+            @Override
+            public Long getBranchId() {
+                return branchId;
+            }
+        };
+    }
+
+    private void assertCancelLockedOrWrittenNothing() {
+        verify(staffDirectory, never()).findStaffForUpdate(anyLong());
+        verify(assignments, never()).findByIdForUpdate(anyLong());
+        verify(requests, never()).findPendingByAssignmentIdForUpdate(anyLong());
+        verify(assignments, never()).saveAndFlush(any());
+        verify(requests, never()).saveAndFlush(any());
+        verifyNoInteractions(audit, notifications);
+    }
 
     private void assertNothingLockedOrWritten() {
         verify(staffDirectory, never()).findStaffForUpdate(anyLong());

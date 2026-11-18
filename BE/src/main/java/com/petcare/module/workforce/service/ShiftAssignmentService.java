@@ -1,7 +1,9 @@
 package com.petcare.module.workforce.service;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -19,23 +21,32 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.branch.api.BranchQueryApi;
+import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
+import com.petcare.module.care.api.NotificationApi;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.module.workforce.dto.CreateShiftAssignmentRequest;
 import com.petcare.module.workforce.dto.ShiftAssignmentResponse;
+import com.petcare.module.workforce.dto.ShiftAssignmentAuditSnapshot;
+import com.petcare.module.workforce.dto.ShiftReasonRequest;
 import com.petcare.module.workforce.entity.ShiftAssignment;
 import com.petcare.module.workforce.entity.ShiftAssignmentSource;
 import com.petcare.module.workforce.entity.ShiftAssignmentStatus;
 import com.petcare.module.workforce.entity.ShiftDefinition;
+import com.petcare.module.workforce.entity.ShiftRequest;
+import com.petcare.module.workforce.fsm.ShiftAssignmentTransitionHandler;
 import com.petcare.module.workforce.mapper.ShiftAssignmentMapper;
 import com.petcare.module.workforce.repository.ShiftAssignmentRepository;
+import com.petcare.module.workforce.repository.ShiftAssignmentRepository.AssignmentScope;
 import com.petcare.module.workforce.repository.ShiftAssignmentRepository.OverlappingShift;
 import com.petcare.module.workforce.repository.ShiftDefinitionRepository;
 import com.petcare.module.workforce.repository.ShiftRequestRepository;
 import com.petcare.module.workforce.repository.ShiftRequestRepository.PendingRequestRow;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
+import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
@@ -55,6 +66,13 @@ import com.petcare.platform.security.BranchScope;
  * <p>
  * <b>#4 danh sách</b> — {@code readOnly} + REPEATABLE_READ để trang, tổng và dữ liệu ghép cùng một ảnh chụp; luôn lọc theo
  * chi nhánh của người gọi (không có tham số chi nhánh).
+ * <p>
+ * <b>#6 hủy (một transaction, READ COMMITTED)</b> — đọc không khóa phạm vi (404 / 403) → khóa {@code accounts} của nhân
+ * viên → phân ca → yêu cầu {@code PENDING} (ADR-0123 mục 8) → <b>đọc lại dưới khóa</b>: chuyển trạng thái hợp lệ (409)
+ * trước, rồi ca chưa bắt đầu (400) → ghi phân ca và Yêu cầu#5 → audit → hai thông báo (outbox). Mọi bước là một
+ * transaction nên lỗi ở bất kỳ bước nào rút cả bốn hiệu ứng.
+ * <p>
+ * <b>#8 lịch của tôi</b> — {@code readOnly} + REPEATABLE_READ; {@code staffId} luôn là người gọi.
  */
 @Service
 public class ShiftAssignmentService {
@@ -62,6 +80,9 @@ public class ShiftAssignmentService {
     /** BR-NS-03, A9: khoảng {@code from}–{@code to} tối đa 62 ngày (tính cả hai đầu). */
     static final int MAX_RANGE_DAYS = 62;
     static final int MAX_PAGE_SIZE = 100;
+
+    /** Ghi chú hệ thống của Yêu cầu#5 khi phân ca bị quản lý hủy (03 Yêu cầu#5; lý do thật nằm ở phân ca). */
+    static final String PENDING_REQUEST_CLOSED_NOTE = "Phân ca đã bị quản lý hủy";
 
     private static final Set<Role> SCHEDULABLE_ROLES = Set.of(Role.RECEPTIONIST, Role.VET, Role.CARETAKER);
     private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm");
@@ -72,18 +93,26 @@ public class ShiftAssignmentService {
     private final ShiftAssignmentRepository assignments;
     private final ShiftRequestRepository requests;
     private final ShiftAssignmentMapper mapper;
+    private final ShiftAssignmentTransitionHandler transitions;
+    private final NotificationApi notifications;
+    private final BranchQueryApi branches;
     private final AuditRecorder audit;
     private final Clock clock;
 
     public ShiftAssignmentService(BranchScope branchScope, StaffDirectoryApi staffDirectory,
             ShiftDefinitionRepository definitions, ShiftAssignmentRepository assignments,
-            ShiftRequestRepository requests, ShiftAssignmentMapper mapper, AuditRecorder audit, Clock clock) {
+            ShiftRequestRepository requests, ShiftAssignmentMapper mapper,
+            ShiftAssignmentTransitionHandler transitions, NotificationApi notifications, BranchQueryApi branches,
+            AuditRecorder audit, Clock clock) {
         this.branchScope = branchScope;
         this.staffDirectory = staffDirectory;
         this.definitions = definitions;
         this.assignments = assignments;
         this.requests = requests;
         this.mapper = mapper;
+        this.transitions = transitions;
+        this.notifications = notifications;
+        this.branches = branches;
         this.audit = audit;
         this.clock = clock;
     }
@@ -145,6 +174,96 @@ public class ShiftAssignmentService {
     public PageResponse<ShiftAssignmentResponse> listShiftAssignments(LocalDate from, LocalDate to, Long staffId,
             ShiftAssignmentStatus status, int page, int size) {
         Long branchId = requireBranch(branchScope.current().branchId());
+        requireValidRange(from, to);
+        Page<ShiftAssignment> result = assignments.findBranchSchedule(branchId, from, to, staffId, status,
+                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE)));
+        List<ShiftAssignmentResponse> content = toResponses(result.getContent());
+        return PageResponse.of(new PageImpl<>(content, result.getPageable(), result.getTotalElements()));
+    }
+
+    /**
+     * workforce-v1 #8 — lịch làm việc của <b>chính người gọi</b> trong {@code [from, to]}, mọi trạng thái và mọi chi
+     * nhánh (nhân viên đã điều chuyển vẫn thấy ca cũ, BR-NS-03). {@code staffId} lấy từ principal, không có tham số
+     * định danh nên không xem được lịch người khác. Không phân trang: tối đa 62 ngày.
+     */
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
+    public List<ShiftAssignmentResponse> listMyShiftAssignments(LocalDate from, LocalDate to) {
+        Long staffId = branchScope.current().accountId();
+        requireValidRange(from, to);
+        return toResponses(assignments.findStaffSchedule(staffId, from, to));
+    }
+
+    /**
+     * workforce-v1 #6 — BRANCH_MANAGER hủy phân ca {@code SCHEDULED} chưa bắt đầu, cả hai nguồn (BR-NS-02, BR-NS-10).
+     * Thứ tự kiểm theo contract §D.5–6 / A11: phạm vi (404 / 403) trước khóa; sau khóa thì chuyển trạng thái (409) rồi
+     * mới guard "ca đã bắt đầu" (400). Hệ quả (Yêu cầu#5, audit, thông báo) cùng transaction.
+     */
+    @Transactional
+    public ShiftAssignmentResponse cancelShiftAssignment(Long shiftAssignmentId, ShiftReasonRequest request) {
+        // 0. Lớp phòng thủ thứ hai sau @PreAuthorize: người gọi phạm vi toàn chuỗi (không có chi nhánh) bị từ chối, vì
+        //    branchScope.check một mình cho SUPER_MANAGER / ADMIN đi qua mọi chi nhánh.
+        requireBranch(branchScope.current().branchId());
+
+        // 1. Phân quyền dữ liệu bằng đọc không khóa: không khóa dòng tài khoản của chi nhánh khác.
+        AssignmentScope scope = assignments.findScopeById(shiftAssignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("phân ca", shiftAssignmentId));
+        branchScope.check(scope.getBranchId());
+
+        // 2. Khóa theo ADR-0123 mục 8: accounts → phân ca → yêu cầu PENDING; từ đây mọi đọc là đọc dưới khóa.
+        StaffSummary staff = staffDirectory.findStaffForUpdate(scope.getStaffId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Phân ca " + shiftAssignmentId + " trỏ tới tài khoản không phải nhân viên " + scope.getStaffId()));
+        ShiftAssignment assignment = assignments.findByIdForUpdate(shiftAssignmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("phân ca", shiftAssignmentId));
+        ShiftRequest pending = requests.findPendingByAssignmentIdForUpdate(shiftAssignmentId).orElse(null);
+
+        // 3. Chuyển trạng thái hợp lệ (409) trước guard nghiệp vụ (400): phân ca đã nghỉ / đã hủy dù ca đã qua báo 409.
+        transitions.validateTransition(assignment.getStatus(), ShiftAssignmentStatus.CANCELLED);
+        ShiftDefinition definition = definitions.findById(assignment.getShiftDefinitionId())
+                .orElseThrow(() -> new IllegalStateException(
+                        "Phân ca " + shiftAssignmentId + " thiếu ca làm việc " + assignment.getShiftDefinitionId()));
+        Instant now = clock.instant();
+        LocalDateTime start = assignment.getWorkDate().atTime(definition.getStartTime());
+        if (!LocalDateTime.ofInstant(now, TimeConfig.BUSINESS_ZONE).isBefore(start)) {
+            throw new BusinessRuleViolationException("BR-NS-02",
+                    "Ca đã bắt đầu, không hủy được; hãy ghi nhận vắng đột xuất");
+        }
+
+        // 4. Ghi. before chụp trước khi đổi vì entity là đối tượng sống.
+        ShiftAssignmentAuditSnapshot before = mapper.toSnapshot(assignment);
+        assignment.cancel(request.reason(), branchScope.current().accountId(), now);
+        ShiftAssignment saved = assignments.saveAndFlush(assignment);
+        closePendingRequest(pending, now);
+
+        audit.record(AuditEntry.of(WorkforceAuditActions.SHIFT_ASSIGNMENT_CANCELLED)
+                .entity(WorkforceAuditActions.SHIFT_ASSIGNMENT_ENTITY, saved.getId())
+                .before(before).after(mapper.toSnapshot(saved)).reason(saved.getReason()));
+
+        // 5. Thông báo (BR-NS-08) dùng đúng lý do đã strip lưu trong phân ca.
+        String branchName = branches.findBranch(saved.getBranchId()).map(BranchSummary::name)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Phân ca " + shiftAssignmentId + " thiếu chi nhánh " + saved.getBranchId()));
+        ShiftNotices.cancelled(staff.accountId(), staffDirectory.findEmail(staff.accountId()).orElse(null),
+                staff.fullName(), definition.getName(), saved.getWorkDate(), definition.getStartTime(),
+                definition.getEndTime(), branchName, saved.getReason()).forEach(notifications::enqueue);
+
+        return mapper.toResponse(saved, staff.fullName(), definition, null);
+    }
+
+    /**
+     * Yêu cầu#5: yêu cầu {@code PENDING} của phân ca không còn hiệu lực → {@code REJECTED}, hệ thống ghi chú, không có
+     * người quyết định. {@code null} = phân ca không có yêu cầu chờ. Đã khóa dòng ở bước trước; dùng lại được cho ghi
+     * vắng đột xuất (#7, T59).
+     */
+    private void closePendingRequest(ShiftRequest pending, Instant now) {
+        if (pending != null) {
+            pending.rejectBySystem(PENDING_REQUEST_CLOSED_NOTE, now);
+            requests.saveAndFlush(pending);
+        }
+    }
+
+    /** BR-NS-03, A9: {@code to} từ {@code from}, tối đa 62 ngày tính cả hai đầu; dùng chung cho #4 và #8. */
+    private static void requireValidRange(LocalDate from, LocalDate to) {
         if (to.isBefore(from)) {
             throw new BusinessRuleViolationException("BR-NS-03", "Ngày kết thúc phải từ ngày bắt đầu trở đi");
         }
@@ -152,10 +271,6 @@ public class ShiftAssignmentService {
             throw new BusinessRuleViolationException("BR-NS-03",
                     "Khoảng ngày tối đa " + MAX_RANGE_DAYS + " ngày");
         }
-        Page<ShiftAssignment> result = assignments.findBranchSchedule(branchId, from, to, staffId, status,
-                PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE)));
-        List<ShiftAssignmentResponse> content = toResponses(result.getContent());
-        return PageResponse.of(new PageImpl<>(content, result.getPageable(), result.getTotalElements()));
     }
 
     /** Ghép theo lô: đúng một lần cho mỗi nguồn (nhân viên, ca, yêu cầu chờ), bất kể số dòng. */

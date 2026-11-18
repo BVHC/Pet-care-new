@@ -73,8 +73,8 @@
 
 - **`GET /shift-assignments`** — Lịch phân ca của chi nhánh. Query: `from`, `to`, `staffId?`, `status?`, `page?`, `size?`. Response `200` trang `ShiftAssignment`. Lỗi: `400` `from` / `to` thiếu hoặc sai kiểu (`MALFORMED_REQUEST`) · `to` < `from` hoặc khoảng quá 62 ngày tính cả hai đầu (`BR-NS-03`, A9) · `401` · `403`.
 - **`POST /shift-assignments`** — Phân ca cho nhân viên. Request `CreateShiftAssignmentRequest`. Response `201` `ShiftAssignment`. Lỗi: `400` `BR-NS-02` ngày trong quá khứ · ca ngừng dùng · nhân viên không phải A06–A08 `ACTIVE` của chi nhánh · trùng hoặc chồng giờ phân ca khác · `401` · `403` · `404` Không tìm thấy nhân viên hoặc ca trong chi nhánh (id của chi nhánh khác và id không tồn tại trả cùng một dạng lỗi).
-- **`POST /shift-assignments/{shiftAssignmentId}/cancel`** — Hủy phân ca. Request `ReasonRequest`. Response `200` `ShiftAssignment`. Lỗi: `400` `BR-NS-02` ca đã bắt đầu (dùng ghi vắng đột xuất); `VALIDATION_FAILED` thiếu lý do · `401` · `403` `ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác · `404` · `409` `INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11).
-- **`POST /shift-assignments/{shiftAssignmentId}/absent`** — Ghi nhận vắng đột xuất. Request `ReasonRequest`. Response `200` `ShiftAssignment`. Lỗi: `400` `BR-NS-07` ca của ngày tương lai · quá 7 ngày **[CFG]**; `VALIDATION_FAILED` thiếu lý do · `401` · `403` `ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác · `404` · `409` `INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11).
+- **`POST /shift-assignments/{shiftAssignmentId}/cancel`** — Hủy phân ca. Request `ShiftReasonRequest`. Response `200` `ShiftAssignment`. Lỗi: `400` `BR-NS-02` ca đã bắt đầu (dùng ghi vắng đột xuất); `VALIDATION_FAILED` thiếu lý do · `401` · `403` `ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác · `404` · `409` `INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11).
+- **`POST /shift-assignments/{shiftAssignmentId}/absent`** — Ghi nhận vắng đột xuất. Request `ShiftReasonRequest`. Response `200` `ShiftAssignment`. Lỗi: `400` `BR-NS-07` ca của ngày tương lai · quá 7 ngày **[CFG]**; `VALIDATION_FAILED` thiếu lý do · `401` · `403` `ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác · `404` · `409` `INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11).
 - **`GET /me/shift-assignments`** — Lịch làm việc của tôi. Query: `from`, `to`. Response `200` mảng `ShiftAssignment`. Lỗi: `400` `from` / `to` thiếu hoặc `to` < `from` hoặc khoảng quá 62 ngày (`BR-NS-03`) · `401` · `403`.
 ### Shift requests
 
@@ -101,7 +101,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`ShiftAssignmentSource`** — enum: `SELF`, `MANAGER`. SELF = nhân viên tự đăng ký (BR-NS-11); MANAGER = BRANCH_MANAGER phân hộ (BR-NS-02)
 - **`ShiftAssignment`** — {`shiftAssignmentId`: int64, `branchId`: int64, `staffId`: int64, `staffName`: string, `shiftDefinitionId`: int64, `shiftName`: string, `startTime`: string, `endTime`: string, `workDate`: date, `status`: ShiftAssignmentStatus, `source`: ShiftAssignmentSource, `reason?`: string, `pendingRequestId?`: int64}
 - **`CreateShiftAssignmentRequest`** — {`staffId`: int64, `shiftDefinitionId`: int64, `workDate`: date}
-- **`ReasonRequest`** — {`reason`: string}
+- **`ShiftReasonRequest`** — {`reason`: string}
 - **`ShiftRegistrationItem`** — {`workDate`: date, `shiftDefinitionId`: int64}
 - **`PutShiftRegistrationRequest`** — {`items`: [ShiftRegistrationItem]}
 - **`ShiftRegistration`** — {`weekStart`: date, `requiredShifts`: int32, `shiftCount`: int32, `assignments`: [ShiftAssignment]}

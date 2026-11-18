@@ -78,6 +78,22 @@ class ShiftAssignmentMapperTest {
     }
 
     @Test
+    void anAssignmentMovedToAnotherShiftBySwapShowsTheNewShiftNameAndHoursAndStaysScheduledWithoutAReason() {
+        ShiftAssignment assignment = scheduled(31L, 5L, 12L, 7L, LocalDate.of(2026, 11, 24));
+        assignment.swapTo(8L);
+
+        ShiftAssignmentResponse response = mapper.toResponse(assignment, "An", definition(8L, 5L, "Ca chiều",
+                LocalTime.of(13, 0), LocalTime.of(17, 0)), null);
+
+        assertThat(response.shiftDefinitionId()).isEqualTo(8L);
+        assertThat(response.shiftName()).isEqualTo("Ca chiều");
+        assertThat(response.startTime()).isEqualTo(LocalTime.of(13, 0));
+        assertThat(response.endTime()).isEqualTo(LocalTime.of(17, 0));
+        assertThat(response.status()).isEqualTo(ShiftAssignmentStatus.SCHEDULED);
+        assertThat(response.reason()).isNull();
+    }
+
+    @Test
     void snapshotUsesStringsForDateAndEnumsAndIsExactlyTheAuditSet() {
         ShiftAssignment assignment = scheduled(31L, 5L, 12L, 7L, LocalDate.of(2026, 11, 24));
 

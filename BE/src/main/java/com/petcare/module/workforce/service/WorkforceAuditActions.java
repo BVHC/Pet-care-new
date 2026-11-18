@@ -12,6 +12,9 @@ final class WorkforceAuditActions {
     /** Phân ca hộ của BRANCH_MANAGER (BR-NS-02, BR-NS-10); phân ca tự đăng ký không audit (BR-NS-11). */
     static final String SHIFT_ASSIGNMENT_CREATED = "SHIFT_ASSIGNMENT_CREATED";
 
+    /** BRANCH_MANAGER hủy phân ca chưa bắt đầu, cả hai nguồn (BR-NS-02, BR-NS-10). */
+    static final String SHIFT_ASSIGNMENT_CANCELLED = "SHIFT_ASSIGNMENT_CANCELLED";
+
     /** {@code audit_logs.entity_type} của ca làm việc. */
     static final String SHIFT_DEFINITION_ENTITY = "shift_definitions";
 

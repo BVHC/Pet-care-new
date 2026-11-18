@@ -71,7 +71,7 @@ m.schema("ShiftAssignment", {
     "pendingRequestId": "int64?|Yêu cầu PENDING của phân ca, nếu có (BR-NS-04)",
 })
 m.schema("CreateShiftAssignmentRequest", {"staffId": "int64", "shiftDefinitionId": "int64", "workDate": "date"})
-m.schema("ReasonRequest", {"reason": "string:300"})
+m.schema("ShiftReasonRequest", {"reason": "string:300"})
 m.schema("ShiftRegistrationItem", {"workDate": "date|Phải nằm trong tuần của đường dẫn", "shiftDefinitionId": "int64|Ca đang dùng của chi nhánh"})
 m.schema("PutShiftRegistrationRequest", {"items": "array:ref:ShiftRegistrationItem|Toàn bộ (ngày, ca) nhân viên muốn có trong tuần; thay thế các phân ca SELF hiện có (BR-NS-11)"})
 m.schema("ShiftRegistration", {
@@ -134,14 +134,14 @@ m.op("post", "/shift-assignments", "createShiftAssignment", "Phân ca cho nhân 
      notes="Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không thông báo cho nhân viên (BR-NS-08 không liệt kê phân hộ). Không kiểm định mức tuần (BR-NS-12). Chồng giờ là hai khoảng giờ giao nhau thật sự; hai ca liền kề (kết thúc = bắt đầu) không chồng. Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`.")
 m.op("post", "/shift-assignments/{shiftAssignmentId}/cancel", "cancelShiftAssignment", "Hủy phân ca",
      "Shift assignments", "UC34", "BR-NS-02, BR-NS-08, BR-NS-10", "A05", BM, "SCHEDULED → CANCELLED (Phân ca#2)",
-     body="ReasonRequest", resp="ShiftAssignment", path_params=["ShiftAssignmentId"], errors=(400, 401, 403, 404, 409),
+     body="ShiftReasonRequest", resp="ShiftAssignment", path_params=["ShiftAssignmentId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-NS-02` ca đã bắt đầu (dùng ghi vắng đột xuất); `VALIDATION_FAILED` thiếu lý do",
                403: "`ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác",
                409: "`INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11)"},
      notes="Cùng một transaction: phân ca → `CANCELLED` và yêu cầu `PENDING` của nó → `REJECTED` (Yêu cầu#5; `decision_note` do hệ thống ghi, `decided_by` rỗng); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08).")
 m.op("post", "/shift-assignments/{shiftAssignmentId}/absent", "recordShiftAbsence", "Ghi nhận vắng đột xuất",
      "Shift assignments", "UC38", "BR-NS-07, BR-NS-08, BR-NS-10", "A05", BM, "SCHEDULED → ABSENT (Phân ca#4)",
-     body="ReasonRequest", resp="ShiftAssignment", path_params=["ShiftAssignmentId"], errors=(400, 401, 403, 404, 409),
+     body="ShiftReasonRequest", resp="ShiftAssignment", path_params=["ShiftAssignmentId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-NS-07` ca của ngày tương lai · quá 7 ngày **[CFG]**; `VALIDATION_FAILED` thiếu lý do",
                403: "`ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác",
                409: "`INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11)"},

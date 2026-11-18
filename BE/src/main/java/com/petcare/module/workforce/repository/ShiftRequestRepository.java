@@ -36,6 +36,20 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Long
             """, nativeQuery = true)
     List<PendingRequestRow> findPendingByAssignmentIds(@Param("assignmentIds") Collection<Long> assignmentIds);
 
+    /**
+     * Yêu cầu {@code PENDING} của <b>một</b> phân ca ({@code FOR NO KEY UPDATE}): hủy phân ca, ghi vắng và sửa đăng ký
+     * tuần đóng nó trong cùng transaction (Yêu cầu#5). Tối đa một dòng nhờ {@code ux_shift_requests_pending} (V36);
+     * status là literal để dùng partial index đó. Khóa sau {@code accounts} và phân ca (ADR-0123 mục 8).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT r FROM ShiftRequest r
+            WHERE r.assignmentId = :assignmentId
+              AND r.status = com.petcare.module.workforce.entity.ShiftRequestStatus.PENDING
+            """)
+    Optional<ShiftRequest> findPendingByAssignmentIdForUpdate(@Param("assignmentId") Long assignmentId);
+
     /** {@code FOR NO KEY UPDATE}: rút, duyệt, từ chối yêu cầu. */
     @Transactional(propagation = Propagation.MANDATORY)
     @Lock(LockModeType.PESSIMISTIC_WRITE)

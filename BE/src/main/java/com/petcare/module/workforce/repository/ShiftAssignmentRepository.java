@@ -28,6 +28,34 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
     @Query("SELECT a FROM ShiftAssignment a WHERE a.id = :id")
     Optional<ShiftAssignment> findByIdForUpdate(@Param("id") Long id);
 
+    /** Chủ và chi nhánh của một phân ca, đọc <b>không khóa</b> để phân quyền dữ liệu trước khi khóa (docs/adr/0138 bước 4). */
+    interface AssignmentScope {
+        Long getStaffId();
+
+        Long getBranchId();
+    }
+
+    /**
+     * Phạm vi của phân ca để kiểm 404 / 403 trước mọi khóa; hai cột này {@code updatable = false} nên đọc không khóa
+     * không bị lỗi thời. Rỗng = không có phân ca.
+     */
+    @Query("SELECT a.staffId AS staffId, a.branchId AS branchId FROM ShiftAssignment a WHERE a.id = :id")
+    Optional<AssignmentScope> findScopeById(@Param("id") Long id);
+
+    /**
+     * Lịch của chính một nhân viên trong {@code [from, to]} (workforce-v1 #8), <b>mọi trạng thái</b> và mọi chi nhánh,
+     * sắp {@code workDate}, giờ bắt đầu của ca, {@code id} tăng dần. Không phân trang: khoảng tối đa 62 ngày và các phân
+     * ca {@code SCHEDULED} của một người không chồng giờ. Đi qua {@code ix_shift_assignments_staff_date}.
+     */
+    @Query("""
+            SELECT a FROM ShiftAssignment a, ShiftDefinition d
+            WHERE d.id = a.shiftDefinitionId AND a.staffId = :staffId
+              AND a.workDate >= :from AND a.workDate <= :to
+            ORDER BY a.workDate ASC, d.startTime ASC, a.id ASC
+            """)
+    List<ShiftAssignment> findStaffSchedule(@Param("staffId") Long staffId, @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
     /** Một phân ca {@code SCHEDULED} đang giao giờ với ca mới (để báo lỗi nêu đúng phân ca đang chồng). */
     interface OverlappingShift {
         Long getAssignmentId();

@@ -1,11 +1,13 @@
 package com.petcare.module.workforce.controller;
 
 import java.time.LocalDate;
+import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.workforce.dto.CreateShiftAssignmentRequest;
 import com.petcare.module.workforce.dto.ShiftAssignmentResponse;
+import com.petcare.module.workforce.dto.ShiftReasonRequest;
 import com.petcare.module.workforce.entity.ShiftAssignmentStatus;
 import com.petcare.module.workforce.service.ShiftAssignmentService;
 import com.petcare.platform.config.ApiErrorDoc;
@@ -27,15 +30,18 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Phân ca của chi nhánh (UC34, workforce-v1 #4–5; docs/adr/0138). Không chứa logic và không biết mã rule: BR-NS-02 /
- * BR-NS-03 do {@link ShiftAssignmentService} kiểm. Chỉ BRANCH_MANAGER (A06–A08 không có quyền đọc ở đây, khác với
- * {@code GET /shift-definitions}).
+ * Phân ca (UC34, UC35, workforce-v1 #4–6, #8; docs/adr/0138). Không chứa logic và không biết mã rule: BR-NS-02 /
+ * BR-NS-03 do {@link ShiftAssignmentService} kiểm. #4–6 chỉ BRANCH_MANAGER (A06–A08 không có quyền ở đây, khác với
+ * {@code GET /shift-definitions}); #8 chỉ nhân viên A06–A08 và chỉ lịch của chính họ.
  */
 @RestController
 @RequestMapping("/api")
 public class ShiftAssignmentController {
 
     static final String BRANCH_MANAGER = "hasRole('BRANCH_MANAGER')";
+
+    /** Nhân viên A06–A08 (không gồm BRANCH_MANAGER: quản lý không nằm trong lịch, workforce-v1 Q3). */
+    static final String STAFF = "hasAnyRole('RECEPTIONIST', 'VET', 'CARETAKER')";
 
     private final ShiftAssignmentService shiftAssignments;
 
@@ -72,6 +78,45 @@ public class ShiftAssignmentController {
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(shiftAssignments.listShiftAssignments(from, to, staffId, status, page, size),
                 "Lịch phân ca của chi nhánh");
+    }
+
+    /** workforce-v1 #6. */
+    @Operation(operationId = "cancelShiftAssignment", tags = "Shift assignments", summary = "Hủy phân ca",
+            description = "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. "
+                + "Chuyển trạng thái: SCHEDULED → CANCELLED (Phân ca#2). Cùng một transaction: phân ca → `CANCELLED` và "
+                + "yêu cầu `PENDING` của nó → `REJECTED` (Yêu cầu#5; `decision_note` do hệ thống ghi, `decided_by` "
+                + "rỗng); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08).",
+            parameters = {@Parameter(name = "shiftAssignmentId", in = ParameterIn.PATH, example = "31")})
+    @ApiErrorDoc(status = 400, description = "`BR-NS-02` ca đã bắt đầu (dùng ghi vắng đột xuất); `VALIDATION_FAILED` "
+            + "thiếu lý do")
+    @ApiErrorDoc(status = 403, description = "`ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "`INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước "
+            + "guard 400, A11)")
+    @PostMapping("/shift-assignments/{shiftAssignmentId}/cancel")
+    @PreAuthorize(BRANCH_MANAGER)
+    public ApiResponse<ShiftAssignmentResponse> cancel(@PathVariable Long shiftAssignmentId,
+            @Valid @RequestBody ShiftReasonRequest request) {
+        return ApiResponse.ok(shiftAssignments.cancelShiftAssignment(shiftAssignmentId, request), "Đã hủy phân ca");
+    }
+
+    /** workforce-v1 #8. */
+    @Operation(operationId = "listMyShiftAssignments", tags = "Shift assignments", summary = "Lịch làm việc của tôi",
+            description = "UC35 · BR-NS-03. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển "
+                + "trạng thái: —. Không phân trang (tối đa 62 ngày). Sắp `workDate`, `startTime` tăng dần. Gồm cả "
+                + "phân ca đã nghỉ / vắng / hủy để hiển thị lịch sử.",
+            parameters = {
+                    @Parameter(name = "from", in = ParameterIn.QUERY, required = true, example = "2026-11-23"),
+                    @Parameter(name = "to", in = ParameterIn.QUERY, required = true, example = "2026-11-29")})
+    @ApiErrorDoc(status = 400, description = "`from` / `to` thiếu hoặc `to` < `from` hoặc khoảng quá 62 ngày "
+            + "(`BR-NS-03`)")
+    @ApiErrorDoc(status = 403)
+    @GetMapping("/me/shift-assignments")
+    @PreAuthorize(STAFF)
+    public ApiResponse<List<ShiftAssignmentResponse>> listMine(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ApiResponse.ok(shiftAssignments.listMyShiftAssignments(from, to), "Lịch làm việc của tôi");
     }
 
     /** workforce-v1 #5. */
