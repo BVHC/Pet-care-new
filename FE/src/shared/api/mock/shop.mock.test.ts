@@ -489,11 +489,14 @@ describe('xử lý và giao đơn (UC65, BR-BH-11)', () => {
   });
 
   describe('bàn giao (#15)', () => {
-    it('thiếu đơn vị vận chuyển hoặc mã vận đơn → 400 BR-BH-11, đứng trước 409', async () => {
+    it('thiếu đơn vị vận chuyển hoặc mã vận đơn → 400 BR-BH-11 (câu của BE thật 17/11), đứng SAU 409', async () => {
       for (const body of [{}, { carrier: 'GHN' }, { trackingCode: 'X' }, { carrier: ' ', trackingCode: 'X' }, { carrier: 'GHN', trackingCode: '' }]) {
         expectError(await fails('desk', 'post', '/api/online-orders/4/ship', body), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-11');
       }
-      expectError(await fails('desk', 'post', '/api/online-orders/5/ship', {}), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-11'); // PAID, thiếu → 400 trước 409
+      expect((await fails('desk', 'post', '/api/online-orders/4/ship', { trackingCode: 'X' })).data.message).toBe('Thiếu đơn vị vận chuyển (BR-BH-11)');
+      expect((await fails('desk', 'post', '/api/online-orders/4/ship', { carrier: 'GHN' })).data.message).toBe('Thiếu mã vận đơn (BR-BH-11)');
+      // BE thật (đo 17/11): đơn PAID gọi ship thiếu body → 409 trước, 400 BR-BH-11 sau.
+      expectError(await fails('desk', 'post', '/api/online-orders/5/ship', {}), 409, 'INVALID_STATE_TRANSITION');
       expect((await staffOrder('desk', 4)).status).toBe('PROCESSING');
     });
     it('quá 100 ký tự → VALIDATION_FAILED, sai kiểu → MALFORMED_REQUEST, cả hai chạy trước vai trò', async () => {
@@ -504,11 +507,20 @@ describe('xử lý và giao đơn (UC65, BR-BH-11)', () => {
   });
 
   describe('giao thất bại và giao lại (#17, #18)', () => {
-    it('SHIPPED → DELIVERY_FAILED cần lý do (BR-BH-11); thiếu → 400', async () => {
-      for (const body of [{}, { reason: '  ' }]) expectError(await fails('desk', 'post', '/api/online-orders/3/fail-delivery', body), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-11');
+    it('SHIPPED → DELIVERY_FAILED cần lý do; thiếu hoặc trắng → 400 VALIDATION_FAILED (BE thật 17/11: @NotBlank của ReasonRequest, không phải BR-BH-11)', async () => {
+      for (const body of [{}, { reason: '  ' }]) {
+        const res = await fails('desk', 'post', '/api/online-orders/3/fail-delivery', body);
+        expectError(res, 400, 'VALIDATION_FAILED');
+        expect(res.data.message).toBe('reason: Lý do là bắt buộc');
+      }
       expectError(await fails('desk', 'post', '/api/online-orders/3/fail-delivery', { reason: 'x'.repeat(301) }), 400, 'VALIDATION_FAILED');
       expect((await data<OnlineOrder>('desk', 'post', '/api/online-orders/3/fail-delivery', { reason: 'Khách vắng nhà' })).status).toBe('DELIVERY_FAILED');
       expect(ids(await data('desk', 'get', '/api/online-orders'))).toContain(3);
+    });
+    it('thiếu lý do chạy TRƯỚC vai trò và TRƯỚC 404 / 409 (BE thật 17/11: @Valid trước @PreAuthorize)', async () => {
+      expectError(await fails('manager', 'post', '/api/online-orders/5/fail-delivery', { reason: '' }), 400, 'VALIDATION_FAILED'); // quản lý: 400, không phải 403
+      expectError(await fails('desk', 'post', '/api/online-orders/999/fail-delivery', {}), 400, 'VALIDATION_FAILED'); // đơn không có: 400, không phải 404
+      expectError(await fails('desk', 'post', '/api/online-orders/5/fail-delivery', { reason: 'Khách vắng nhà' }), 409, 'INVALID_STATE_TRANSITION'); // PAID, lý do hợp lệ
     });
     it('giao lại: SHIPPED, redeliveryCount + 1, cập nhật mã vận đơn', async () => {
       const again = await data<OnlineOrder>('desk', 'post', '/api/online-orders/7/redeliver', { carrier: 'Viettel Post', trackingCode: 'VTP999' });
@@ -516,8 +528,12 @@ describe('xử lý và giao đơn (UC65, BR-BH-11)', () => {
     });
     it('quá số lần giao lại tối đa [CFG] 2 → 400 BR-BH-11; thiếu mã vận đơn cũng 400', async () => {
       expectError(await fails('desk', 'post', '/api/online-orders/6/redeliver', SHIP), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-11');
-      expect((await fails('desk', 'post', '/api/online-orders/6/redeliver', SHIP)).data.message).toContain('tối đa 2 lần');
+      expect((await fails('desk', 'post', '/api/online-orders/6/redeliver', SHIP)).data.message).toBe('Đơn đã giao lại tối đa 2 lần, không giao lại thêm được (BR-BH-11)');
       expectError(await fails('desk', 'post', '/api/online-orders/7/redeliver', { carrier: 'GHN' }), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-11');
+      // Thiếu body trên đơn hết lượt: BE kiểm "thiếu" TRƯỚC "hết lượt" (đo 17/11 trên đơn #5 của petcare_t67).
+      expect((await fails('desk', 'post', '/api/online-orders/6/redeliver', {})).data.message).toBe('Thiếu đơn vị vận chuyển (BR-BH-11)');
+      // 409 trước 400: đơn PAID gọi giao lại thiếu body.
+      expectError(await fails('desk', 'post', '/api/online-orders/5/redeliver', {}), 409, 'INVALID_STATE_TRANSITION');
       // vòng đủ 2 lần rồi lần thứ 3 bị chặn
       await call('desk', 'post', '/api/online-orders/7/redeliver', SHIP);
       await call('desk', 'post', '/api/online-orders/7/fail-delivery', { reason: 'Lần 2 thất bại' });

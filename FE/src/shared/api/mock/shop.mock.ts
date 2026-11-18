@@ -1,16 +1,21 @@
 // Mock shop-v1 (UC61, 62, 64, 65; docs/api/shop-v1.md #1–19): giỏ hàng, báo giá + đặt đơn online, đơn của tôi, xử lý và giao đơn của lễ tân.
-// BE tầng 3 CHƯA cài (08 + yaml đã duyệt ở T54) nên mock không có số đo thật; mọi chỗ hợp đồng im lặng là ASSUMPTION dưới đây (chung cho shop / payment / returns,
+// BE đã cài shop #1–#18 (task 116, 125, 126); FE ghép BE thật ở T67 (#1–#11) và T68 (#12–#18), nên mock chỉ còn để chạy Vitest / toàn mock và phải khớp số đo ở A1–A9. #19 BE CHƯA có (task 138).
+// Mọi chỗ hợp đồng im lặng là ASSUMPTION dưới đây (chung cho shop / payment / returns,
 // state và nghiệp vụ chéo module ở commerce.store.ts, phần HTTP dùng chung ở commerce.http.ts).
 //
 //  A1  Thứ tự kiểm: 401 (adapter) → 400 path / query / body SAI KIỂU (MALFORMED_REQUEST, kể cả enum lạ) → 400 VALIDATION_FAILED của BODY (maxLength, trường bắt buộc có
 //      @NotNull / @NotBlank; @Valid chạy TRƯỚC @PreAuthorize, đo trên BE thật ở care.mock / cashier.mock) → 403 ACCESS_DENIED vai trò → 404 → 403 phạm vi chi nhánh
 //      (ACCESS_DENIED_SCOPE_MISMATCH, message chung) → 400 BR-… → 409 INVALID_STATE_TRANSITION. Đơn của người khác với khách là 404 (ADR-0006), với nhân viên chi nhánh
 //      khác là 403 phạm vi sau 404. Lệch có chủ đích so với dòng "400 VALIDATION_FAILED chạy SAU vai trò" của brief: dòng đó đúng cho tham số query (@Positive…),
-//      còn body @Valid đã đo là chạy trước vai trò. BR (400) đứng TRƯỚC 409 như 00-method §3.5 (GĐ1 BE đo ngược ở sales / cashier: 409 trước rule).
-//  A2  "Thiếu lý do / thiếu vận đơn" mà yaml ghi `400 BR-BH-11` (fail-delivery, cancel-failed, ship, redeliver) là 400 BUSINESS_RULE_VIOLATION sau 404 / phạm vi,
-//      trước 409 (như care-v1 C2: DTO không @NotNull); kiểu sai hoặc quá maxLength vẫn là MALFORMED / VALIDATION_FAILED trước vai trò. Riêng khách hủy đơn (#10) yaml
-//      không nêu BR nên thiếu `reason` là VALIDATION_FAILED. Số lượng giỏ ngoài 1–99 và thiếu `quantity` đều là 400 VALIDATION_FAILED ("quantity: Số lượng phải từ 1 đến 99" /
-//      "quantity: Số lượng là bắt buộc"), chạy trước vai trò: đo trên BE thật 17/11 (DTO dùng @Min / @Max; shop-v1 hiện hành cũng ghi VALIDATION_FAILED).
+//      còn body @Valid đã đo là chạy trước vai trò. Xử lý đơn của lễ tân (#14–#19): 409 INVALID_STATE_TRANSITION đứng TRƯỚC 400 BR-BH-11 (BE thật đo 17/11, T68: `requireStatus`
+//      chạy trước `required(...)`, ADR-0146 F3; sales / cashier GĐ1 cũng 409 trước rule), khác dòng "BR trước 409" của 00-method §3.5.
+//  A2  Thiếu đơn vị vận chuyển / mã vận đơn (ship, redeliver) là 400 BUSINESS_RULE_VIOLATION BR-BH-11 do service kiểm ("Thiếu đơn vị vận chuyển (BR-BH-11)" / "Thiếu mã vận đơn (BR-BH-11)"),
+//      sau 404 / phạm vi và sau 409; `redeliver` kiểm "thiếu" rồi mới "hết lượt" ("Đơn đã giao lại tối đa N lần, không giao lại thêm được (BR-BH-11)"). Đã đo trên BE thật 17/11.
+//      `fail-delivery` thiếu / trắng lý do là 400 VALIDATION_FAILED "reason: Lý do là bắt buộc" (@NotBlank của ReasonRequest dùng chung; hợp đồng đã sửa chữ theo ADR-0146 F3), chạy
+//      trước vai trò và 404 như mọi body @Valid. `cancel-failed` (#19) BE CHƯA CÓ (task 138): mock theo chữ hợp đồng (400 BR-BH-11); task 138 sẽ dùng lại ReasonRequest nên BE thật
+//      nhiều khả năng trả VALIDATION_FAILED như #17: đo lại khi có controller. Mock chặt hơn BE ở một chỗ: `carrier: 123` (sai kiểu) mock trả MALFORMED_REQUEST, BE ép thành chuỗi.
+//      Kiểu sai hoặc quá maxLength vẫn là MALFORMED / VALIDATION_FAILED trước vai trò. Riêng khách hủy đơn (#10) thiếu `reason` là VALIDATION_FAILED. Số lượng giỏ ngoài 1–99 và thiếu
+//      `quantity` đều là 400 VALIDATION_FAILED ("quantity: Số lượng phải từ 1 đến 99" / "quantity: Số lượng là bắt buộc"), chạy trước vai trò: đo trên BE thật 17/11 (DTO dùng @Min / @Max).
 //  A3  Quyền (đúng dòng "Quyền:"): /me/cart, /me/online-orders… chỉ CUSTOMER; GET /online-orders và chi tiết: RECEPTIONIST + BRANCH_MANAGER của chi nhánh xử lý;
 //      mọi lệnh ghi chỉ RECEPTIONIST (BRANCH_MANAGER chỉ xem → 403). ADMIN, SUPER_MANAGER, VET, CARETAKER không có quyền nào ở đây. Chi nhánh lấy từ `branchIdOf(account.id)`.
 //  A4  Giỏ: sản phẩm ngừng kinh doanh bị loại khi xem (vẫn nằm trong bảng); `available` = còn hàng ở ít nhất một chi nhánh ACTIVE (đã trừ phần giữ); PUT cùng sản phẩm
@@ -28,7 +33,7 @@
 //      cho tới task 138 (hoàn hàng + hoàn tiền; BE thật 17/11, ADR-0145 C1). Hoàn hàng về lô gốc và hoàn tiền GATEWAY toàn bộ gồm phí vận chuyển chỉ còn ở nhánh lễ tân
 //      hủy sau giao thất bại (#19). Không gửi thông báo ST20 (ONLINE_ORDER_*) và không ghi audit (BR-QT-15): ngoài phạm vi.
 //      `refundStatus` của OnlineOrder = trạng thái hoàn tiền gần nhất của đơn, null khi chưa có hoàn tiền (shop-v1, 08 §D Q4).
-//  A8  Lý do giao thất bại có lưu nhưng yaml `OnlineOrder` KHÔNG có field để trả (03 #14 "DELIVERY_FAILED có lý do") — đề nghị thêm `deliveryFailReason` hoặc dùng `cancelReason`;
+//  A8  Lý do giao thất bại BE lưu ở `online_orders.delivery_failure_reason` (V58) nhưng `OnlineOrder` KHÔNG trả (đo 17/11; mock lưu `failReason` cũng không trả) — đề nghị Dũng thêm `deliveryFailureReason`;
 //      `OnlineOrderLine.orderLineId` cũng không có trong yaml (returns-v1 cần `order_lines.id`): mock trả `orderLineId` (types/shop.ts ghi rõ).
 //  A9  Job hệ thống ST10 / ST11 / ST12 / ST21 chạy lười mỗi request (commerce.store.ts `sweep`): ST10 hủy đơn PENDING_PAYMENT quá hạn + 15 phút; ST12 tự xác nhận đơn DELIVERED
 //      sau 7 ngày nếu không có yêu cầu trả hàng đang mở.
@@ -397,7 +402,7 @@ interface Transition {
   to: OnlineOrderStatus;
   /** Kiểu và độ dài của body: chạy trước vai trò (A1). Có hàm này thì endpoint có body. */
   parse?: (b: Body) => MockReply | null;
-  /** BR-BH-11 (400): sau 404 / phạm vi, trước 409 (A2). */
+  /** BR-BH-11 (400): sau 404 / phạm vi và sau 409 (A2). */
   guard?: (o: OnlineOrderRow, b: Body) => MockReply | null;
   apply: (s: State, o: OnlineOrderRow, b: Body, at: number, by: number) => void;
   message: string;
@@ -414,9 +419,10 @@ const transition = (t: Transition): MockHandler => (req) => {
   const s = loadFresh();
   const o = ofMyBranch(s, req);
   if (isReply(o)) return o;
+  // 409 trước BR-BH-11 (BE thật 17/11: `requireStatus` chạy trước `required(...)`, ADR-0146 F3).
+  if (!t.from.includes(o.status)) return stateError('đơn hàng online', o.status, t.to);
   const broken = t.guard?.(o, b);
   if (broken) return broken;
-  if (!t.from.includes(o.status)) return stateError('đơn hàng online', o.status, t.to);
   t.apply(s, o, b, Date.now(), me(req).id);
   save(s);
   return ok(orderView(o, s), 200, t.message);
@@ -433,8 +439,16 @@ const parseShip = (b: Body) => {
     ['trackingCode', `Mã vận đơn tối đa ${SHOP_LIMITS.trackingCode} ký tự`, tooLong(b.trackingCode, SHOP_LIMITS.trackingCode)],
   ]);
 };
+/** `fail-delivery`: lý do là @NotBlank của ReasonRequest nên thiếu / trắng là VALIDATION_FAILED (chạy trước vai trò và 404), không phải BR-BH-11 (A2). */
+const parseFailReason = (b: Body) => {
+  if (has(b.reason) && typeof b.reason !== 'string') return malformed();
+  return invalid([
+    ['reason', 'Lý do là bắt buộc', !isText(b.reason)],
+    ['reason', `Lý do tối đa ${SHOP_LIMITS.reason} ký tự`, tooLong(b.reason, SHOP_LIMITS.reason)],
+  ]);
+};
 const guardShip = (_o: OnlineOrderRow, b: Body) =>
-  !isText(b.carrier) ? ruleFail('BR-BH-11', 'Vui lòng nhập đơn vị vận chuyển') : !isText(b.trackingCode) ? ruleFail('BR-BH-11', 'Vui lòng nhập mã vận đơn') : null;
+  !isText(b.carrier) ? ruleFail('BR-BH-11', 'Thiếu đơn vị vận chuyển') : !isText(b.trackingCode) ? ruleFail('BR-BH-11', 'Thiếu mã vận đơn') : null;
 const guardReason = (what: string) => (_o: OnlineOrderRow, b: Body) => (isText(b.reason) ? null : ruleFail('BR-BH-11', what));
 
 const startProcessing = transition({
@@ -469,22 +483,21 @@ const markDelivered = transition({
 const failDelivery = transition({
   from: ['SHIPPED'],
   to: 'DELIVERY_FAILED',
-  parse: parseReason,
-  guard: guardReason('Vui lòng nhập lý do giao thất bại'),
+  parse: parseFailReason,
   apply: (_s, o, b) => {
     Object.assign(o, { status: 'DELIVERY_FAILED', failReason: (b.reason as string).trim() });
   },
   message: 'Đã ghi nhận giao thất bại',
 });
 
-/** Đơn đã giao lại đủ `shop.max_redelivery` lần thì không giao lại nữa (kiểm khi đang DELIVERY_FAILED; trạng thái khác là 409). */
+/** Đơn đã giao lại đủ `shop.max_redelivery` lần thì không giao lại nữa: BE kiểm "thiếu vận đơn" rồi mới "hết lượt", cả hai sau 409 (đo 17/11, ADR-0146 F3). */
 const redeliver = transition({
   from: ['DELIVERY_FAILED'],
   to: 'SHIPPED',
   parse: parseShip,
   guard: (o, b) =>
     guardShip(o, b) ??
-    (o.status === 'DELIVERY_FAILED' && o.redeliveryCount >= CFG.maxRedelivery ? ruleFail('BR-BH-11', `Đơn đã giao lại tối đa ${CFG.maxRedelivery} lần, hãy hủy đơn`) : null),
+    (o.redeliveryCount >= CFG.maxRedelivery ? ruleFail('BR-BH-11', `Đơn đã giao lại tối đa ${CFG.maxRedelivery} lần, không giao lại thêm được`) : null),
   apply: (_s, o, b, at) => {
     Object.assign(o, {
       status: 'SHIPPED',

@@ -38,7 +38,8 @@ export const ADMIN_MENU: MenuSection[] = [
       // UC87 (A06): Care Task của chi nhánh; BRANCH_MANAGER không thấy (BR-TB-05, care-v1 §D.1).
       { path: '/admin/care-tasks', label: 'Việc gọi điện', icon: PhoneCall, roles: ['RECEPTIONIST'] },
       // Hàng chờ (UC45, UC46), Khám & EMR (UC48), Tiêm chủng (UC49), Grooming (UC52) nằm ở các bàn làm việc; URL cũ /admin/queue|exam|vaccination|grooming chỉ còn chuyển hướng (App.tsx).
-      { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST'] }, // UC65 (tầng 3)
+      // UC65 (tầng 3): A06 xử lý, A05 chỉ xem (shop-v1 §B: #12, #13 cho cả hai; mọi thao tác ghi chỉ A06). ADMIN, SUPER_MANAGER bị 403 (ADR-0146 F1).
+      { path: '/admin/orders', label: 'Đơn online', icon: Package, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] },
       // UC55, UC56 (tầng 3): VET, CARETAKER ra y lệnh / ghi theo dõi; RECEPTIONIST chỉ xem (inpatient-v1 §B).
       { path: '/admin/inpatient', label: 'Nội trú', icon: Stethoscope, roles: ['VET', 'CARETAKER', 'RECEPTIONIST'] },
       // UC35, UC36 (tầng 3): lịch của tôi, gửi / rút yêu cầu nghỉ hoặc đổi ca.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { X } from 'lucide-react';
 import { formatVnDateTime } from '@/components/appointments/format';
 import type { Notice } from '@/components/admin/form-ui';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/modal-templates';
 import { formatCurrency } from '@/lib/utils';
+import { cancelFailedClosed } from '@/shared/api/axios';
 import { shopApi } from '@/shared/api/shop.api';
 import { useOnlineOrder, useShopMutation } from '@/shared/hooks/useShop';
 import { ONLINE_ORDER_STATUS_LABELS, type OnlineOrder } from '@/shared/types/shop';
@@ -37,6 +38,9 @@ export function OrderDetailPanel({ onlineOrderId, canAct, onClose, onNotice }: P
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const run = useShopMutation((fn: (id: number) => Promise<OnlineOrder>) => fn(onlineOrderId));
   const order = detail.data;
+  // BE chưa có `cancel-failed` (task 138): xem `cancelFailedClosedForRealOrders` ở mock-scope.ts.
+  const cancelClosed = cancelFailedClosed();
+  const cancelHintId = useId();
 
   const direct = async (fn: (id: number) => Promise<OnlineOrder>, text: string) => {
     try {
@@ -137,9 +141,21 @@ export function OrderDetailPanel({ onlineOrderId, canAct, onClose, onNotice }: P
                 <Button size="sm" onClick={() => setDialog('redeliver')}>
                   Giao lại
                 </Button>
-                <Button size="sm" variant="outline" className="border-red-200 text-red-600" onClick={() => setDialog('cancel')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-red-200 text-red-600"
+                  disabled={cancelClosed}
+                  aria-describedby={cancelClosed ? cancelHintId : undefined}
+                  onClick={() => setDialog('cancel')}
+                >
                   Hủy đơn
                 </Button>
+                {cancelClosed && (
+                  <p id={cancelHintId} className="basis-full text-xs text-(--text-tertiary)">
+                    Hủy đơn sau giao thất bại chưa mở (BE chưa có, task 138). Nếu đơn đã hết lượt giao lại thì tạm thời chưa xử lý được trên giao diện.
+                  </p>
+                )}
               </>
             )}
           </div>

@@ -57,10 +57,10 @@ export const shopApi = {
   ship: (onlineOrderId: number, body: ShipRequest) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/ship`, body),
   /** #16: SHIPPED → DELIVERED (bắt đầu đếm hạn trả hàng 7 ngày). */
   markDelivered: (onlineOrderId: number) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/mark-delivered`),
-  /** #17: SHIPPED → DELIVERY_FAILED. 400 BR-BH-11 thiếu lý do. */
+  /** #17: SHIPPED → DELIVERY_FAILED. 400 VALIDATION_FAILED thiếu lý do hoặc quá 300 ký tự (BE thật 17/11). BE lưu lý do nhưng `OnlineOrder` không trả lại. */
   failDelivery: (onlineOrderId: number, body: ReasonRequest) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/fail-delivery`, body),
-  /** #18: DELIVERY_FAILED → SHIPPED. 400 BR-BH-11 quá số lần giao lại tối đa [CFG] 2 / thiếu mã vận đơn. */
+  /** #18: DELIVERY_FAILED → SHIPPED. 400 BR-BH-11 thiếu đơn vị vận chuyển / mã vận đơn, rồi quá số lần giao lại tối đa [CFG] `shop.max_redelivery` (mặc định 2). */
   redeliver: (onlineOrderId: number, body: ShipRequest) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/redeliver`, body),
-  /** #19: DELIVERY_FAILED → CANCELLED, hoàn kho và sinh hoàn tiền qua cổng. 400 BR-BH-11 thiếu lý do. */
+  /** #19: DELIVERY_FAILED → CANCELLED, hoàn kho và sinh hoàn tiền qua cổng. BE CHƯA CÓ (404 đường dẫn tới task 138): xem `cancelFailedClosed` ở axios.ts. 400 BR-BH-11 thiếu lý do (theo hợp đồng). */
   cancelFailed: (onlineOrderId: number, body: ReasonRequest) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/cancel-failed`, body),
 };
