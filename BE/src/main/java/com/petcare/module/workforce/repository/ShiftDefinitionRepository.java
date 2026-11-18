@@ -27,6 +27,16 @@ public interface ShiftDefinitionRepository extends JpaRepository<ShiftDefinition
     Optional<ShiftDefinition> findByIdForUpdate(@Param("id") Long id);
 
     /**
+     * {@code FOR SHARE} (Hibernate 6 + PostgreSQL): bên ghi phân ca đọc ca dưới khóa chia sẻ rồi mới chèn. Xung đột với
+     * {@code FOR NO KEY UPDATE} của {@link #findByIdForUpdate} (sửa / ngừng dùng ca) nên hai bên xếp hàng: không có phân
+     * ca mới lọt vào ca vừa ngừng dùng (BR-NS-01, docs/adr/0123 mục 8, docs/adr/0138).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT d FROM ShiftDefinition d WHERE d.id = :id")
+    Optional<ShiftDefinition> findByIdForShare(@Param("id") Long id);
+
+    /**
      * Chi nhánh của ca, đọc không khóa và không nạp entity để phân quyền trước khi khóa (khuôn
      * {@code KennelRepository.findBranchIdById}); entity chỉ được nạp một lần, dưới khóa (docs/adr/0138).
      */

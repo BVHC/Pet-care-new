@@ -9,8 +9,14 @@ final class WorkforceAuditActions {
     static final String SHIFT_DEFINITION_CREATED = "SHIFT_DEFINITION_CREATED";
     static final String SHIFT_DEFINITION_UPDATED = "SHIFT_DEFINITION_UPDATED";
 
+    /** Phân ca hộ của BRANCH_MANAGER (BR-NS-02, BR-NS-10); phân ca tự đăng ký không audit (BR-NS-11). */
+    static final String SHIFT_ASSIGNMENT_CREATED = "SHIFT_ASSIGNMENT_CREATED";
+
     /** {@code audit_logs.entity_type} của ca làm việc. */
     static final String SHIFT_DEFINITION_ENTITY = "shift_definitions";
+
+    /** {@code audit_logs.entity_type} của phân ca. */
+    static final String SHIFT_ASSIGNMENT_ENTITY = "shift_assignments";
 
     private WorkforceAuditActions() {
     }

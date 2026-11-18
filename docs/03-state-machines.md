@@ -281,7 +281,7 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
-| 1 | — → `SCHEDULED` | Phân ca hộ, hoặc nhân viên đăng ký ca | A05 (phân hộ, `source = MANAGER`); A06, A07, A08 (tự đăng ký cho chính mình, `source = SELF`) | Nhân viên A06–A08 `ACTIVE` của chi nhánh; ca đang dùng; `work_date` ≥ hôm nay; không trùng hay chồng giờ phân ca `SCHEDULED` khác của nhân viên. Tự đăng ký: gửi trước 00:00 thứ Hai của tuần và tập kết quả của tuần đủ định mức | A05: thông báo nhân viên, ghi audit. Tự đăng ký: không thông báo, không audit | BR-NS-02, 08, 10, 11, 12 · UC34, UC35 |
+| 1 | — → `SCHEDULED` | Phân ca hộ, hoặc nhân viên đăng ký ca | A05 (phân hộ, `source = MANAGER`); A06, A07, A08 (tự đăng ký cho chính mình, `source = SELF`) | Nhân viên A06–A08 `ACTIVE` của chi nhánh; ca đang dùng; `work_date` ≥ hôm nay; không trùng hay chồng giờ phân ca `SCHEDULED` khác của nhân viên. Tự đăng ký: gửi trước 00:00 thứ Hai của tuần và tập kết quả của tuần đủ định mức | A05: ghi audit, không thông báo (BR-NS-08). Tự đăng ký: không thông báo, không audit | BR-NS-02, 08, 10, 11, 12 · UC34, UC35 |
 | 2 | `SCHEDULED` → `CANCELLED` | Hủy phân ca | A05 | Chưa bắt đầu; có lý do | Yêu cầu#5 nếu phân ca có yêu cầu `PENDING`. Thông báo nhân viên; ghi audit | BR-NS-02, 08, 10 · UC34 |
 | 3 | `SCHEDULED` → `ON_LEAVE` | Nghỉ được duyệt | SYS ← Yêu cầu#3 | Yêu cầu loại `LEAVE` | — | BR-NS-06 |
 | 4 | `SCHEDULED` → `ABSENT` | Ghi vắng đột xuất | A05 | `work_date` từ hôm nay trở về trước, không quá 7 ngày **[CFG]**; có lý do | Yêu cầu#5 nếu phân ca có yêu cầu `PENDING`. Thông báo nhân viên; ghi audit | BR-NS-07, 08, 10 · UC38 |

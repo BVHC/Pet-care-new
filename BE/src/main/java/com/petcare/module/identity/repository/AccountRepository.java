@@ -108,6 +108,16 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<Long> lockForShare(@Param("id") Long id);
 
     /**
+     * Khóa độc quyền dòng tài khoản ({@code SELECT … FOR NO KEY UPDATE}) cho {@code StaffDirectoryApi.findStaffForUpdate}:
+     * tuần tự hóa mọi thao tác workforce trên cùng một nhân viên (docs/adr/0123 mục 8), xung đột với cả
+     * {@link #lockForShare} lẫn khóa của điều chuyển / vô hiệu hóa / khóa. Câu vô hướng, không nạp entity; dữ liệu đọc
+     * bằng câu sau, chạy sau khi có khóa. {@code MANDATORY}: ngoài transaction thì khóa nhả ngay.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = "SELECT id FROM accounts WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
+    Optional<Long> lockForUpdate(@Param("id") Long id);
+
+    /**
      * Tài khoản#3 — xóa cứng tài khoản {@code PENDING} (BR-TK-08). Gọi sau {@link #lockExpiredPending} và sau khi đã
      * xóa dòng con ({@code otp_tokens}, hồ sơ online).
      */

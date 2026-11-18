@@ -162,7 +162,7 @@ paths:
     get:
       tags: ["Shift assignments"]
       summary: "Lịch phân ca của chi nhánh"
-      description: "UC34 · BR-NS-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Sắp `workDate`, `startTime` tăng dần, trùng thì `shiftAssignmentId` tăng dần. Chi nhánh đông nhân viên có thể vượt một trang (`size` tối đa 100): màn lịch tuần gọi thêm trang."
+      description: "UC34 · BR-NS-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Sắp `workDate`, `startTime` tăng dần, trùng thì `shiftAssignmentId` tăng dần. Chi nhánh đông nhân viên có thể vượt một trang (`size` tối đa 100): màn lịch tuần gọi thêm trang. Luôn là chi nhánh của người gọi; `staffId` của chi nhánh khác cho trang rỗng."
       operationId: listShiftAssignments
       security:
         - bearerAuth: []
@@ -218,7 +218,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`from` / `to` thiếu hoặc `to` < `from` hoặc khoảng quá 62 ngày (`BR-NS-03`, A9)"
+          description: "`from` / `to` thiếu hoặc sai kiểu (`MALFORMED_REQUEST`) · `to` < `from` hoặc khoảng quá 62 ngày tính cả hai đầu (`BR-NS-03`, A9)"
           content:
             "application/json":
               schema:
@@ -230,7 +230,7 @@ paths:
     post:
       tags: ["Shift assignments"]
       summary: "Phân ca cho nhân viên"
-      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → SCHEDULED (Phân ca#1). Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không kiểm định mức tuần (BR-NS-12). Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`."
+      description: "UC34 · BR-NS-02, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → SCHEDULED (Phân ca#1). Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không thông báo cho nhân viên (BR-NS-08 không liệt kê phân hộ). Không kiểm định mức tuần (BR-NS-12). Chồng giờ là hai khoảng giờ giao nhau thật sự; hai ca liền kề (kết thúc = bắt đầu) không chồng. Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`."
       operationId: createShiftAssignment
       security:
         - bearerAuth: []
@@ -267,7 +267,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: "Không tìm thấy nhân viên hoặc ca trong chi nhánh"
+          description: "Không tìm thấy nhân viên hoặc ca trong chi nhánh (id của chi nhánh khác và id không tồn tại trả cùng một dạng lỗi)"
           content:
             "application/json":
               schema:

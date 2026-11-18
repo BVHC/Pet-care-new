@@ -124,14 +124,14 @@ m.op("get", "/shift-assignments", "listShiftAssignments", "Lịch phân ca của
      "BR-NS-03", "A05", BM, resp="ShiftAssignment", page=True,
      query=["from!=date", "to!=date", "staffId=int64", "status=enum:SCHEDULED,ON_LEAVE,ABSENT,CANCELLED", "page", "size"],
      errors=(400, 401, 403),
-     err_desc={400: "`from` / `to` thiếu hoặc `to` < `from` hoặc khoảng quá 62 ngày (`BR-NS-03`, A9)"},
-     notes="Sắp `workDate`, `startTime` tăng dần, trùng thì `shiftAssignmentId` tăng dần. Chi nhánh đông nhân viên có thể vượt một trang (`size` tối đa 100): màn lịch tuần gọi thêm trang.")
+     err_desc={400: "`from` / `to` thiếu hoặc sai kiểu (`MALFORMED_REQUEST`) · `to` < `from` hoặc khoảng quá 62 ngày tính cả hai đầu (`BR-NS-03`, A9)"},
+     notes="Sắp `workDate`, `startTime` tăng dần, trùng thì `shiftAssignmentId` tăng dần. Chi nhánh đông nhân viên có thể vượt một trang (`size` tối đa 100): màn lịch tuần gọi thêm trang. Luôn là chi nhánh của người gọi; `staffId` của chi nhánh khác cho trang rỗng.")
 m.op("post", "/shift-assignments", "createShiftAssignment", "Phân ca cho nhân viên", "Shift assignments", "UC34",
-     "BR-NS-02, BR-NS-08, BR-NS-10", "A05", BM, "— → SCHEDULED (Phân ca#1)", body="CreateShiftAssignmentRequest",
+     "BR-NS-02, BR-NS-10", "A05", BM, "— → SCHEDULED (Phân ca#1)", body="CreateShiftAssignmentRequest",
      resp="ShiftAssignment", status=201, errors=(400, 401, 403, 404),
      err_desc={400: "`BR-NS-02` ngày trong quá khứ · ca ngừng dùng · nhân viên không phải A06–A08 `ACTIVE` của chi nhánh · trùng hoặc chồng giờ phân ca khác",
-               404: "Không tìm thấy nhân viên hoặc ca trong chi nhánh"},
-     notes="Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không kiểm định mức tuần (BR-NS-12). Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`.")
+               404: "Không tìm thấy nhân viên hoặc ca trong chi nhánh (id của chi nhánh khác và id không tồn tại trả cùng một dạng lỗi)"},
+     notes="Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không thông báo cho nhân viên (BR-NS-08 không liệt kê phân hộ). Không kiểm định mức tuần (BR-NS-12). Chồng giờ là hai khoảng giờ giao nhau thật sự; hai ca liền kề (kết thúc = bắt đầu) không chồng. Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`.")
 m.op("post", "/shift-assignments/{shiftAssignmentId}/cancel", "cancelShiftAssignment", "Hủy phân ca",
      "Shift assignments", "UC34", "BR-NS-02, BR-NS-08, BR-NS-10", "A05", BM, "SCHEDULED → CANCELLED (Phân ca#2)",
      body="ReasonRequest", resp="ShiftAssignment", path_params=["ShiftAssignmentId"], errors=(400, 401, 403, 404, 409),
