@@ -34,8 +34,8 @@ public class WorkforceItSupport {
         return id;
     }
 
-    /** Nhân viên A06–A08 / A05 có hồ sơ ở chi nhánh {@code branchId}. */
-    public long staff(String role, long branchId) {
+    /** Nhân viên A06–A08 / A05 có hồ sơ ở chi nhánh {@code branchId}; {@code null} cho ADMIN, SUPER_MANAGER. */
+    public long staff(String role, Long branchId) {
         return base.staff(role, branchId);
     }
 

@@ -27,6 +27,13 @@ public interface ShiftDefinitionRepository extends JpaRepository<ShiftDefinition
     Optional<ShiftDefinition> findByIdForUpdate(@Param("id") Long id);
 
     /**
+     * Chi nhánh của ca, đọc không khóa và không nạp entity để phân quyền trước khi khóa (khuôn
+     * {@code KennelRepository.findBranchIdById}); entity chỉ được nạp một lần, dưới khóa (docs/adr/0138).
+     */
+    @Query(value = "SELECT branch_id FROM shift_definitions WHERE id = :id", nativeQuery = true)
+    Optional<Long> findBranchIdById(@Param("id") Long id);
+
+    /**
      * Tên đã có trong chi nhánh, không phân biệt hoa thường (BR-NS-01), cùng biểu thức với unique index
      * {@code ux_shift_definitions_branch_name (branch_id, lower(name))}. {@code excludeId} loại chính ca đang sửa
      * (null khi tạo); {@code CAST} để PostgreSQL suy được kiểu khi tham số là null.

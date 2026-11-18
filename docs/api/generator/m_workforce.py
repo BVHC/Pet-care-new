@@ -3,7 +3,7 @@ from lib import Module
 m = Module(
     key="workforce", title="Workforce API v1 (tầng 3)", codes="NS", owner="BE-1",
     sources="01 UC34–UC38; 02 BR-NS-01…12; 03 #11 Yêu cầu nghỉ / đổi ca, #12 Phân ca; ADR-0123; 04 §12.1; 05 §14.1 (shift_definitions, shift_assignments, shift_requests)",
-    intro="Ca làm việc, đăng ký ca theo tuần của nhân viên (và phân ca hộ của BRANCH_MANAGER), lịch làm việc, yêu cầu nghỉ / đổi ca và ghi nhận vắng đột xuất. *(ADR-0123, 2026-11-08)* nhân viên tự đăng ký ca cả tuần, mỗi tuần tối thiểu 10 ca **[CFG]**. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026); chưa có cài đặt.**",
+    intro="Ca làm việc, đăng ký ca theo tuần của nhân viên (và phân ca hộ của BRANCH_MANAGER), lịch làm việc, yêu cầu nghỉ / đổi ca và ghi nhận vắng đột xuất. *(ADR-0123, 2026-11-08)* nhân viên tự đăng ký ca cả tuần, mỗi tuần tối thiểu 10 ca **[CFG]**. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài: ca làm việc #1–3 (T58 bước 2, ADR-0138); các endpoint còn lại chưa có cài đặt.**",
     frozen=[
         "Danh sách nhân viên của chi nhánh (UC34 'xem nhân viên chi nhánh') dùng `GET /staff` của identity (UC08), không lặp ở đây.",
         "Hủy phân ca, từ chối yêu cầu khi nhân viên bị vô hiệu hóa / điều chuyển (BR-NS-09; Yêu cầu#5, Phân ca#6) là hệ quả hệ thống, không có endpoint.",
@@ -44,7 +44,7 @@ m = Module(
         ("Q1", "Khi nhân viên bị vô hiệu hóa / điều chuyển, identity phát sự kiện nào cho workforce? `StaffLeftBranchEvent(staffId, branchId)` ở `identity.api` (06 §3).", "Đã chốt (T55b, 06 §6b #1): sự kiện đã khai báo, chưa phát; identity phát, workforce nhận (`MANDATORY`) ở T58", "BR-NS-09, BR-QT-06, BR-QT-09"),
         ("Q2", "Chặn chồng giờ ở DB bằng cột sao chép + `EXCLUDE USING gist` hay chỉ kiểm trong service?", "Đã chốt (ADR-0123): chỉ kiểm trong service dưới khóa `accounts` + `UNIQUE` partial ở DB", "05 §13 mục 24"),
         ("Q3", "BRANCH_MANAGER có được tự phân ca / xin nghỉ không (UC35–36 chỉ nêu A06–A08)?", "Đã chốt (PO, 2026-11-08): không, quản lý không nằm trong lịch", "01 UC35, UC36"),
-        ("Q4", "Trần số phần tử `items` của `PUT /me/shift-registrations/{weekStart}`: đặc tả không nêu (không giới hạn ca mỗi ngày, chỉ cấm trùng cặp và chồng giờ). Có đặt trần để chặn request quá lớn không, và bao nhiêu?", "TBD (BE-1)", "BR-NS-11, BR-NS-02"),
+        ("Q4", "Trần số phần tử `items` của `PUT /me/shift-registrations/{weekStart}`: có đặt trần để chặn request quá lớn không, và bao nhiêu?", "Đã chốt (2026-11-17, ADR-0137 mục 12): tối đa 100 phần tử (một tuần chỉ có 7 ngày, 100 chặn request quá lớn mà không cản nghiệp vụ); vượt → 400 `VALIDATION_FAILED`", "BR-NS-11, BR-NS-02"),
     ],
 )
 
@@ -108,13 +108,15 @@ m.op("get", "/shift-definitions", "listShiftDefinitions", "Danh sách ca làm vi
      notes="Không phân trang. BRANCH_MANAGER: `activeOnly` vắng = false (cả ca ngừng dùng). A06–A08 chỉ nhận ca đang dùng, `activeOnly` bị bỏ qua (A10); nhân viên cần danh sách này để điền `items` của `PUT` đăng ký tuần và chọn ca đích của `SWAP`. Sắp theo `startTime` tăng dần.")
 m.op("post", "/shift-definitions", "createShiftDefinition", "Tạo ca làm việc", "Shift definitions", "UC34",
      "BR-NS-01, BR-NS-10", "A05", BM, body="CreateShiftDefinitionRequest", resp="ShiftDefinition", status=201,
-     errors=(400, 401, 403),
-     err_desc={400: "`BR-NS-01` tên trùng trong chi nhánh · giờ bắt đầu không nhỏ hơn giờ kết thúc; `VALIDATION_FAILED` sai kiểu / quá dài"})
+     errors=(400, 401, 403, 409),
+     err_desc={400: "`BR-NS-01` tên trùng trong chi nhánh · giờ bắt đầu không nhỏ hơn giờ kết thúc; `VALIDATION_FAILED` sai kiểu / quá dài",
+               409: "`CONCURRENCY_CONFLICT` hai yêu cầu cùng tạo / đổi tên thành một tên trùng nhau cùng lúc (ràng buộc tên duy nhất): tải lại và thử lại"})
 m.op("patch", "/shift-definitions/{shiftDefinitionId}", "updateShiftDefinition", "Sửa / ngừng dùng ca làm việc",
      "Shift definitions", "UC34", "BR-NS-01, BR-NS-10", "A05", BM, body="UpdateShiftDefinitionRequest",
-     resp="ShiftDefinition", path_params=["ShiftDefinitionId"], errors=(400, 401, 403, 404),
+     resp="ShiftDefinition", path_params=["ShiftDefinitionId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-NS-01` tên trùng · giờ bắt đầu không nhỏ hơn giờ kết thúc · sửa giờ khi ca đã có phân ca · ngừng dùng khi ca còn phân ca `SCHEDULED` từ hôm nay; `VALIDATION_FAILED` body không có trường nào · sai kiểu / quá dài",
-               403: "`ACCESS_DENIED_SCOPE_MISMATCH` ca thuộc chi nhánh khác"},
+               403: "`ACCESS_DENIED_SCOPE_MISMATCH` ca thuộc chi nhánh khác",
+               409: "`CONCURRENCY_CONFLICT` hai yêu cầu cùng tạo / đổi tên thành một tên trùng nhau cùng lúc (ràng buộc tên duy nhất): tải lại và thử lại"},
      notes="Chỉ các trường có trong body được đổi; body không có trường nào là lỗi. `active = true` bật lại ca đã ngừng dùng (A10).")
 
 # ---- UC34/35/38 phân ca
@@ -191,9 +193,9 @@ m.op("put", "/me/shift-registrations/{weekStart}", "putMyShiftRegistration", "Đ
      "Shift registrations", "UC35", "BR-NS-11, BR-NS-12", "A06–A08", STAFF,
      "— → SCHEDULED (Phân ca#1) · SCHEDULED → CANCELLED (Phân ca#7)", body="PutShiftRegistrationRequest",
      resp="ShiftRegistration", path_params=["WeekStart"], errors=(400, 401, 403, 409),
-     err_desc={400: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items` hoặc sai kiểu",
+     err_desc={400: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items`, sai kiểu hoặc quá 100 phần tử",
                409: "`CONCURRENCY_CONFLICT` trùng cặp ca – ngày do thao tác song song"},
-     notes="Idempotent: gửi lại cùng nội dung không đổi kết quả. Mục thiếu so với phân ca `SELF` hiện có bị hủy (lý do hệ thống ghi 'Nhân viên sửa đăng ký tuần'), mục mới được tạo, mục giữ nguyên không đổi; phân ca `MANAGER` không bị đụng nhưng được tính vào định mức. Không thông báo, không audit (BR-NS-08, 10). Yêu cầu `PENDING` của phân ca bị hủy tự `REJECTED` (Yêu cầu#5). Mọi mục tạo / hủy và Yêu cầu#5 nằm trong **một** transaction. Response chỉ gồm phân ca `SCHEDULED` của tuần (A12). Đọc đăng ký hiện có và định mức trước khi sửa: `GET /me/shift-registrations/{weekStart}`; xem lịch đầy đủ (cả nghỉ / vắng / hủy): `GET /me/shift-assignments`. Số phần tử tối đa của `items`: Q4.")
+     notes="Idempotent: gửi lại cùng nội dung không đổi kết quả. Mục thiếu so với phân ca `SELF` hiện có bị hủy (lý do hệ thống ghi 'Nhân viên sửa đăng ký tuần'), mục mới được tạo, mục giữ nguyên không đổi; phân ca `MANAGER` không bị đụng nhưng được tính vào định mức. Không thông báo, không audit (BR-NS-08, 10). Yêu cầu `PENDING` của phân ca bị hủy tự `REJECTED` (Yêu cầu#5). Mọi mục tạo / hủy và Yêu cầu#5 nằm trong **một** transaction. Response chỉ gồm phân ca `SCHEDULED` của tuần (A12). Đọc đăng ký hiện có và định mức trước khi sửa: `GET /me/shift-registrations/{weekStart}`; xem lịch đầy đủ (cả nghỉ / vắng / hủy): `GET /me/shift-assignments`. `items` tối đa 100 phần tử, vượt thì 400 `VALIDATION_FAILED` (Q4, ADR-0137 mục 12).")
 m.op("get", "/shift-weekly-summaries", "listShiftWeeklySummaries", "Thống kê số ca mỗi nhân viên trong tuần",
      "Shift registrations", "UC34", "BR-NS-12", "A05", BM, resp="array:ShiftWeeklySummary", query=["weekStart!=date"],
      errors=(400, 401, 403),
