@@ -2,9 +2,10 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../app/App';
 import { apiClient } from '../../shared/api/axios';
+import { careApi } from '../../shared/api/care.api';
 import { MOCK_PASSWORD } from '../../shared/api/mock/identity.mock';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { useSession } from '../../shared/stores/session.store';
@@ -15,6 +16,7 @@ import { StaffNotificationsPage } from './StaffNotificationsPage';
 
 beforeAll(() => installMockApi(apiClient));
 beforeEach(() => useSession.getState().clear());
+afterEach(() => vi.restoreAllMocks());
 
 const signInAs = (email: string) => useSession.getState().login({ email, password: MOCK_PASSWORD });
 
@@ -40,7 +42,25 @@ describe('StaffNotificationsPage (UC88)', () => {
     expect(list).toHaveLength(3);
     expect(within(list[0]).getByText('Nhật ký chăm sóc bất thường: Lu')).toBeInTheDocument();
     expect(within(list[2]).getByText(/Lịch hẹn #58: đã đặt/)).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Chưa đọc (2)' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Chưa đọc (2)' })).toBeInTheDocument();
+  });
+
+  // Danh sách và số chưa đọc là hai truy vấn riêng nên số có thể về sau danh sách: giữ số lại bằng `gate`.
+  it('số chưa đọc về sau danh sách: nhãn tab vẫn hiện đủ số', async () => {
+    await signInAs('reception@store1.vn');
+    const original = careApi.countUnread;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(careApi, 'countUnread').mockImplementation(async (config) => {
+      await gate;
+      return original(config);
+    });
+    renderPage();
+    await items();
+    release();
+    expect(await screen.findByRole('tab', { name: 'Chưa đọc (2)' })).toBeInTheDocument();
   });
 
   it('đánh dấu một đã đọc, rồi tất cả; tab Chưa đọc trống', async () => {
