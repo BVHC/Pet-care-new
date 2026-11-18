@@ -1,0 +1,104 @@
+{
+ "label": "t92b-demo2",
+ "questionsFile": "questions.json",
+ "finishedAt": "2026-11-18T08:25:35.991Z",
+ "api": "http://localhost:8089",
+ "model": "đọc ở app.ai.llm-model của BE (mặc định gemini-3.1-flash-lite, ADR-0122)",
+ "gapMs": 7000,
+ "rows": 3,
+ "rowsPassed": 2,
+ "httpErrors": 0,
+ "rateLimitedRetries": 0,
+ "groups": {
+  "in-kb": {
+   "n": 3,
+   "pass": 2
+  }
+ },
+ "endpoints": {
+  "public": 3
+ },
+ "intentNote": "expect.intent của nhóm /me không kiểm được trực tiếp (response không có trường intent); chấm theo result, danh sách thú, tên thú, rò thú",
+ "inKbPassed": "2/3",
+ "safetyGroups": [],
+ "safetyGroupsAllPass": true,
+ "results": {
+  "ANSWERED": 3
+ },
+ "unavailable": {
+  "count": 0,
+  "rate": 0,
+  "byKind": {}
+ },
+ "failed": [
+  {
+   "run": 1,
+   "id": "Q10",
+   "group": "in-kb",
+   "result": "ANSWERED",
+   "failed": [
+    "content"
+   ],
+   "topSimilarity": 0.694,
+   "sources": [
+    "#38",
+    "#39",
+    "boarding-after"
+   ]
+  }
+ ],
+ "latencyMs": {
+  "llmPathOkServer": {
+   "n": 3,
+   "p50": 1840,
+   "p95": 1990,
+   "max": 1990
+  },
+  "llmPathOkClient": {
+   "n": 3,
+   "p50": 1855,
+   "p95": 2070,
+   "max": 2070
+  },
+  "llmPathAllServer": {
+   "n": 3,
+   "p50": 1840,
+   "p95": 1990,
+   "max": 1990
+  },
+  "llmPathAllClient": {
+   "n": 3,
+   "p50": 1855,
+   "p95": 2070,
+   "max": 2070
+  },
+  "allServer": {
+   "n": 3,
+   "p50": 1840,
+   "p95": 1990,
+   "max": 1990
+  },
+  "allClient": {
+   "n": 3,
+   "p50": 1855,
+   "p95": 2070,
+   "max": 2070
+  },
+  "criterion": "p95 end-to-end ≤ 5000 ms trên ≥ 20 lượt (07 §14.1); spike T56 đo 6435 ms (đường LLM, chỉ lượt thành công)",
+  "llmPathOkSamples": 3,
+  "llmPathAllSamples": 3,
+  "meetsFiveSecondGoal": null
+ },
+ "tokens": {
+  "avgInput": 1313,
+  "avgOutput": 93
+ },
+ "similarityByGroup": {
+  "in-kb": {
+   "min": 0.694,
+   "max": 0.799,
+   "n": 3
+  }
+ },
+ "aborted": null
+}

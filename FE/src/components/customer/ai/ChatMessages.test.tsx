@@ -33,7 +33,7 @@ describe('ChatEntryView theo result', () => {
   it('PERSONAL: giữ nguyên xuống dòng của câu mẫu, không nguồn, không nút', () => {
     show({ result: 'PERSONAL', answer: 'Bạn có 2 lịch hẹn sắp tới:\n1) Mochi — Tiêm phòng\n2) Bim — Tắm' });
     expect(screen.getByText(/Bạn có 2 lịch hẹn sắp tới/).closest('.whitespace-pre-line')).not.toBeNull();
-    expect(screen.queryByText(/^Nguồn:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Tài liệu liên quan:/)).not.toBeInTheDocument();
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
@@ -53,9 +53,11 @@ describe('ChatEntryView theo result', () => {
     expect(screen.getByRole('link', { name: '0901234567' })).toHaveAttribute('href', 'tel:0901234567');
   });
 
-  it('ANSWERED: nguồn nối bằng dấu chấm phẩy và lời nhắc', () => {
+  it('ANSWERED: tài liệu liên quan nối bằng dấu chấm phẩy và lời nhắc; không còn nhãn "Nguồn:"', () => {
     show({ result: 'ANSWERED', answer: 'Mũi dại từ 12 tuần.', sources: [{ documentId: 1, title: 'Lịch tiêm cho chó con' }, { documentId: 2, title: 'Vaccine dại' }], disclaimer: 'Thông tin tham khảo.' });
-    expect(screen.getByText('Nguồn: Lịch tiêm cho chó con; Vaccine dại')).toBeInTheDocument();
+    expect(screen.getByText('Tài liệu liên quan: Lịch tiêm cho chó con; Vaccine dại')).toBeInTheDocument();
+    // T92b, BR-AI-05: danh sách này là 3 tài liệu truy hồi gần câu hỏi nhất, không phải "tài liệu mô hình dùng"; nhãn "Nguồn" nói quá.
+    expect(screen.queryByText(/^Nguồn:/)).not.toBeInTheDocument();
     expect(screen.getByText('Thông tin tham khảo.')).toBeInTheDocument();
   });
 });
@@ -139,7 +141,7 @@ describe('Nhãn nguồn của câu trả lời (sourceType)', () => {
     const badge = screen.getByText(LABELS.KNOWLEDGE_BASE);
     expect(badge.tagName).toBe('P');
     expect(badge).not.toHaveAttribute('role');
-    expect(screen.getByText('Nguồn: Vaccine dại')).toBeInTheDocument();
+    expect(screen.getByText('Tài liệu liên quan: Vaccine dại')).toBeInTheDocument();
   });
 
   it('kiến thức chung có màu nhấn khác nhãn tài liệu', () => {
