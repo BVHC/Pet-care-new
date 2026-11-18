@@ -1,6 +1,6 @@
 # ADR-0136: Kiến thức chung có kiểm soát, nguồn câu trả lời và đánh giá hồi quy (AI v2, phần 3)
 
-- **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T92 — **lát cắt tối thiểu đã cài 13/11/2026**, xem mục "Đã cài ở T92"; D2 Hiến duyệt 13/11). **T92 phần 2 đã cài 16/11/2026 (`category`, chế độ mở `ai.chat.open_domain_enabled` ở V57, `ai_chat_logs.intent`, bộ đo v2; số đo: xem mục "Đã cài ở T92 (phần 2)"). Công tắc `ai.chat.general_knowledge_enabled` (`BOOL`) mặc định `false` trong mã (V52). Tiêu chí bật thật: bộ v2 đạt mục "Kiểm thử" và Hiến cho phép. Trạng thái thực tế: ĐANG BẬT trên DB demo 5433 từ 13/11/2026 để Hiến thử (bộ v2 CHƯA đo); tắt trước khi đo baseline 43 câu; hoàn tác: ADMIN `PUT /api/system-configs/ai.chat.general_knowledge_enabled {"value":"false"}` hoặc `/admin/system-configs`.**
+- **Trạng thái:** Accepted (Hiến duyệt **hướng** 13/11/2026 và **nội dung** 18/11/2026; T92 — **lát cắt tối thiểu đã cài 13/11/2026**, xem mục "Đã cài ở T92"; D2 Hiến duyệt 13/11). **T92 phần 2 đã cài 16/11/2026 (`category`, chế độ mở `ai.chat.open_domain_enabled` ở V57, `ai_chat_logs.intent`, bộ đo v2; số đo: xem mục "Đã cài ở T92 (phần 2)"). Công tắc `ai.chat.general_knowledge_enabled` (`BOOL`) mặc định `false` trong mã (V52). Tiêu chí bật thật: bộ v2 đạt mục "Kiểm thử" và Hiến cho phép. Trạng thái thực tế: ĐANG BẬT trên DB demo 5433 từ 13/11/2026 để Hiến thử (bộ v2 CHƯA đo); tắt trước khi đo baseline 43 câu; hoàn tác: ADMIN `PUT /api/system-configs/ai.chat.general_knowledge_enabled {"value":"false"}` hoặc `/admin/system-configs`.**
 - **Ngày:** 2026-11-13
 - **Liên quan:** ADR-0109, 0122 (τ, mô hình), 0141 (đường ống, Q24), 0142 (chat cá nhân), 0134, 0135; `07` §1.1, §4.1 BR-AI-01 / 04 (v2), §4.7 BR-AI-33, 34, 35, §5.2 bước 7–9, §5.4 lời nhắc v2, §8 `ai_chat_logs`, §13, §14.
 - **Đánh số:** V52 chỉ mang công tắc `ai.chat.general_knowledge_enabled` (đã cài 13/11/2026, **không sửa** vì đã chạy trên DB demo, Flyway kiểm checksum); cột `ai_chat_logs.source_type`, `intent`, `used_pet_context` và các khóa [CFG] còn lại sang **V53**. Hợp đồng #1, #2 thêm trường tùy chọn `sourceType`.
@@ -234,6 +234,8 @@ H3 (chia đoạn) không có bằng chứng. τ không tách được nhóm: top
 - Bộ v2 qua BE thật: ba lượt, số đo ghi vào `07` §13 trước khi xin bật.
 
 ## Chờ Hiến duyệt (trước khi viết mã)
+
+_Hiến duyệt nội dung ADR này ngày 18/11/2026 ("duyệt nội dung ADR 0134–0136"), trạng thái chuyển Accepted. Các điểm dưới đây là câu hỏi lúc viết; điểm gạch đã chốt riêng trước đó._
 
 1. Tiền tố "Thông tin tham khảo chung:" và câu `disclaimer` — chữ cụ thể.
 2. Danh sách cụm `MEDICAL_RISK` khởi điểm (10–15 cụm) — Hiến xem trước khi đo.
