@@ -20,7 +20,7 @@ class StaffApiTier3PlaceholderTest {
                 .hasMessageContaining("T75");
     }
 
-    /** Chỉ khai báo lớp (docs/06 §6b hàng 1); chưa có nơi phát nên chưa có test phát. */
+    /** Hình dạng của sự kiện. Nơi phát và nơi nhận (docs/06 §6b hàng 1, D071 đã trả) có test riêng ở service và IT. */
     @Test
     void staffLeftBranchEventCarriesStaffAndBranch() {
         StaffLeftBranchEvent event = new StaffLeftBranchEvent(7L, 2L);

@@ -1,9 +1,10 @@
 # System Overview — trạng thái kỹ thuật thực tế
 
 > Mô tả **codebase hiện có**, không phải thiết kế mục tiêu. Nghiệp vụ: `docs/01`–`05` (tra qua `docs/INDEX.md`); quy ước code: `docs/convention/backend/`; quy tắc toàn hệ thống, công cụ platform: `CLAUDE.md`; thứ tự khóa: `docs/architecture/concurrency-locking.md`; bẫy FE: `docs/architecture/frontend-notes.md`. **Chi tiết hành vi, thứ tự khóa / lỗi và danh sách test nằm trong ADR của từng dòng** — file này chỉ là bản đồ.
-> Cập nhật: 2026-11-14 (đối chiếu với code tại `67bb006`, nhánh `manh` = `origin/dev` `3acce4c` + 2 commit; vị trí `origin/*` kiểm bằng `git log`). Trạng thái task: `docs/time.md`.
+> Cập nhật: 2026-11-19 (nhánh `manh`; vị trí `origin/*` kiểm bằng `git log`, không ghi cứng ở đây). Trạng thái task: `docs/time.md`.
 >
 > Nhật ký (mới nhất trước, giữ 5 dòng; cũ hơn: `git log` của file này):
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -27,11 +28,16 @@
 =======
 > - 2026-11-18 — T58 bước 4 (ADR-0138 mục 26–33, Proposed): hủy phân ca `workforce-v1` #6 (kéo Yêu cầu#5, một cặp thông báo, khóa `accounts` → phân ca → yêu cầu) và `GET /me/shift-assignments` #8; schema contract đổi `ReasonRequest` → `ShiftReasonRequest` (trùng DTO của identity); không migration. 27 test đơn vị mới + 5 IT (`ShiftAssignmentCancel*IT`, `…MyScheduleIT`, era 2053–2057, 45 ca) xanh; ghim OpenAPI 205 → 207. Còn: listener `StaffLeftBranchEvent` (N2-S2, **cùng PR**), rồi T59.
 >>>>>>> 9cb2a85c (feat: T58: hủy phân ca và lịch làm việc của tôi (workforce-v1 #6, #8, ADR-0138, D071, D072))
+=======
+> - 2026-11-19 — T58 bước 5 / N2-S2 (ADR-0138 mục 34–40, Proposed; trả D071, ghi nợ D073): identity phát `StaffLeftBranchEvent` đồng bộ sau mọi guard và `flush` (`disableStaff`, `transferStaff`; SUPER_MANAGER không phát); `workforce/listener/StaffLeftBranchListener` → `StaffLeftBranchService` (`MANDATORY`) hủy hàng loạt phân ca chưa bắt đầu, từ chối yêu cầu `PENDING`, mỗi ca một cặp thông báo V40; không `BranchScope`, tên chi nhánh là chi nhánh cũ; không migration, ghim OpenAPI giữ 207. 13 test đơn vị mới + 4 IT (`StaffLeftBranch{,Rollback,Lock,Security}IT`, era 2058–2061, 27 ca) xanh cùng hồi quy 393 ca IT (identity, mọi IT workforce, schema, parity, khởi động).
+> - 2026-11-18 — T58 bước 4 (ADR-0138 mục 26–33, Proposed): hủy phân ca `workforce-v1` #6 (kéo Yêu cầu#5, một cặp thông báo, khóa `accounts` → phân ca → yêu cầu) và `GET /me/shift-assignments` #8; schema contract đổi `ReasonRequest` → `ShiftReasonRequest` (trùng DTO của identity); không migration; ghim OpenAPI 205 → 207. 5 IT mới (era 2053–2057) xanh.
+>>>>>>> 32149b78 (feat: T58: StaffLeftBranchEvent và listener hủy phân ca (BR-NS-09, ADR-0138, D071) gồm toàn bộ code và test)
 > - 2026-11-18 — T58 bước 3 (ADR-0138 mục 18–25, Proposed): phân ca hộ `workforce-v1` #4–5 (`GET` / `POST /shift-assignments`): khóa độc quyền theo nhân viên qua `StaffDirectoryApi.findStaffForUpdate` (mới, identity) → `shift_definitions FOR SHARE` → INSERT; chồng giờ = giao nhau thật sự (ca liền kề hợp lệ); phân hộ không thông báo (02 BR-NS-08); ghi READ COMMITTED, danh sách REPEATABLE_READ; không migration. 33 test đơn vị mới + 4 IT (`ShiftAssignmentIT`, `…SecurityIT`, `…LockIT`, `…RollbackIT`, era 2049–2052, 40 ca) xanh cùng hồi quy identity / visit / thu ngân; ghim OpenAPI 203 → 205. Còn: hủy #6, lịch của tôi #8, listener `StaffLeftBranchEvent` (N2, **cùng PR** để không để phân ca mồ côi) rồi T59.
 >>>>>>> 7988f3c1 (feat: T58: phân ca hộ và lịch ca chi nhánh (workforce-v1 #4–5, ADR-0138))
 > - 2026-11-17 — T58 bước 2 (ADR-0138 mục 11–17, ADR-0137 mục 12–13, Proposed): CRUD ca làm việc `workforce-v1` #1–3 (`GET` / `POST /shift-definitions`, `PATCH /shift-definitions/{id}`): service + controller + MapStruct một chiều + audit `SHIFT_DEFINITION_*`; khóa `PATCH` = `FOR NO KEY UPDATE` (lá, không khóa `branches`), đua tên → 409 (D070); không migration. 2 test đơn vị (`ShiftDefinitionServiceTest`, `ShiftDefinitionMapperTest`) và 4 IT era 2045–2048 (`ShiftDefinitionIT`, `…SecurityIT`, `…LockIT`, `…RollbackIT`) xanh; ghim OpenAPI 200 → 203; hợp đồng thêm 409 + Q4 (`items` ≤ 100).
 >>>>>>> a4b69193 (feat: T58: CRUD ca làm việc (workforce-v1 #1–3, ADR-0138, D070))
 > - 2026-11-16 — T58 bước 1 (ADR-0138, Proposed): nền module `workforce` — entity `ShiftDefinition` / `ShiftAssignment` / `ShiftRequest`, 3 repository (khóa `MANDATORY`, truy vấn tên trùng / đếm phân ca), `ShiftAssignmentTransitionHandler` (#12, có cạnh `X → X`) và `ShiftRequestTransitionHandler` (#11); 5 unit test lớp + 3 IT (`ShiftAssignmentFsmIT` 2042, `ShiftRequestFsmIT` 2043, `WorkforceRepositoryIT` 2044) xanh. Chưa có endpoint (bước 2: CRUD ca) nên ghim OpenAPI vẫn 200.
+<<<<<<< HEAD
 > - 2026-11-16 — T58 nhóm A (D069 phần Java / SQL): gỡ dấu conflict 4 test, V52 của BE-1 đổi thành V56, V55 = Nhân sự (`shift_assignments.source`, khóa `workforce.weekly_required_shifts`) ⇒ 83 khóa [CFG], ghim OpenAPI 200; sửa `@Operation` 2 endpoint feedback cho khớp hợp đồng. `SchemaMigrationIT`, `Tier3Be1SchemaIT`, `SystemConfigIT`, `OpenApiContractParityIT`, `FeedbackCleanupIT` xanh (Testcontainers). BE-2 lấy migration từ V57. Chưa có Java của `workforce`.
 <<<<<<< HEAD
 > - 2026-11-14 — Đồng bộ docs sau rebase lên `origin/dev` (HEAD `67bb006` = `3acce4c` + T70 + D045): gỡ dấu conflict ở `system-overview.md`, `docs/INDEX.md`, `docs/adr/INDEX.md`; **còn nợ ngoài docs** (D069): dấu conflict trong 4 test Java, hai file `V52__*.sql` (BE-1 ↔ AI), ADR 0131 / 0132 trùng số; AI (FE-1) đã cài chat công khai / cá nhân, gợi ý, `/admin/ai` (ai-v1 #1–#14, ADR-0131…0136); hợp đồng `workforce-v1` 17 endpoint (ADR-0137, Proposed; chưa Java); nợ FE đưa vào `CLAUDE.md`.
@@ -43,6 +49,8 @@
 >>>>>>> 7988f3c1 (feat: T58: phân ca hộ và lịch ca chi nhánh (workforce-v1 #4–5, ADR-0138))
 =======
 >>>>>>> 9cb2a85c (feat: T58: hủy phân ca và lịch làm việc của tôi (workforce-v1 #6, #8, ADR-0138, D071, D072))
+=======
+>>>>>>> 32149b78 (feat: T58: StaffLeftBranchEvent và listener hủy phân ca (BR-NS-09, ADR-0138, D071) gồm toàn bộ code và test)
 
 ## 1. Tóm tắt
 
@@ -103,7 +111,7 @@ Stack: Java 21, Spring Boot 3.5.15, Spring Security, Data JPA, Validation, AOP, 
 | Audit | `platform/audit/{AuditRecorder, AuditEntry, …}` | ADR-0001, 0098. `record()` `MANDATORY`; `recordIndependently()` `REQUIRES_NEW` chỉ cho thất bại, gọi sau rollback. Snapshot là JSON object, cấm khóa nhạy cảm; `audit_logs` chỉ-thêm ở tầng app (trigger đã gỡ ở V31) |
 | Mã chứng từ | `platform/sequence/DocumentCodeGenerator` | ADR-0043, 0107. Liên tục theo `(doc_type, period)` trong `document_counters` (V14); trần 999 999 / tháng |
 | Job | `platform/config/SchedulingConfig` | ADR-0007. 4 thread, một instance; job ở `module/<m>/job`, cron `app.jobs.<job>.cron`, không `@Transactional`, lỗi log `<JOB>_FAILED`. Job dài chọn phút lệch nhau (ADR-0056 Q11) |
-| Sự kiện đồng bộ | `ApplicationEventPublisher` + `@EventListener` | Convention 07 §7.2; `DomainEventTransactionIT`. Đang dùng: `AccountLockedEvent` / `AccountUnlockedEvent` (→ visit), `BranchClinicCancellationEvent`, `PetDeceasedEvent`, `PetOwnerTransferredEvent` (→ appointment, boarding, visit, care). Ngoại lệ có chủ đích: `ai` ST22 kích hoạt nạp chỉ mục `AFTER_COMMIT` trên luồng nền (`AiIndexRequested`, ADR-0130) vì gọi nhúng không được chạy trong transaction. Khai báo cho tầng 3, chưa có listener: `StaffLeftBranchEvent` (identity), `CustomerMergedEvent` (customer) |
+| Sự kiện đồng bộ | `ApplicationEventPublisher` + `@EventListener` | Convention 07 §7.2; `DomainEventTransactionIT`. Đang dùng: `AccountLockedEvent` / `AccountUnlockedEvent` (→ visit), `BranchClinicCancellationEvent`, `PetDeceasedEvent`, `PetOwnerTransferredEvent` (→ appointment, boarding, visit, care). Ngoại lệ có chủ đích: `ai` ST22 kích hoạt nạp chỉ mục `AFTER_COMMIT` trên luồng nền (`AiIndexRequested`, ADR-0130) vì gọi nhúng không được chạy trong transaction. `StaffLeftBranchEvent` (identity → workforce, BR-NS-09, từ 19/11: phát sau mọi guard và `flush`, listener `MANDATORY`, ADR-0138 bước 5). Khai báo cho tầng 3, chưa có listener: `CustomerMergedEvent` (customer) |
 | IP client | `server.forward-headers-strategy: native` | ADR-0002 (dải proxy tin cậy gồm cả `172.x` — mục 7) |
 | Logging | `resources/logback-spring.xml` | Profile `docker` log JSON; khác: chữ kèm `[traceId]` |
 
@@ -193,7 +201,7 @@ Quy ước (CLAUDE.md *Backend architecture*): ném `UnsupportedOperationExcepti
 | `PaymentGatewayClient` (payment, **mới**) | cổng thanh toán trung lập (BR-TG-11) — lớp `PaymentGatewayClientPlaceholder`; bản cài VNPay sandbox hoặc `FakeGatewayClient` | T65; `refund` T73 |
 | `StockApi` · `OrderQueryApi` · `CashierShiftApi` (sales, **mới**) (trả hàng, #8) | `restockToOriginalLot`, `discardReturned` · `findLinesForReturn` · `recordRefund` — lớp `CashierShiftApiPlaceholder` | 30/11 (T73) |
 | `StockApi` · `StockQueryApi` · `VaccinationQueryApi` (chuyển kho, #12) | `transferOut`, `transferIn`, `transferCancel` · `findMovementsOfLot` · `findByStockLot` | 3/12 (T74) |
-| Sự kiện (không placeholder) | `StaffLeftBranchEvent` (#1, workforce T58), `CustomerMergedEvent` (#14, T75): đã khai báo, chưa có bên phát / nhận | |
+| Sự kiện (không placeholder) | `CustomerMergedEvent` (#14, T75): đã khai báo, chưa có bên phát / nhận. `StaffLeftBranchEvent` (#1) đã phát và đã nhận từ 19/11 (T58 bước 5) | |
 
 Còn thiếu hẳn (chưa khai báo ở T55, `docs/06` §6b #2, #5, #6, #9–11): `CatalogQueryApi.findMaterialNorms`, `VisitOrderApi.addServiceLine`, `KennelApi.occupyForTreatment`, `AdmissionQueryApi`, `VisitApi.startTreatmentVisit`, `StockApi.issueMaterials`.
 
@@ -203,7 +211,7 @@ Còn thiếu hẳn (chưa khai báo ở T55, `docs/06` §6b #2, #5, #6, #9–11)
 |---|---|---|
 | visit #21 hồ sơ sức khỏe thú (T28b) | BR-KH-07, ADR-0108 | D045 (khóa Order trước khi đọc) |
 | care #9–10 cài đặt nhận thông báo | UC88 | D025, chờ PO |
-| Tầng 3 BE-1: Nhân sự (T58–T59; hợp đồng `workforce-v1` 17 endpoint, ADR-0123, 0137; mock FE còn 14, D062), nội trú (T69; ADR-0124; phẫu thuật T61 đã bỏ, ADR-0125), feedback không trạng thái + ST24 (T70, ADR-0122; khiếu nại đã bỏ), trừ vật tư ST07 (T71) | `docs/09`, ADR-0113 | Schema đã có (V36–V41); `workforce`: entity + FSM #11 / #12 (T58 bước 1), CRUD ca #1–3 (bước 2), phân ca hộ #4–5 (bước 3), hủy phân ca #6 + lịch của tôi #8 (bước 4; ADR-0138, khóa `accounts` → phân ca → yêu cầu), còn listener `StaffLeftBranchEvent` (D071, cùng PR; đánh đổi #6 / #8 ở D072), ghi vắng #7 và yêu cầu (T59), đăng ký tuần #15–17; các phần khác chưa có Java |
+| Tầng 3 BE-1: Nhân sự (T58–T59; hợp đồng `workforce-v1` 17 endpoint, ADR-0123, 0137; mock FE còn 14, D062), nội trú (T69; ADR-0124; phẫu thuật T61 đã bỏ, ADR-0125), feedback không trạng thái + ST24 (T70, ADR-0122; khiếu nại đã bỏ), trừ vật tư ST07 (T71) | `docs/09`, ADR-0113 | Schema đã có (V36–V41); `workforce`: entity + FSM #11 / #12 (T58 bước 1), CRUD ca #1–3 (bước 2), phân ca hộ #4–5 (bước 3), hủy phân ca #6 + lịch của tôi #8 (bước 4; ADR-0138, khóa `accounts` → phân ca → yêu cầu; đánh đổi ở D072), listener `StaffLeftBranchEvent` + identity phát (bước 5, trả D071; chủ ý chưa làm ở D073), ghi vắng #7 và yêu cầu (T59), đăng ký tuần #15–17; các phần khác chưa có Java |
 | Tầng 3 BE-2: phí / định mức vật tư, thương mại điện tử, thanh toán online, trả hàng – hoàn tiền, kho mở rộng, vòng đời chi nhánh, gộp khách, bình luận bài viết | `docs/08`, ADR-0116, 0117 | Schema đã có (V42–V48), interface ở mục 3.3. T62 phí / định mức, T63–T64 đơn online, T65 thanh toán, T73 trả hàng, T74 kho mở rộng, T75 chi nhánh / khách / bài viết |
 | Phân hệ AI (chatbot RAG, gợi ý) | `docs/07`, ADR-0109, 0110 | Có V34–V35 (4 bảng, 18 khóa `ai.*`); đã cài ai-v1 #1–#14: nền T77a (UC93, FSM #13, ST22–23, `GeminiClient`), chat công khai #1 (T77b), chat cá nhân #2 và lịch tiêm tất định #3 (T77c), gợi ý #4 và hồ sơ gợi ý #12–13 (T78), nạp file #14 (T89); ADR-0129…0133 Accepted 12/11. Còn lại là AI v2 (T88–T93, ADR-0134…0136 Proposed; V52, V53 của AI) và Q2 (người rà soát KB demo) |
 | Gọi `AuditRecorder` ở module còn lại | BR-QT-15 | Snapshot JSON object |

@@ -1,11 +1,13 @@
 package com.petcare.module.workforce.repository;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
@@ -49,6 +51,23 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Long
               AND r.status = com.petcare.module.workforce.entity.ShiftRequestStatus.PENDING
             """)
     Optional<ShiftRequest> findPendingByAssignmentIdForUpdate(@Param("assignmentId") Long assignmentId);
+
+    /**
+     * Yêu cầu#5 hàng loạt (BR-NS-09, nhân viên rời chi nhánh): yêu cầu {@code PENDING} của các phân ca vừa bị hủy →
+     * {@code REJECTED}, hệ thống ghi chú, {@code decided_by} giữ NULL. Ghi đủ cột như {@code ShiftRequest.rejectBySystem}
+     * (CHECK V36 {@code ck_shift_requests_closed_at} / {@code _rejected_note}); {@code status = 'PENDING'} nằm trong câu
+     * nên yêu cầu vừa được xử lý trong lúc chờ khóa không bị ghi đè (READ COMMITTED kiểm lại điều kiện). Literal để dùng
+     * partial {@code ux_shift_requests_pending}. Khuôn {@code CareTaskRepository.cancelOpenVaccineTasks}, ADR-0138 mục 7.
+     * Bên gọi không truyền tập rỗng.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying
+    @Query(value = """
+            UPDATE shift_requests SET status = 'REJECTED', decision_note = :note, closed_at = :now, updated_at = :now
+            WHERE assignment_id IN (:assignmentIds) AND status = 'PENDING'
+            """, nativeQuery = true)
+    int rejectPendingBySystem(@Param("assignmentIds") Collection<Long> assignmentIds, @Param("note") String note,
+            @Param("now") Instant now);
 
     /** {@code FOR NO KEY UPDATE}: rút, duyệt, từ chối yêu cầu. */
     @Transactional(propagation = Propagation.MANDATORY)

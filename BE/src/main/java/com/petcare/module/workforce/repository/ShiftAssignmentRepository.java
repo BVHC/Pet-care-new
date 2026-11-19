@@ -1,7 +1,10 @@
 package com.petcare.module.workforce.repository;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -9,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Propagation;
@@ -83,6 +87,57 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
             """, nativeQuery = true)
     List<OverlappingShift> findOverlapping(@Param("staffId") Long staffId, @Param("workDate") LocalDate workDate,
             @Param("startTime") LocalTime startTime, @Param("endTime") LocalTime endTime);
+
+    /** Một phân ca {@code SCHEDULED} chưa bắt đầu bị hủy vì nhân viên rời chi nhánh (đủ dữ liệu để dựng thông báo). */
+    interface CancellableAssignment {
+        Long getAssignmentId();
+
+        LocalDate getWorkDate();
+
+        String getShiftName();
+
+        LocalTime getStartTime();
+
+        LocalTime getEndTime();
+    }
+
+    /**
+     * BR-NS-09: phân ca {@code SCHEDULED} của nhân viên tại chi nhánh <b>cũ</b> mà <b>chưa bắt đầu</b>
+     * ({@code work_date + start_time > now}, đúng giờ bắt đầu là đã bắt đầu như #6), đọc và khóa
+     * {@code FOR NO KEY UPDATE} trong <b>một</b> câu, theo {@code id} tăng dần (thứ tự khóa cố định). Cùng
+     * {@code status = 'SCHEDULED'} literal nên dùng được {@code ix_shift_assignments_staff_date} ({@code work_date >=
+     * today} thu hẹp trước). {@code now} là giờ Việt Nam từ {@code Clock}, bind {@code CAST(… AS timestamp)} như
+     * {@code LocalTime} ở {@link #findOverlapping}. Alias SQL phải trùng tên getter của {@link CancellableAssignment}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT a.id AS assignmentId, a.work_date AS workDate, d.name AS shiftName,
+                   d.start_time AS startTime, d.end_time AS endTime
+            FROM shift_assignments a JOIN shift_definitions d ON d.id = a.shift_definition_id
+            WHERE a.staff_id = :staffId AND a.branch_id = :branchId AND a.status = 'SCHEDULED'
+              AND a.work_date >= :today AND (a.work_date + d.start_time) > CAST(:now AS timestamp)
+            ORDER BY a.id ASC
+            FOR NO KEY UPDATE OF a
+            """, nativeQuery = true)
+    List<CancellableAssignment> lockNotStartedScheduled(@Param("staffId") Long staffId,
+            @Param("branchId") Long branchId, @Param("today") LocalDate today, @Param("now") LocalDateTime now);
+
+    /**
+     * Phân ca#6: {@code SCHEDULED → CANCELLED} do hệ thống ({@code status_changed_by} NULL, 03). Ghi đủ cột như
+     * {@code ShiftAssignment.cancel} (CHECK V36 {@code ck_shift_assignments_status_changed} / {@code _reason}); {@code
+     * updated_at} lấy từ {@code Clock} (ADR-0015). {@code status = 'SCHEDULED'} nằm trong câu để kiểm lại sau khóa.
+     * Bên gọi không truyền tập rỗng ({@code IN ()} là SQL sai) và đã khóa các dòng này bằng
+     * {@link #lockNotStartedScheduled}.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Modifying
+    @Query(value = """
+            UPDATE shift_assignments SET status = 'CANCELLED', reason = :reason, status_changed_by = NULL,
+                   status_changed_at = :now, updated_at = :now
+            WHERE id IN (:ids) AND status = 'SCHEDULED'
+            """, nativeQuery = true)
+    int cancelByStaffLeaving(@Param("ids") Collection<Long> ids, @Param("reason") String reason,
+            @Param("now") Instant now);
 
     /**
      * Lịch phân ca của chi nhánh trong {@code [from, to]} (workforce-v1 #4), sắp {@code workDate}, giờ bắt đầu của ca,
