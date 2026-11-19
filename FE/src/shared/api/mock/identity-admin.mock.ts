@@ -24,6 +24,7 @@ import {
   type MockHandler,
   type MockReply,
 } from './envelope';
+import { pendingWorkOfLockedStaff } from './visit.mock';
 import { staffLeftBranch } from './workforce.mock';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -660,7 +661,7 @@ const lockAccount: MockHandler = ({ account, params, body }) => {
     isLocked: true,
     mustChangePassword: 'mustChangePassword' in target ? target.mustChangePassword : false,
   };
-  return ok({ account: summary as LockResult['account'], pendingWork: [] });
+  return ok({ account: summary as LockResult['account'], pendingWork: role === 'CUSTOMER' ? [] : pendingWorkOfLockedStaff(id) });
 };
 
 const unlockAccount: MockHandler = ({ account, params, body }) => {

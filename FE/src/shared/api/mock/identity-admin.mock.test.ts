@@ -4,6 +4,7 @@ import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { applyLifecycle } from './branch.mock';
 import { MOCK_OTP_CODE, MOCK_PASSWORD } from './identity.mock';
+import { visitRowOf } from './visit.mock';
 import { installMockApi } from './mock-api';
 
 let client: AxiosInstance;
@@ -1522,5 +1523,35 @@ describe('PUT /api/notification-templates/{code} và restore-default — validat
     expect((await failure(client.post('/api/notification-templates/NOPE/restore-default', {}, await admin()))).status).toBe(404);
     expect((await failure(client.post(`${otp}/restore-default`, {}, await as('chuoi@petcare.vn')))).status).toBe(403);
     expect((await failure(client.put(otp, { subject: 'T', body: '{ma_otp}' }, await as('chuoi@petcare.vn')))).status).toBe(403);
+  });
+});
+
+// BR-QT-11, ADR-0035: sau khi khóa, `pendingWork` liệt kê việc dở của người bị khóa (lượt đã gọi trước, `needsReassign` chỉ với IN_PROGRESS) và
+// listener của visit đánh dấu "cần gán lại" cho các lượt đang làm của họ. Mock chỉ dựng được phần lượt khám / làm đẹp (visit.mock); ca thu ngân mở,
+// lịch hẹn, đặt chỗ lưu trú và Order của khách BE có mà mock chưa dựng (trả rỗng cho các loại đó).
+describe('POST /api/accounts/{id}/lock — pendingWork lấy từ lượt được gán chưa xong (BR-QT-11, ADR-0035)', () => {
+  const lockAs = async (id: number) => (await client.post(`/api/accounts/${id}/lock`, { reason: 'Thử khóa' }, await as('admin@petcare.vn'))).data.data;
+  const brief = (work: { type: string; entityId: number; needsReassign: boolean }[]) => work.map((w) => [w.type, w.entityId, w.needsReassign]);
+
+  it('BS. Minh Anh (#5): lượt đang khám 2002 (cần gán lại) trước lượt đang chờ 2102; chi nhánh lấy từ lượt', async () => {
+    const data = await lockAs(5);
+    expect(brief(data.pendingWork)).toEqual([['VISIT_IN_PROGRESS', 2002, true], ['VISIT_WAITING', 2102, false]]);
+    expect(data.pendingWork.every((w: { branchId: number }) => w.branchId === 1)).toBe(true);
+    expect(Object.keys(data.pendingWork[0]).sort()).toEqual(['branchId', 'entityId', 'needsReassign', 'type']);
+  });
+
+  it('listener của visit: lượt đang khám của người bị khóa thành "cần gán lại" (BR-TN-08); lượt đang chờ thì không', async () => {
+    await lockAs(5);
+    expect(visitRowOf(2002)?.needsReassign).toBe(true);
+    expect(visitRowOf(2102)?.needsReassign).toBe(false);
+  });
+
+  it('phụ tá Thu Hà (#6): chỉ lượt thẩm mỹ đang chờ 2103', async () => {
+    expect(brief((await lockAs(6)).pendingWork)).toEqual([['VISIT_WAITING', 2103, false]]);
+  });
+
+  it('ADMIN / SUPER_MANAGER bị khóa: rỗng, không hỏi việc nào (ADR-0035); người không có việc dở cũng rỗng, không bao giờ null', async () => {
+    expect((await lockAs(2)).pendingWork).toEqual([]);
+    expect((await lockAs(4)).pendingWork).toEqual([]);
   });
 });

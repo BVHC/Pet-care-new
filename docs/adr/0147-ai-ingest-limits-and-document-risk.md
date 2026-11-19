@@ -31,7 +31,7 @@ T89 đã cài phần nạp file ngày 13/11/2026 (ADR-0134 mục "Đã cài ở 
 | D1: 409 `BR-AI-30` | HTTP 409, `errorCode = CONCURRENCY_CONFLICT`, message kết thúc "(BR-AI-30)" | không có mã nào mang rule ID ở 409 |
 | D1: audit `importedFrom`, trường `warnings`, PDF đổi dòng in hoa ngắn thành `##`, `.docx` kiểm `word/document.xml` | **Chưa làm** (nợ) | ngoài năm mục của T89 |
 
-## Đã đo (19/11/2026, bản sao DB `petcare_t89`, BE cổng 8083; DB demo 5433 không đổi)
+## Đã đo (19/11/2026, bản sao DB `petcare_t89`, BE cổng 8083; riêng mục "DB demo 5433" cuối danh sách là DB thật)
 
 - Flyway tự áp V59 trên bản sao có dữ liệu thật (20,7 giây khởi động); cột nullable nên không backfill.
 - #14: `.md`, `.docx`, `.pdf` có chữ → 201 `DRAFT`, `externalId` khớp SHA-256 tính ngoài; nạp lại (đổi tên) → 409 nêu `#<id>`; PDF scan, giả đuôi, `.exe`, base64 hỏng → 400 `BR-AI-29`; ADMIN, lễ tân, khách → 403; không token → 401.
@@ -42,6 +42,7 @@ T89 đã cài phần nạp file ngày 13/11/2026 (ADR-0134 mục "Đã cài ở 
 - #6, #7, #8, #5: `SAFETY` + `HIGH`, `LIFESTYLE`, `riskLevel` lạ hoặc viết thường → 400 `MALFORMED_REQUEST`; PATCH đổi `riskLevel` giữ `version`; PATCH `null` giữ nguyên.
 - Giao diện `/admin/ai` (Vite 5173 → BE 8083, Chrome): 13/13 bước (nạp, nạp lại 409, file 3 MB bị BE từ chối, huy hiệu rủi ro, sửa rủi ro).
 - **Chưa đo:** hết giờ trích 20 giây trên file thật (chỉ có test đơn vị với thời hạn tiêm); 429 khi hết luồng (chỉ test đơn vị).
+- **DB demo 5433** (sau commit `c0eac03`; BE tạm cổng 8083, `AI_INDEXING_ENABLED=false`): Flyway 58 → 59, khóa `ai.ingest.max_file_kb` = 2048; bù bằng `--backfill-risk-topic --apply` cho 25 tài liệu `docs_RAG` (25 đặt `riskLevel`, 8 đổi topic: `SAFETY` #48, #49, #50, #52; `LIFESTYLE` #51, #53, #54, #55). Đo lại: 70 tài liệu, tổng `version` 76 (không đổi), 39 `PUBLISHED` vẫn `INDEXED`, `CARE` 39 → 31, audit `AI_DOCUMENT_UPDATED` 25 dòng (`riskLevel` rỗng → có giá trị); chạy lại thì 0 việc cần bù. Log BE không có ERROR / WARN.
 
 ## Hệ quả và nợ
 
@@ -49,7 +50,7 @@ T89 đã cài phần nạp file ngày 13/11/2026 (ADR-0134 mục "Đã cài ở 
 - Hai request đồng thời cùng file: bên thua nhận 409 chung, không nêu mã tài liệu (đua chỉ mục duy nhất).
 - File 10 MB tách thành ~528 tài liệu trong **một** transaction (5,8 giây); chấp nhận ở quy mô này, không chia lô.
 - Nạp lại file đã `ARCHIVED` vẫn 409 (tài liệu giữ `external_id`); người quản lý mở lại tài liệu có sẵn thay vì nạp lại.
-- Tài liệu `docs_RAG` đã nạp ở DB demo trước V59 giữ topic `CARE` và `risk_level` NULL. **Hiến chọn phương án B (19/11/2026):** bù bằng chế độ `--backfill-risk-topic` của `BE/scripts/ai-kb/load-docs-rag.mjs`, tức PATCH #8 (có audit `AI_DOCUMENT_UPDATED` trước và sau, **không** tăng `version`, không nạp lại chỉ mục, giữ `PUBLISHED`). Không ghi đè sửa tay: `topic` chỉ đổi khi còn `CARE` và bảng ánh xạ mới cho `SAFETY` / `LIFESTYLE`, `riskLevel` chỉ đặt khi còn rỗng; tài liệu `ARCHIVED` bỏ qua. Mặc định chỉ in kế hoạch, ghi khi thêm `--apply`; cần BE đã chạy V59. Đã đo trên bản sao DB (xem mục "Đã đo"); chạy trên DB demo 5433 chờ BE chạy V59 ở đó (xem mục "Chờ Hiến").
+- Tài liệu `docs_RAG` đã nạp ở DB demo trước V59 giữ topic `CARE` và `risk_level` NULL. **Hiến chọn phương án B (19/11/2026):** bù bằng chế độ `--backfill-risk-topic` của `BE/scripts/ai-kb/load-docs-rag.mjs`, tức PATCH #8 (có audit `AI_DOCUMENT_UPDATED` trước và sau, **không** tăng `version`, không nạp lại chỉ mục, giữ `PUBLISHED`). Không ghi đè sửa tay: `topic` chỉ đổi khi còn `CARE` và bảng ánh xạ mới cho `SAFETY` / `LIFESTYLE`, `riskLevel` chỉ đặt khi còn rỗng; tài liệu `ARCHIVED` bỏ qua. Mặc định chỉ in kế hoạch, ghi khi thêm `--apply`; cần BE đã chạy V59. Đã đo trên bản sao DB và **đã chạy trên DB demo 5433 ngày 19/11/2026** (xem mục "Đã đo").
 - FE mock không mô phỏng hết giờ trích và 429; `externalId` của mock dùng FNV-1a thay SHA-256 (chỉ giữ tính "cùng byte thì cùng mã").
 
 ## Hiến đã duyệt (19/11/2026) và việc còn lại
@@ -57,4 +58,4 @@ T89 đã cài phần nạp file ngày 13/11/2026 (ADR-0134 mục "Đã cài ở 
 Hiến duyệt cả bốn điểm: V59 cho T89 (BE-1 chuyển `workforce.*` sang V60), `CONCURRENCY_CONFLICT` làm mã của 409 `BR-AI-30`, `risk_level` `VARCHAR(30)`, pool trích 2 luồng không hàng đợi (hết luồng 429). Việc còn lại:
 
 1. Hỏi Mạnh còn file V59 nào chưa đẩy lên không (script commit chỉ thấy nhánh remote); nếu có thì đánh số lại file này.
-2. Chạy `--backfill-risk-topic --apply` trên DB demo 5433: cần BE chạy V59 ở đó (Flyway tự áp lúc khởi động, kèm 24 cron trên dữ liệu demo) nên chờ Hiến cho phép khởi động BE trên 5433 và ghi `BAO TRUOC` / `DA GHI` vào `SHARED-CHANGES.md`.
+2. ~~Chạy `--backfill-risk-topic --apply` trên DB demo 5433~~ **Đã làm 19/11/2026** sau khi Hiến commit `c0eac03`, có `BAO TRUOC` / `DA GHI` ở `SHARED-CHANGES.md` và sao lưu `petcare_seed_19-11_truoc-V59-backfill.dump`.

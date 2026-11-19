@@ -15,6 +15,8 @@ import { useLock, useUnlock, useAccounts } from '../../shared/hooks/useAdminIden
 import { plainMessage, toApiError } from '../../shared/api/api-error';
 import { useAccount } from '../../shared/stores/session.store';
 import { Pager } from '../../components/admin/Pager';
+import type { PendingWorkItem } from '../../shared/types/identity';
+import { PendingWorkDialog } from './accounts/PendingWorkDialog';
 
 const PAGE_SIZE = 20; // = mặc định của BE, kẹp 1–100
 
@@ -43,6 +45,8 @@ export function AdminAccountsPage() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [lockTarget, setLockTarget] = useState<{ id: number; name: string } | null>(null);
   const [unlockTarget, setUnlockTarget] = useState<{ id: number; name: string } | null>(null);
+  /** Việc dở của người vừa bị khóa (BR-QT-11), chỉ khi có. */
+  const [pendingWork, setPendingWork] = useState<{ name: string; items: PendingWorkItem[] } | null>(null);
   const [reason, setReason] = useState('');
 
   const params = {
@@ -190,10 +194,11 @@ export function AdminAccountsPage() {
         onSubmit={async () => {
           if (!lockTarget) return;
           try {
-            await lock.mutateAsync({ id: lockTarget.id, reason });
-            toast.success(`Đã khóa ${lockTarget.name}`);
+            const result = await lock.mutateAsync({ id: lockTarget.id, reason });
+            toast.success(result.pendingWork.length ? `Đã khóa ${lockTarget.name}` : `Đã khóa ${lockTarget.name}. Không có quy trình dở dang.`);
             setNotice(null);
             setLockTarget(null);
+            if (result.pendingWork.length) setPendingWork({ name: lockTarget.name, items: result.pendingWork });
           } catch (e) { handleError(e); }
         }}
         submitText="Khóa"
@@ -206,6 +211,8 @@ export function AdminAccountsPage() {
         </Field>
         {lock.isError && <FormError message={plainMessage(toApiError(lock.error))} />}
       </FormModal>
+
+      {pendingWork && <PendingWorkDialog email={pendingWork.name} items={pendingWork.items} onClose={() => setPendingWork(null)} />}
 
       <FormModal
         open={!!unlockTarget}

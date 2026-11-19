@@ -240,3 +240,48 @@ describe('AdminAccountsPage (T22 - UC09)', () => {
     });
   });
 });
+
+// BR-QT-11: khóa có hiệu lực ngay, rồi hệ thống hiển thị việc dở của người bị khóa; lượt đã gọi mang nhãn "Cần gán lại" (BR-TN-08).
+// Mock (visit.mock): BS. Minh Anh (#5) có lượt 2002 đang khám và lượt 2102 đang chờ; lễ tân Lan Chi (#4) không có việc dở.
+describe('AdminAccountsPage — việc dở sau khi khóa (BR-QT-11)', () => {
+  beforeEach(() => signIn('admin@petcare.vn'));
+
+  const lock = async (user: ReturnType<typeof userEvent.setup>, email: string) => {
+    await user.click(await screen.findByRole('button', { name: `Khóa ${email}` }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText(/^Lý do/), 'Tài khoản có dấu hiệu bị chiếm');
+    await user.click(within(dialog).getByRole('button', { name: 'Khóa' }));
+  };
+
+  it('khóa BS. Minh Anh: hộp "Quy trình dở dang" liệt kê lượt đang khám (Cần gán lại) trước lượt đang chờ; Đóng thì biến mất', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await lock(user, 'doctor@store1.vn');
+
+    const work = await screen.findByRole('dialog', { name: 'Quy trình dở dang của doctor@store1.vn' });
+    const rows = within(work).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Lượt đang khám hoặc đang làm');
+    expect(rows[0]).toHaveTextContent('#2002');
+    expect(rows[0]).toHaveTextContent('Cần gán lại');
+    expect(rows[1]).toHaveTextContent('Lượt đang chờ');
+    expect(rows[1]).toHaveTextContent('#2102');
+    expect(rows[1]).not.toHaveTextContent('Cần gán lại');
+    expect(within(work).getAllByText(/Chi nhánh #1/)).toHaveLength(2);
+
+    await user.click(within(work).getAllByRole('button', { name: 'Đóng' }).at(-1)!); // nút chân hộp; đầu hộp có thêm nút đóng cùng tên
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByRole('button', { name: 'Mở khóa doctor@store1.vn' })).toBeInTheDocument();
+  });
+
+  it('khóa người không có việc dở (lễ tân Lan Chi): không có hộp "Quy trình dở dang", hộp khóa đóng như cũ', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await lock(user, 'reception@store1.vn');
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByRole('button', { name: 'Mở khóa reception@store1.vn' })).toBeInTheDocument();
+  });
+});
