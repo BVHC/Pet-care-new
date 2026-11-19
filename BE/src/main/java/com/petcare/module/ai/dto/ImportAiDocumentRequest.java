@@ -19,7 +19,8 @@ public record ImportAiDocumentRequest(
                 requiredMode = Schema.RequiredMode.REQUIRED)
         String fileName,
         @NotBlank(message = "Nội dung file không được để trống")
-        @Schema(description = "Nội dung file mã hóa base64 (không kèm tiền tố data:), tối đa 2 MB trước khi mã hóa",
+        @Schema(description = "Nội dung file mã hóa base64 (không kèm tiền tố data:); cỡ file tối đa là [CFG] "
+                + "`ai.ingest.max_file_kb` (mặc định 2048 kB) trước khi mã hóa",
                 example = "IyBDaMSDbSBzw7NjIGNow7MgY29u", requiredMode = Schema.RequiredMode.REQUIRED)
         String contentBase64,
         @NotNull(message = "Chủ đề không được để trống")

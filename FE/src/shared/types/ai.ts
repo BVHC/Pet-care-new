@@ -16,14 +16,18 @@ export type VaccinationStatus = 'NOT_YET_ELIGIBLE' | 'NOT_STARTED' | 'UP_TO_DATE
 export type RecoGroup = 'GROOMING' | 'BOARDING' | 'PRODUCT';
 export type ItemType = 'SERVICE' | 'PRODUCT';
 export type DocumentSource = 'MANUAL' | 'CATALOG_PROTOCOL';
-export type DocumentTopic = 'CARE' | 'NUTRITION' | 'BEHAVIOR' | 'HYGIENE' | 'VACCINATION' | 'CLINIC_INFO';
+/** `SAFETY`: cấp cứu, sơ cứu, ngộ độc, an toàn trẻ em; `LIFESTYLE`: nhận nuôi, đi lại, nhiều thú, thú già (V59). */
+export type DocumentTopic = 'CARE' | 'NUTRITION' | 'BEHAVIOR' | 'HYGIENE' | 'VACCINATION' | 'CLINIC_INFO' | 'SAFETY' | 'LIFESTYLE';
+/** Mức rủi ro của nội dung tài liệu (V59); chưa dùng để lọc truy hồi. */
+export type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH';
 export type DocumentSpecies = 'DOG' | 'CAT' | 'OTHER' | 'ALL';
 /** FSM #13. */
 export type DocumentStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type IndexStatus = 'PENDING' | 'INDEXED' | 'FAILED';
 export type ProfileSpecies = 'DOG' | 'CAT' | 'OTHER';
 
-export const DOCUMENT_TOPICS: readonly DocumentTopic[] = ['CARE', 'NUTRITION', 'BEHAVIOR', 'HYGIENE', 'VACCINATION', 'CLINIC_INFO'];
+export const DOCUMENT_TOPICS: readonly DocumentTopic[] = ['CARE', 'NUTRITION', 'BEHAVIOR', 'HYGIENE', 'VACCINATION', 'CLINIC_INFO', 'SAFETY', 'LIFESTYLE'];
+export const RISK_LEVELS: readonly RiskLevel[] = ['LOW', 'MODERATE', 'HIGH'];
 export const DOCUMENT_SPECIES: readonly DocumentSpecies[] = ['DOG', 'CAT', 'OTHER', 'ALL'];
 export const DOCUMENT_STATUSES: readonly DocumentStatus[] = ['DRAFT', 'PUBLISHED', 'ARCHIVED'];
 export const RECO_GROUPS: readonly RecoGroup[] = ['GROOMING', 'BOARDING', 'PRODUCT'];
@@ -165,8 +169,10 @@ export interface AiDocumentSummary {
   version: number;
   indexStatus: IndexStatus;
   updatedAt: string;
-  /** Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ. */
+  /** Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết, FILE-<16 hex đầu của SHA-256 của file>-<n> với tài liệu nạp từ file (BR-AI-30), null với tài liệu soạn tay và phác đồ. */
   externalId?: string | null;
+  /** Mức rủi ro của nội dung; null với tài liệu không nêu. */
+  riskLevel?: RiskLevel | null;
 }
 export interface AiDocument extends AiDocumentSummary {
   /** Markdown ≤ 20 000 ký tự. */
@@ -191,12 +197,14 @@ export interface CreateAiDocumentRequest {
   sourceNote?: string | null;
   reviewerName?: string | null;
   reviewedOn?: string | null;
+  /** Bỏ trống = không nêu. */
+  riskLevel?: RiskLevel | null;
 }
+/** PATCH: trường vắng = giữ nguyên; `riskLevel` đã đặt thì chỉ đổi sang mức khác, không xóa được về trống. */
 export type UpdateAiDocumentRequest = Partial<CreateAiDocumentRequest>;
 
-/** #14 nạp file (BR-AI-29): file gửi base64 trong JSON; phần mở rộng và cỡ tối đa BE cũng kiểm. */
+/** #14 nạp file (BR-AI-29): file gửi base64 trong JSON. Phần mở rộng FE kiểm sớm; trần cỡ là [CFG] `ai.ingest.max_file_kb` nên chỉ BE biết, FE hiện lỗi 400 của BE. */
 export const AI_IMPORT_EXTENSIONS = ['md', 'txt', 'docx', 'pdf'];
-export const AI_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
 export interface ImportAiDocumentRequest {
   fileName: string;
   contentBase64: string;

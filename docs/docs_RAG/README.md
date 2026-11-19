@@ -32,15 +32,18 @@ Không đưa vào tập truy xuất production cho đến khi người có chuy�
 
 Script đọc đúng bảng này; giá trị không có trong bảng thì dừng và báo, không tự đoán.
 
-| `topic` frontmatter | `DocumentTopic` (V34) |
+| `topic` frontmatter | `DocumentTopic` (V34, V59) |
 |---|---|
-| basic_care, dog_care, cat_care, puppy_care, kitten_care, senior_care, adoption, travel, multi_pet_household, family_safety, cat_environment, emergency_triage, first_aid, poisoning_safety | `CARE` |
+| basic_care, dog_care, cat_care, puppy_care, kitten_care, cat_environment | `CARE` |
+| emergency_triage, first_aid, poisoning_safety, family_safety | `SAFETY` |
+| adoption, travel, multi_pet_household, senior_care | `LIFESTYLE` |
 | nutrition, weight_management | `NUTRITION` |
 | dog_behavior | `BEHAVIOR` |
 | grooming_skin, dental_care | `HYGIENE` |
 | vaccination, parasite_prevention | `VACCINATION` |
 
-`CARE` là ánh xạ tạm cho nhóm an toàn / cấp cứu / lối sống; ADR-0134 đề xuất thêm `SAFETY` và `LIFESTYLE` ở V53.
+`SAFETY` và `LIFESTYLE` có từ V59 (ADR-0147). Tài liệu đã nạp trước V59 vẫn mang `CARE` cho hai nhóm này; script chỉ áp bảng mới cho lần nạp sau, không đổi topic tài liệu đã có (người quản lý sửa qua UC93 #8 nếu muốn).
+- `risk_level` (`LOW`, `MODERATE`, `HIGH`) được gửi thành `riskLevel` ở UC93 #6; giá trị khác thì không gửi. Chưa dùng để lọc truy hồi.
 
 - `species`: `[dog]` → `DOG`, `[cat]` → `CAT`, `[dog, cat]` → `ALL`.
 - Trạng thái: `DRAFT` / `PENDING_REVIEW` của file → `DRAFT` trong DB (không có người rà soát). `VERIFIED` kèm `review.approved: true` → `PUBLISHED` với `reviewer_name = review.reviewer_name`, `reviewed_on = review.reviewed_at`. `REJECTED` / `EXPIRED` → không nạp; đã nạp rồi thì lưu trữ tay qua UC93.

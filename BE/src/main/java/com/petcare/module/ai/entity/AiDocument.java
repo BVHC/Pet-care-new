@@ -47,7 +47,10 @@ public class AiDocument extends TimestampedEntity {
     @Column(name = "vaccine_type_id", updatable = false)
     private Long vaccineTypeId;
 
-    /** Khóa nguồn ngoài (V53): hiện chỉ {@code ARTICLE-<id>} của bài viết ST22 đồng bộ (BR-AI-30); UNIQUE khi có giá trị. */
+    /**
+     * Khóa nguồn ngoài (V53): {@code ARTICLE-<id>} của bài viết ST22 đồng bộ, {@code FILE-<sha256 16 hex>-<n>} của file nạp
+     * (BR-AI-30); UNIQUE khi có giá trị.
+     */
     @Column(name = "external_id", updatable = false, length = 100)
     private String externalId;
 
@@ -64,6 +67,11 @@ public class AiDocument extends TimestampedEntity {
 
     @Column(name = "content", nullable = false)
     private String content;
+
+    /** Mức rủi ro (V59, docs/adr/0147); null với tài liệu không nêu. Chưa dùng để lọc truy hồi. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "risk_level", length = 30)
+    private RiskLevel riskLevel;
 
     /** Lớp 1 — nguồn. V34 bắt NOT NULL với {@code MANUAL}, nên nháp chưa có nguồn lưu chuỗi rỗng (docs/adr/0130). */
     @Column(name = "source_note", length = SOURCE_NOTE_MAX_LENGTH)
@@ -101,13 +109,15 @@ public class AiDocument extends TimestampedEntity {
     @Column(name = "updated_by")
     private Long updatedBy;
 
-    /** Tài liệu soạn tay, luôn bắt đầu ở {@code DRAFT} (Tài liệu#1). */
+    /** Tài liệu soạn tay hoặc nạp từ file ({@code externalId} khác null), luôn bắt đầu ở {@code DRAFT} (Tài liệu#1). */
     public static AiDocument manualDraft(String title, DocumentTopic topic, DocumentSpecies species, String content,
-            String sourceNote, String reviewerName, LocalDate reviewedOn, Long updatedBy) {
+            String sourceNote, String reviewerName, LocalDate reviewedOn, RiskLevel riskLevel, String externalId,
+            Long updatedBy) {
         AiDocument doc = new AiDocument();
         doc.sourceType = DocumentSource.MANUAL;
         doc.status = DocumentStatus.DRAFT;
-        doc.edit(title, topic, species, content, sourceNote, reviewerName, reviewedOn, updatedBy);
+        doc.externalId = externalId;
+        doc.edit(title, topic, species, content, sourceNote, reviewerName, reviewedOn, riskLevel, updatedBy);
         return doc;
     }
 
@@ -148,11 +158,12 @@ public class AiDocument extends TimestampedEntity {
     }
 
     public void edit(String title, DocumentTopic topic, DocumentSpecies species, String content, String sourceNote,
-            String reviewerName, LocalDate reviewedOn, Long updatedBy) {
+            String reviewerName, LocalDate reviewedOn, RiskLevel riskLevel, Long updatedBy) {
         this.title = title;
         this.topic = topic;
         this.species = species;
         this.content = content;
+        this.riskLevel = riskLevel;
         this.sourceNote = sourceNote;
         this.reviewerName = reviewerName;
         this.reviewedOn = reviewedOn;

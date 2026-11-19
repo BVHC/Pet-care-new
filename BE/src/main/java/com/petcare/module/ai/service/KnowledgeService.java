@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.IntStream;
 
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -28,6 +29,7 @@ import com.petcare.module.ai.entity.DocumentSource;
 import com.petcare.module.ai.entity.DocumentSpecies;
 import com.petcare.module.ai.entity.DocumentStatus;
 import com.petcare.module.ai.entity.DocumentTopic;
+import com.petcare.module.ai.exception.DuplicateImportException;
 import com.petcare.module.ai.fsm.AiDocumentTransitionHandler;
 import com.petcare.module.ai.repository.AiChunkRepository;
 import com.petcare.module.ai.repository.AiDocumentRepository;
@@ -120,6 +122,30 @@ public class KnowledgeService {
     /** ai-v1 #6, Tài liệu#1: luôn là nháp soạn tay. */
     @Transactional
     public AiDocumentResponse create(CreateAiDocumentRequest request) {
+        return createDraft(request, null);
+    }
+
+    /**
+     * ai-v1 #14, Tài liệu#1 từ file: mọi phần của một file trong một transaction, {@code external_id =
+     * FILE-<fileHash>-<n>}. Đã có phần nào (kể cả {@code ARCHIVED}) thì 409 {@code BR-AI-30} và không tạo gì. Hai request
+     * cùng file chạy đua cùng qua bước kiểm này thì chỉ mục duy nhất chặn bên sau (409 chung, không phải 500).
+     */
+    @Transactional
+    public List<AiDocumentResponse> createFromFile(String fileHash, List<CreateAiDocumentRequest> parts) {
+        List<String> externalIds = IntStream.rangeClosed(1, parts.size()).mapToObj(n -> "FILE-" + fileHash + "-" + n).toList();
+        for (String externalId : externalIds) {
+            docs.findIdByExternalId(externalId).ifPresent(existing -> {
+                throw new DuplicateImportException(existing);
+            });
+        }
+        List<AiDocumentResponse> created = new ArrayList<>();
+        for (int i = 0; i < parts.size(); i++) {
+            created.add(createDraft(parts.get(i), externalIds.get(i)));
+        }
+        return created;
+    }
+
+    private AiDocumentResponse createDraft(CreateAiDocumentRequest request, String externalId) {
         Long actor = scope.current().accountId();
         String title = trim(request.title());
         requireTitle(title);
@@ -127,7 +153,7 @@ public class KnowledgeService {
         // V34 bắt source_note NOT NULL với MANUAL; nháp chưa có nguồn lưu chuỗi rỗng, publish kiểm lại (docs/adr/0130).
         AiDocument doc = AiDocument.manualDraft(title, request.topic(), request.species(), request.content(),
                 request.sourceNote() == null ? "" : request.sourceNote().trim(), blankToNull(request.reviewerName()),
-                request.reviewedOn(), actor);
+                request.reviewedOn(), request.riskLevel(), externalId, actor);
         docs.saveAndFlush(doc);
         audit(AiAuditActions.DOCUMENT_CREATED, doc, null);
         return respond(doc);
@@ -159,7 +185,8 @@ public class KnowledgeService {
                 request.species() == null ? doc.getSpecies() : request.species(), content,
                 request.sourceNote() == null ? doc.getSourceNote() : request.sourceNote().trim(),
                 request.reviewerName() == null ? doc.getReviewerName() : blankToNull(request.reviewerName()),
-                request.reviewedOn() == null ? doc.getReviewedOn() : request.reviewedOn(), scope.current().accountId());
+                request.reviewedOn() == null ? doc.getReviewedOn() : request.reviewedOn(),
+                request.riskLevel() == null ? doc.getRiskLevel() : request.riskLevel(), scope.current().accountId());
         if (published) {
             requirePublishable(doc);
             if (textChanged) {
@@ -294,6 +321,7 @@ public class KnowledgeService {
         snapshot.put("sourceType", doc.getSourceType().name());
         snapshot.put("topic", doc.getTopic().name());
         snapshot.put("species", doc.getSpecies().name());
+        snapshot.put("riskLevel", doc.getRiskLevel() == null ? null : doc.getRiskLevel().name());
         snapshot.put("status", doc.getStatus().name());
         snapshot.put("version", doc.getVersion());
         snapshot.put("indexStatus", doc.getIndexStatus().name());

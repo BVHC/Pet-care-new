@@ -9,6 +9,7 @@ import com.petcare.module.ai.entity.DocumentSpecies;
 import com.petcare.module.ai.entity.DocumentStatus;
 import com.petcare.module.ai.entity.DocumentTopic;
 import com.petcare.module.ai.entity.IndexStatus;
+import com.petcare.module.ai.entity.RiskLevel;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -69,15 +70,20 @@ public record AiDocumentResponse(
         @Schema(description = "Lần sửa cuối", example = "2026-11-10T09:30:00Z")
         Instant updatedAt,
 
-        @Schema(description = "Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu "
-                + "soạn tay, nạp file và phác đồ", example = "ARTICLE-12", nullable = true)
-        String externalId) {
+        @Schema(description = "Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết, FILE-<16 hex đầu của SHA-256 "
+                + "của file>-<n> với tài liệu nạp từ file (BR-AI-30), null với tài liệu soạn tay và phác đồ", example = "ARTICLE-12",
+                nullable = true)
+        String externalId,
+
+        @Schema(description = "Mức rủi ro của nội dung (LOW, MODERATE, HIGH); null với tài liệu không nêu", example = "HIGH",
+                nullable = true)
+        RiskLevel riskLevel) {
 
     public static AiDocumentResponse from(AiDocument doc, long chunkCount) {
         String sourceNote = doc.getSourceNote() == null || doc.getSourceNote().isEmpty() ? null : doc.getSourceNote();
         return new AiDocumentResponse(doc.getId(), doc.getSourceType(), doc.getTitle(), doc.getTopic(),
                 doc.getSpecies(), doc.getContent(), sourceNote, doc.getReviewerName(), doc.getReviewedOn(),
                 doc.getStatus(), doc.getVersion(), doc.getIndexedVersion(), doc.getIndexStatus(), doc.getIndexError(),
-                (int) chunkCount, doc.getPublishedAt(), doc.getUpdatedAt(), doc.getExternalId());
+                (int) chunkCount, doc.getPublishedAt(), doc.getUpdatedAt(), doc.getExternalId(), doc.getRiskLevel());
     }
 }

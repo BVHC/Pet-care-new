@@ -176,12 +176,19 @@ public class KnowledgeController {
 
     /** ai-v1 #14, Tài liệu#1 từ file. */
     @Operation(operationId = "importAiDocument", tags = "Knowledge", summary = "Nạp tài liệu tri thức từ file",
-            description = "UC93 · BR-AI-14, 17, 29. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: — → DRAFT "
-                + "(Tài liệu#1). Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON, tối đa 2 MB); tạo một hoặc nhiều "
-                + "nháp `MANUAL`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14.")
-    @ApiErrorDoc(status = 400, description = "`BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ, "
-            + "rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự")
+            description = "UC93 · BR-AI-14, 17, 29, 30. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: — → DRAFT "
+                + "(Tài liệu#1). Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON; trần cỡ là [CFG] "
+                + "`ai.ingest.max_file_kb`, mặc định 2048 kB, khoảng 256–10240, đọc mỗi lần nạp); trích văn bản tối đa 20 "
+                + "giây. Tạo một hoặc nhiều nháp `MANUAL` có `externalId` = `FILE-<16 hex đầu của SHA-256 của file>-<n>`, "
+                + "không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14.")
+    @ApiErrorDoc(status = 400, description = "`BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ "
+            + "([CFG] `ai.ingest.max_file_kb`), hết thời gian trích (20 giây), rỗng, hỏng, PDF không có chữ · `BR-AI-14` "
+            + "tiêu đề rỗng / quá 200 ký tự")
     @ApiErrorDoc(status = 403)
+    @ApiErrorDoc(status = 409, description = "`CONCURRENCY_CONFLICT` `BR-AI-30` file đã được nạp trước đó (cùng SHA-256 của "
+            + "byte file); message nêu mã tài liệu đã có, kể cả khi đã `ARCHIVED`; không tạo thêm tài liệu nào")
+    @ApiErrorDoc(status = 429, description = "`TOO_MANY_REQUESTS` mọi luồng trích văn bản đang bận: header `Retry-After` là "
+            + "số giây nên chờ rồi nạp lại")
     @PostMapping("/import")
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize(SUPER_MANAGER)

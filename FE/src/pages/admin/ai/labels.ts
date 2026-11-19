@@ -1,4 +1,4 @@
-import type { DocumentSource, DocumentSpecies, DocumentStatus, DocumentTopic, IndexStatus, ItemType, ProfileSpecies, RecoGroup } from '../../../shared/types/ai';
+import type { DocumentSource, DocumentSpecies, DocumentStatus, DocumentTopic, IndexStatus, ItemType, ProfileSpecies, RecoGroup, RiskLevel } from '../../../shared/types/ai';
 
 export const TOPIC_LABELS: Record<DocumentTopic, string> = {
   CARE: 'Chăm sóc',
@@ -7,7 +7,11 @@ export const TOPIC_LABELS: Record<DocumentTopic, string> = {
   HYGIENE: 'Vệ sinh',
   VACCINATION: 'Tiêm phòng',
   CLINIC_INFO: 'Thông tin phòng khám',
+  SAFETY: 'An toàn và cấp cứu',
+  LIFESTYLE: 'Lối sống',
 };
+export const RISK_LABELS: Record<RiskLevel, string> = { LOW: 'Thấp', MODERATE: 'Trung bình', HIGH: 'Cao' };
+export const RISK_VARIANT = { LOW: 'neutral', MODERATE: 'warning', HIGH: 'danger' } as const;
 export const SPECIES_LABELS: Record<DocumentSpecies, string> = { DOG: 'Chó', CAT: 'Mèo', OTHER: 'Loài khác', ALL: 'Mọi loài' };
 export const PROFILE_SPECIES_LABELS: Record<ProfileSpecies, string> = { DOG: 'Chó', CAT: 'Mèo', OTHER: 'Loài khác' };
 export const STATUS_LABELS: Record<DocumentStatus, string> = { DRAFT: 'Nháp', PUBLISHED: 'Đã xuất bản', ARCHIVED: 'Đã lưu trữ' };

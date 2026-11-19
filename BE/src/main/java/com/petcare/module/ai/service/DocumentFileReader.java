@@ -25,15 +25,12 @@ import com.petcare.platform.exception.BusinessRuleViolationException;
 /**
  * Đọc file nạp tri thức thành văn bản Markdown thô (BR-AI-29, docs/adr/0134 D1): {@code .md}, {@code .txt}, {@code .docx},
  * {@code .pdf}. Kiểu file phải khớp cả phần mở rộng lẫn byte đầu; chỉ văn bản được giữ, không lưu file gốc. PDF không có
- * lớp chữ (scan) bị từ chối vì OCR ngoài phạm vi. Mọi lỗi đọc thành 400 {@code BR-AI-29}.
- *
- * <p>shortcut: giới hạn cỡ cố định {@link #MAX_FILE_BYTES} và chưa có hết giờ trích; ADR-0134 D1 đặt trần là [CFG]
- * {@code ai.ingest.max_file_kb} và hết giờ 20 giây, làm khi có V52.
+ * lớp chữ (scan) bị từ chối vì OCR ngoài phạm vi. Mọi lỗi đọc thành 400 {@code BR-AI-29}. Trần cỡ là tham số (bên gọi đọc
+ * [CFG] {@code ai.ingest.max_file_kb} mỗi lần nạp); hết giờ trích do {@link DocumentExtractor} chặn.
  */
 public final class DocumentFileReader {
 
     static final String RULE = "BR-AI-29";
-    public static final int MAX_FILE_BYTES = 2 * 1024 * 1024;
     private static final long MAX_DOCX_ENTRY_BYTES = 10L * 1024 * 1024;   // chặn zip bomb: XML giải nén tối đa 10 MB
     private static final Pattern CONTROL = Pattern.compile("[\\u0000-\\u0008\\u000B\\u000C\\u000E-\\u001F]");
     private static final Pattern BLANK_RUN = Pattern.compile("\\n{3,}");
@@ -54,13 +51,13 @@ public final class DocumentFileReader {
     private DocumentFileReader() {
     }
 
-    public static Extracted read(String fileName, byte[] bytes) {
+    public static Extracted read(String fileName, byte[] bytes, int maxBytes) {
         String ext = extensionOf(fileName);
         if (bytes == null || bytes.length == 0) {
             throw reject("File rỗng");
         }
-        if (bytes.length > MAX_FILE_BYTES) {
-            throw reject("File vượt quá tối đa " + MAX_FILE_BYTES / 1024 + " kB");
+        if (bytes.length > maxBytes) {
+            throw reject("File vượt quá tối đa " + maxBytes / 1024 + " kB");
         }
         String raw;
         switch (ext) {

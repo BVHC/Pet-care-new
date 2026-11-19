@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import com.petcare.module.ai.entity.DocumentSpecies;
 import com.petcare.module.ai.entity.DocumentTopic;
+import com.petcare.module.ai.entity.RiskLevel;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
@@ -37,5 +38,9 @@ public record UpdateAiDocumentRequest(
         String reviewerName,
 
         @Schema(description = "Ngày rà soát mới", example = "2026-11-10", nullable = true)
-        LocalDate reviewedOn) {
+        LocalDate reviewedOn,
+
+        @Schema(description = "Mức rủi ro mới (LOW, MODERATE, HIGH); vắng = giữ nguyên, không xóa được về trống", example = "MODERATE",
+                nullable = true)
+        RiskLevel riskLevel) {
 }

@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import com.petcare.module.ai.entity.DocumentSpecies;
 import com.petcare.module.ai.entity.DocumentTopic;
+import com.petcare.module.ai.entity.RiskLevel;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -44,5 +45,8 @@ public record CreateAiDocumentRequest(
         String reviewerName,
 
         @Schema(description = "Ngày rà soát; bắt buộc khi xuất bản", example = "2026-11-05", nullable = true)
-        LocalDate reviewedOn) {
+        LocalDate reviewedOn,
+
+        @Schema(description = "Mức rủi ro của nội dung (LOW, MODERATE, HIGH); bỏ trống = không nêu. Chưa dùng để lọc truy hồi", example = "HIGH", nullable = true)
+        RiskLevel riskLevel) {
 }

@@ -67,7 +67,9 @@ m.schema("VaccinationStatus", None, enum=["NOT_YET_ELIGIBLE", "NOT_STARTED", "UP
 m.schema("RecoGroup", None, enum=["GROOMING", "BOARDING", "PRODUCT"], desc="BR-AI-18")
 m.schema("ItemType", None, enum=["SERVICE", "PRODUCT"])
 m.schema("DocumentSource", None, enum=["MANUAL", "CATALOG_PROTOCOL"], desc="BR-AI-13")
-m.schema("DocumentTopic", None, enum=["CARE", "NUTRITION", "BEHAVIOR", "HYGIENE", "VACCINATION", "CLINIC_INFO"])
+m.schema("DocumentTopic", None, enum=["CARE", "NUTRITION", "BEHAVIOR", "HYGIENE", "VACCINATION", "CLINIC_INFO", "SAFETY", "LIFESTYLE"],
+         desc="`SAFETY`: cấp cứu, sơ cứu, ngộ độc, an toàn trẻ em · `LIFESTYLE`: nhận nuôi, đi lại, nhiều thú, thú già (V59)")
+m.schema("RiskLevel", None, enum=["LOW", "MODERATE", "HIGH"], desc="Mức rủi ro của nội dung tài liệu (V59); chưa dùng để lọc truy hồi")
 m.schema("DocumentSpecies", None, enum=["DOG", "CAT", "OTHER", "ALL"])
 m.schema("DocumentStatus", None, enum=["DRAFT", "PUBLISHED", "ARCHIVED"], desc="03 #13")
 m.schema("IndexStatus", None, enum=["PENDING", "INDEXED", "FAILED"])
@@ -116,7 +118,8 @@ m.schema("AiDocumentSummary", {
     "documentId": "int64", "sourceType": "ref:DocumentSource", "title": "string", "topic": "ref:DocumentTopic",
     "species": "ref:DocumentSpecies", "status": "ref:DocumentStatus", "version": "int",
     "indexStatus": "ref:IndexStatus", "updatedAt": "datetime",
-    "externalId": "string?|Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ",
+    "externalId": "string?|Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết, FILE-<16 hex đầu của SHA-256 của file>-<n> với tài liệu nạp từ file (BR-AI-30), null với tài liệu soạn tay và phác đồ",
+    "riskLevel": "ref:RiskLevel?|Mức rủi ro của nội dung (LOW, MODERATE, HIGH); null với tài liệu không nêu",
 })
 m.schema("AiDocument", {
     "documentId": "int64", "sourceType": "ref:DocumentSource", "title": "string", "topic": "ref:DocumentTopic",
@@ -126,16 +129,18 @@ m.schema("AiDocument", {
     "status": "ref:DocumentStatus", "version": "int", "indexedVersion": "int|0 = chưa nạp",
     "indexStatus": "ref:IndexStatus", "indexError": "string?", "chunkCount": "int",
     "publishedAt": "datetime?", "updatedAt": "datetime",
-    "externalId": "string?|Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ",
+    "externalId": "string?|Khóa nguồn ngoài: ARTICLE-<id> với tài liệu đồng bộ từ bài viết, FILE-<16 hex đầu của SHA-256 của file>-<n> với tài liệu nạp từ file (BR-AI-30), null với tài liệu soạn tay và phác đồ",
+    "riskLevel": "ref:RiskLevel?|Mức rủi ro của nội dung (LOW, MODERATE, HIGH); null với tài liệu không nêu",
 })
 m.schema("CreateAiDocumentRequest", {
     "title": "string:200", "topic": "ref:DocumentTopic", "species": "ref:DocumentSpecies",
     "content": "string|≤ 20 000 ký tự (BR-AI-14)", "sourceNote": "string:500?|Lớp 1 — nguồn; bắt buộc khi xuất bản",
     "reviewerName": "string:100?|Lớp 2 — bác sĩ thú y rà soát; bắt buộc khi xuất bản", "reviewedOn": "date?|Ngày rà soát; bắt buộc khi xuất bản",
+    "riskLevel": "ref:RiskLevel?|Mức rủi ro của nội dung (LOW, MODERATE, HIGH); bỏ trống = không nêu. Chưa dùng để lọc truy hồi",
 })
 m.schema("ImportAiDocumentRequest", {
     "fileName": "string:255|Tên file kèm phần mở rộng (.md, .txt, .docx, .pdf)",
-    "contentBase64": "string|Nội dung file mã hóa base64 (không kèm tiền tố data:), tối đa 2 MB trước khi mã hóa",
+    "contentBase64": "string|Nội dung file mã hóa base64 (không kèm tiền tố data:); cỡ file tối đa là [CFG] `ai.ingest.max_file_kb` (mặc định 2048 kB) trước khi mã hóa",
     "topic": "ref:DocumentTopic|Chủ đề áp cho mọi tài liệu tạo ra", "species": "ref:DocumentSpecies",
     "sourceNote": "string:500?|Lớp 1 — nguồn; bỏ trống thì ghi \"Nạp từ file <tên> (<kiểu>, <kB>)\"",
 })
@@ -146,6 +151,7 @@ m.schema("ImportAiDocumentResponse", {
 m.schema("UpdateAiDocumentRequest", {
     "title": "string:200?", "topic": "ref:DocumentTopic?", "species": "ref:DocumentSpecies?",
     "content": "string?", "sourceNote": "string:500?", "reviewerName": "string:100?", "reviewedOn": "date?",
+    "riskLevel": "ref:RiskLevel?|Mức rủi ro mới (LOW, MODERATE, HIGH); vắng = giữ nguyên, không xóa được về trống",
 }, required=[])
 
 # ---- hồ sơ gợi ý
@@ -202,7 +208,7 @@ m.op("get", "/me/ai/pets/{petId}/recommendations", "getPetRecommendations", "G�
 # ---- UC93 tri thức
 m.op("get", "/ai/documents", "listAiDocuments", "Danh sách tài liệu tri thức", "Knowledge", "UC93", "BR-AI-17",
      "A04", A04, resp="AiDocumentSummary", page=True,
-     query=["status=enum:DRAFT,PUBLISHED,ARCHIVED", "topic=enum:CARE,NUTRITION,BEHAVIOR,HYGIENE,VACCINATION,CLINIC_INFO",
+     query=["status=enum:DRAFT,PUBLISHED,ARCHIVED", "topic=enum:CARE,NUTRITION,BEHAVIOR,HYGIENE,VACCINATION,CLINIC_INFO,SAFETY,LIFESTYLE",
             "species=enum:DOG,CAT,OTHER,ALL", "fromArticle=bool|true = chỉ tài liệu đồng bộ từ bài viết (external_id ARTICLE-…), false = chỉ tài liệu không từ bài viết; vắng = tất cả",
             "q=string|Tìm theo tiêu đề", "page", "size"], errors=(400, 401, 403),
      notes="Mới sửa trước (`updatedAt` giảm dần, trùng thì `documentId` giảm dần).")
@@ -211,10 +217,12 @@ m.op("post", "/ai/documents", "createAiDocument", "Tạo tài liệu tri thức 
      status=201, errors=(400, 401, 403),
      err_desc={400: "`BR-AI-14` tiêu đề rỗng / quá 200 ký tự · nội dung quá 20 000 ký tự"})
 m.op("post", "/ai/documents/import", "importAiDocument", "Nạp tài liệu tri thức từ file", "Knowledge", "UC93",
-     "BR-AI-14, 17, 29", "A04", A04, "— → DRAFT (Tài liệu#1)", body="ImportAiDocumentRequest",
-     resp="ImportAiDocumentResponse", status=201, errors=(400, 401, 403),
-     err_desc={400: "`BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ, rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự"},
-     notes="Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON, tối đa 2 MB); tạo một hoặc nhiều nháp `MANUAL`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14.")
+     "BR-AI-14, 17, 29, 30", "A04", A04, "— → DRAFT (Tài liệu#1)", body="ImportAiDocumentRequest",
+     resp="ImportAiDocumentResponse", status=201, errors=(400, 401, 403, 409, 429),
+     err_desc={400: "`BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ ([CFG] `ai.ingest.max_file_kb`), hết thời gian trích (20 giây), rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự",
+               409: "`CONCURRENCY_CONFLICT` `BR-AI-30` file đã được nạp trước đó (cùng SHA-256 của byte file); message nêu mã tài liệu đã có, kể cả khi đã `ARCHIVED`; không tạo thêm tài liệu nào",
+               429: "`TOO_MANY_REQUESTS` mọi luồng trích văn bản đang bận: header `Retry-After` là số giây nên chờ rồi nạp lại"},
+     notes="Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON; trần cỡ là [CFG] `ai.ingest.max_file_kb`, mặc định 2048 kB, khoảng 256–10240, đọc mỗi lần nạp); trích văn bản tối đa 20 giây. Tạo một hoặc nhiều nháp `MANUAL` có `externalId` = `FILE-<16 hex đầu của SHA-256 của file>-<n>`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14.")
 m.op("get", "/ai/documents/{documentId}", "getAiDocument", "Chi tiết tài liệu tri thức", "Knowledge", "UC93",
      "BR-AI-17", "A04", A04, resp="AiDocument", path_params=["DocumentId"], errors=(400, 401, 403, 404))
 m.op("patch", "/ai/documents/{documentId}", "updateAiDocument", "Sửa tài liệu tri thức", "Knowledge", "UC93",

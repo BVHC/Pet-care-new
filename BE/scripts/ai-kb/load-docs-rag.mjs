@@ -6,6 +6,8 @@
 // Chạy (BE 8082 trên DB demo 5433):
 //   node BE/scripts/ai-kb/load-docs-rag.mjs [--api http://localhost:8082] [--dry-run] [--publish-demo] [--archive-superseded]
 // --publish-demo: PATCH người rà soát GIẢ ĐỊNH rồi xuất bản (cho demo, Q2 mở). --archive-superseded: lưu trữ tài liệu MANUAL cũ đang PUBLISHED không thuộc docs_RAG (trừ KEEP_TITLES).
+// --backfill-risk-topic: KHÔNG tạo tài liệu; bù topic SAFETY / LIFESTYLE và riskLevel (V59, ADR-0147) cho tài liệu docs_RAG đã nạp trước V59 bằng PATCH #8
+//   (có audit, không tăng version, không nạp lại chỉ mục). Mặc định chỉ IN kế hoạch (chỉ đọc); thêm --apply để ghi. Cần BE đã chạy V59.
 // Mã thoát: 0 xong · 2 dữ liệu lệch (topic lạ, trùng tiêu đề / document_id, quá 20 000 ký tự) · 3 API lỗi.
 // Ghi D:/Do-an/.c2-tmp/ai-kb/docs-rag-map.json (document_id → documentId) cho bộ đo.
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -17,15 +19,17 @@ const CONTENT_MAX = 20_000;
 const SOURCE_NOTE_MAX = 500;
 
 // Bảng ánh xạ: phải khớp docs/docs_RAG/README.md. Thiếu khóa → toCreateRequest ném (không đoán).
+// Từ V59 (ADR-0147): SAFETY = cấp cứu, sơ cứu, ngộ độc, an toàn trẻ em; LIFESTYLE = nhận nuôi, đi lại, nhiều thú, thú già.
 export const TOPIC_MAP = {
-  basic_care: 'CARE', dog_care: 'CARE', cat_care: 'CARE', puppy_care: 'CARE', kitten_care: 'CARE', senior_care: 'CARE',
-  adoption: 'CARE', travel: 'CARE', multi_pet_household: 'CARE', family_safety: 'CARE', cat_environment: 'CARE',
-  emergency_triage: 'CARE', first_aid: 'CARE', poisoning_safety: 'CARE',
+  basic_care: 'CARE', dog_care: 'CARE', cat_care: 'CARE', puppy_care: 'CARE', kitten_care: 'CARE', cat_environment: 'CARE',
+  adoption: 'LIFESTYLE', travel: 'LIFESTYLE', multi_pet_household: 'LIFESTYLE', senior_care: 'LIFESTYLE',
+  emergency_triage: 'SAFETY', first_aid: 'SAFETY', poisoning_safety: 'SAFETY', family_safety: 'SAFETY',
   nutrition: 'NUTRITION', weight_management: 'NUTRITION',
   dog_behavior: 'BEHAVIOR',
   grooming_skin: 'HYGIENE', dental_care: 'HYGIENE',
   vaccination: 'VACCINATION', parasite_prevention: 'VACCINATION',
 };
+const RISK_LEVELS = new Set(['LOW', 'MODERATE', 'HIGH']);   // enum RiskLevel của BE (V59); giá trị khác (kể cả 'UNSET') thì không gửi
 const SPECIES_MAP = { dog: 'DOG', cat: 'CAT', 'dog,cat': 'ALL', 'cat,dog': 'ALL' };
 
 // ---- YAML frontmatter tối thiểu (đủ cho FRONTMATTER_SCHEMA.md: vô hướng, [a, b], {k: v}, khối "- x" và khối "k: v") ----
@@ -95,8 +99,21 @@ export function toCreateRequest(d) {
   const verified = d.status === 'VERIFIED' && d.approved && d.reviewerName && d.reviewedAt;
   return {
     title: d.title, topic, species, content: d.content, sourceNote,
+    ...(RISK_LEVELS.has(d.riskLevel) ? { riskLevel: d.riskLevel } : {}),
     ...(verified ? { reviewerName: String(d.reviewerName), reviewedOn: String(d.reviewedAt) } : {}),
   };
+}
+
+/**
+ * Thân PATCH #8 bù `topic` / `riskLevel` cho tài liệu đã nạp trước V59; null nếu không có gì để bù. Không ghi đè sửa tay: `topic` chỉ đổi khi
+ * còn `CARE` (ánh xạ tạm cũ) và bảng mới cho `SAFETY` / `LIFESTYLE`; `riskLevel` chỉ đặt khi còn rỗng. Tài liệu ARCHIVED bỏ qua (PATCH là 409).
+ */
+export function backfillPatch(have, create) {
+  if (have.status === 'ARCHIVED') return null;
+  const patch = {};
+  if (have.topic === 'CARE' && (create.topic === 'SAFETY' || create.topic === 'LIFESTYLE')) patch.topic = create.topic;
+  if (have.riskLevel == null && create.riskLevel) patch.riskLevel = create.riskLevel;
+  return Object.keys(patch).length ? patch : null;
 }
 
 // ---- xuất bản demo và lưu trữ kho cũ (13/11/2026, Hiến chọn "B": xuất bản cả 21 với người rà soát GIẢ ĐỊNH, bỏ kho cũ) -----------
@@ -181,6 +198,25 @@ async function main() {
   let token;
   try { token = await api.login(repoRoot); } catch (e) { console.error(e.message); process.exit(3); }
   const existing = indexByTitle(await api.listAll(token));
+  if (args['backfill-risk-topic'] === 'true') {
+    const apply = args.apply === 'true';
+    let patched = 0; let nothing = 0; let missing = 0;
+    for (const [, r] of plan) {
+      if (r.skip) continue;
+      const have = existing.get(r.title);
+      if (!have) { missing++; continue; }
+      const patch = backfillPatch(have, r);
+      if (!patch) { nothing++; continue; }
+      console.log(`  ${apply ? '' : '[chỉ in] '}#${have.documentId} ${have.status} | ${r.title.slice(0, 50)} | ${JSON.stringify(patch)}`);
+      if (apply) {
+        const res = await api.call('PATCH', `/api/ai/documents/${have.documentId}`, patch, token);
+        if (res.status !== 200) { console.error(`Bù #${have.documentId}: HTTP ${res.status} ${res.json?.errorCode ?? ''} ${res.json?.message ?? ''}`); process.exit(3); }
+      }
+      patched++;
+    }
+    console.log(`Bù topic / riskLevel: ${apply ? 'đã sửa' : 'sẽ sửa (chưa ghi, thêm --apply)'} ${patched}; không có gì để bù ${nothing}; chưa nạp (bỏ qua) ${missing}. Không tạo tài liệu mới.`);
+    return;
+  }
   const map = {}; let created = 0; let kept = 0;
   for (const [d, r] of plan) {
     if (r.skip) continue;

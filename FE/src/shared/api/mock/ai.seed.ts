@@ -1,7 +1,7 @@
 // Dữ liệu mẫu của mock AI (ai.mock.ts): tài liệu tri thức MANUAL và hồ sơ gợi ý. Nội dung là văn bản TỰ SOẠN để chạy demo cơ chế, KHÔNG phải tri thức thú y đã duyệt
 // (07 §6.3: "tài liệu chưa ai soạn"): không chép nguồn thật, không có liều thuốc. Dòng đầu mỗi tài liệu nói rõ điều đó; người rà soát ghi "(dữ liệu mẫu)".
 import { vnDate } from '../../utils/vn-time';
-import type { DocumentSpecies, DocumentStatus, DocumentTopic, IndexStatus, ItemProfile } from '../../types/ai';
+import type { DocumentSpecies, DocumentStatus, DocumentTopic, IndexStatus, ItemProfile, RiskLevel } from '../../types/ai';
 
 /** Một dòng `ai_documents` (05/07 §8) cộng bản đang phục vụ chatbot. */
 export interface DocRow {
@@ -22,8 +22,10 @@ export interface DocRow {
   chunkCount: number;
   publishedAt: string | null;
   updatedAt: string;
-  /** Khóa nguồn ngoài (V53): `ARTICLE-<id>` với tài liệu đồng bộ từ bài viết (BR-AI-30), null với tài liệu soạn tay, nạp file và phác đồ. */
+  /** Khóa nguồn ngoài (V53): `ARTICLE-<id>` với tài liệu đồng bộ từ bài viết, `FILE-<16 hex>-<n>` với tài liệu nạp từ file (BR-AI-30), null với tài liệu soạn tay và phác đồ. */
   externalId: string | null;
+  /** Mức rủi ro (V59); null = không nêu. Dữ liệu mẫu đều null. */
+  riskLevel: RiskLevel | null;
   /** Đoạn đang phục vụ (BR-AI-16: `doc_version = indexed_version`): tiêu đề và nội dung ở phiên bản ĐÃ NẠP, có thể cũ hơn `content`. null = chưa có đoạn nào. */
   served: { title: string; content: string } | null;
 }
@@ -206,6 +208,7 @@ function rowOf(seed: Seed, now: number): DocRow {
     publishedAt: published || archived ? updatedAt : null,
     updatedAt,
     externalId: seed.articleId ? `ARTICLE-${seed.articleId}` : null,
+    riskLevel: null,
     served: published || archived ? { title: seed.title, content: seed.failed ? `${NOTICE}\n\n${seed.failed.servedBody}` : content } : null,
   };
 }

@@ -217,11 +217,12 @@ class SchemaMigrationIT {
         // V56 ai_chat_logs.used_pet_context + công tắc [CFG] ai.chat.pet_context_enabled (docs/adr/0135, T91; đánh số lại từ V55 vì trùng V55 của feedbacks),
         // V57 ai_chat_logs.intent + công tắc [CFG] ai.chat.open_domain_enabled (docs/adr/0136 "Đã cài ở T92 (phần 2)"),
         // V58 online_orders.delivery_failure_reason (docs/adr/0137 D2, task 126),
+        // V59 ai_documents.risk_level, topic thêm SAFETY / LIFESTYLE + khóa [CFG] ai.ingest.max_file_kb (docs/adr/0147, T89),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 

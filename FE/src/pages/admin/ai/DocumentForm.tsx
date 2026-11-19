@@ -10,13 +10,15 @@ import {
   AI_LIMITS,
   DOCUMENT_SPECIES,
   DOCUMENT_TOPICS,
+  RISK_LEVELS,
   type AiDocument,
   type CreateAiDocumentRequest,
   type DocumentSpecies,
   type DocumentTopic,
+  type RiskLevel,
   type UpdateAiDocumentRequest,
 } from '../../../shared/types/ai';
-import { INDEX_LABELS, SOURCE_LABELS, SPECIES_LABELS, STATUS_LABELS, TOPIC_LABELS } from './labels';
+import { INDEX_LABELS, RISK_LABELS, SOURCE_LABELS, SPECIES_LABELS, STATUS_LABELS, TOPIC_LABELS } from './labels';
 
 interface Draft {
   title: string;
@@ -26,6 +28,7 @@ interface Draft {
   sourceNote: string;
   reviewerName: string;
   reviewedOn: string;
+  riskLevel: RiskLevel | '';
 }
 type Errors = Partial<Record<keyof Draft, string>>;
 
@@ -37,6 +40,7 @@ const draftOf = (d: AiDocument | null): Draft => ({
   sourceNote: d?.sourceNote ?? '',
   reviewerName: d?.reviewerName ?? '',
   reviewedOn: d?.reviewedOn ?? '',
+  riskLevel: d?.riskLevel ?? '',
 });
 
 /** BR-AI-14: tài liệu đã xuất bản phải giữ đủ nguồn (lớp 1) và người, ngày rà soát (lớp 2). */
@@ -62,6 +66,7 @@ const createBody = (d: Draft): CreateAiDocumentRequest => ({
   ...(d.sourceNote.trim() ? { sourceNote: d.sourceNote.trim() } : {}),
   ...(d.reviewerName.trim() ? { reviewerName: d.reviewerName.trim() } : {}),
   ...(d.reviewedOn ? { reviewedOn: d.reviewedOn } : {}),
+  ...(d.riskLevel ? { riskLevel: d.riskLevel } : {}),
 });
 
 /** PATCH chỉ trường đã đổi; sửa NỘI DUNG tài liệu đã xuất bản thì luôn gửi kèm người và ngày rà soát (BR-AI-14). */
@@ -74,6 +79,7 @@ function changesOf(a: AiDocument, d: Draft): UpdateAiDocumentRequest {
   if (d.sourceNote.trim() !== (a.sourceNote ?? '')) p.sourceNote = d.sourceNote.trim();
   if (d.reviewerName.trim() !== (a.reviewerName ?? '')) p.reviewerName = d.reviewerName.trim();
   if (d.reviewedOn && d.reviewedOn !== (a.reviewedOn ?? '')) p.reviewedOn = d.reviewedOn;
+  if (d.riskLevel && d.riskLevel !== (a.riskLevel ?? '')) p.riskLevel = d.riskLevel;
   if (a.status === 'PUBLISHED' && p.content !== undefined) Object.assign(p, { reviewerName: d.reviewerName.trim(), reviewedOn: d.reviewedOn });
   return p;
 }
@@ -184,6 +190,18 @@ function Form({ doc, onClose, onSaved }: { doc: AiDocument | null; onClose: () =
           )}
         </Field>
       </div>
+      <Field label="Mức rủi ro (tùy chọn)" error={shown.riskLevel} hint="Chưa dùng để lọc câu trả lời. Đã đặt thì chỉ đổi sang mức khác, không xóa được.">
+        {(id) => (
+          <select id={id} className={selectClass} value={draft.riskLevel} disabled={readOnly} onChange={(e) => set({ riskLevel: e.target.value as RiskLevel | '' })}>
+            <option value="">— Không nêu —</option>
+            {RISK_LEVELS.map((r) => (
+              <option key={r} value={r}>
+                {RISK_LABELS[r]}
+              </option>
+            ))}
+          </select>
+        )}
+      </Field>
       <Field label="Nội dung (Markdown)" error={shown.content} hint={`${draft.content.length}/${AI_LIMITS.content}`}>
         {(id) => <textarea id={id} className="input min-h-48 font-mono text-sm" rows={10} maxLength={AI_LIMITS.content} disabled={readOnly} value={draft.content} onChange={(e) => set({ content: e.target.value })} />}
       </Field>
