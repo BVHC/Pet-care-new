@@ -60,6 +60,23 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
     List<ShiftAssignment> findStaffSchedule(@Param("staffId") Long staffId, @Param("from") LocalDate from,
             @Param("to") LocalDate to);
 
+    /**
+     * Phân ca {@code SCHEDULED} của chính một nhân viên trong {@code [from, to]} (một tuần, workforce-v1 #17), cả hai
+     * nguồn {@code SELF} và {@code MANAGER} và mọi chi nhánh (BR-NS-12 đếm cả hai; nhân viên điều chuyển giữa tuần vẫn
+     * còn ca chưa hủy ở chi nhánh cũ), sắp {@code workDate}, giờ bắt đầu của ca, {@code id} tăng dần. Không phân trang:
+     * tối đa 7 ngày và các phân ca {@code SCHEDULED} của một người không chồng giờ (BR-NS-02). Đi qua
+     * {@code ix_shift_assignments_staff_date}; {@code status} là lọc sau trên tập ≤ 7 ngày.
+     */
+    @Query("""
+            SELECT a FROM ShiftAssignment a, ShiftDefinition d
+            WHERE d.id = a.shiftDefinitionId AND a.staffId = :staffId
+              AND a.status = com.petcare.module.workforce.entity.ShiftAssignmentStatus.SCHEDULED
+              AND a.workDate >= :from AND a.workDate <= :to
+            ORDER BY a.workDate ASC, d.startTime ASC, a.id ASC
+            """)
+    List<ShiftAssignment> findScheduledInWeek(@Param("staffId") Long staffId, @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
     /** Một phân ca {@code SCHEDULED} đang giao giờ với ca mới (để báo lỗi nêu đúng phân ca đang chồng). */
     interface OverlappingShift {
         Long getAssignmentId();

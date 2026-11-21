@@ -123,7 +123,14 @@ class Tier3Be1SchemaIT {
             long assignment = insert("shift_assignments", row("branch_id", branch, "staff_id", staff,
                     "shift_definition_id", morning, "work_date", DAY, "status", "SCHEDULED", "source", "MANAGER"));
             Map<String, Object> pending = row("assignment_id", assignment, "requester_id", staff,
-                    "request_type", "LEAVE", "reason", "Việc gia đình", "status", "PENDING");
+                    "current_shift_definition_id", morning, "request_type", "LEAVE", "reason", "Việc gia đình",
+                    "status", "PENDING");
+
+            // V60: ca lúc gửi bắt buộc; SWAP không được trỏ ca đích trùng ca lúc gửi (cũng là kiểm điều kiện của V60)
+            rejects("current_shift_definition_id", () -> insert("shift_requests",
+                    with(pending, "current_shift_definition_id", null)));
+            rejects("ck_shift_requests_swap_differs", () -> insert("shift_requests",
+                    with(pending, "request_type", "SWAP", "target_shift_definition_id", morning)));
 
             insert("shift_requests", pending);
             // Tối đa 1 yêu cầu PENDING mỗi phân ca (BR-NS-04)

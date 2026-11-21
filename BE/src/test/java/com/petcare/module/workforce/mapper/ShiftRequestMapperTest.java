@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.petcare.module.workforce.dto.ShiftRequestAuditSnapshot;
 import com.petcare.module.workforce.dto.ShiftRequestResponse;
 import com.petcare.module.workforce.entity.ShiftRequest;
 import com.petcare.module.workforce.entity.ShiftRequestStatus;
@@ -118,6 +119,32 @@ class ShiftRequestMapperTest {
         assertThat(response.decidedBy()).isEqualTo(5L);
         assertThat(response.decisionNote()).isNull();
         assertThat(response.closedAt()).isEqualTo(CLOSED);
+    }
+
+    @Test
+    void theAuditSnapshotHasExactlyTheSevenAgreedKeys() {
+        assertThat(ShiftRequestAuditSnapshot.class.getRecordComponents()).extracting(c -> c.getName())
+                .containsExactly("shiftAssignmentId", "requesterId", "type", "targetShiftDefinitionId", "status",
+                        "decidedBy", "decisionNote");
+    }
+
+    @Test
+    void toSnapshotCopiesEveryColumnFromItsOwnSourceForARejectedSwap() {
+        ShiftRequest swap = ShiftRequest.submit(31L, 12L, 7L, ShiftRequestType.SWAP, 8L, "Đổi ca");
+        swap.reject(5L, "Thiếu người trực", CLOSED);
+
+        ShiftRequestAuditSnapshot snapshot = mapper.toSnapshot(swap);
+
+        assertThat(snapshot).isEqualTo(new ShiftRequestAuditSnapshot(31L, 12L, "SWAP", 8L, "REJECTED", 5L,
+                "Thiếu người trực"));
+    }
+
+    @Test
+    void toSnapshotOfAPendingLeaveHasNoTargetNoDeciderAndNoNote() {
+        ShiftRequestAuditSnapshot snapshot = mapper.toSnapshot(leave());
+
+        assertThat(snapshot).isEqualTo(new ShiftRequestAuditSnapshot(31L, 12L, "LEAVE", null, "PENDING", null,
+                null));
     }
 
     private ShiftRequestResponse map(ShiftRequest request) {

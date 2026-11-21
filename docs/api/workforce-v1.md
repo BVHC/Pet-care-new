@@ -58,7 +58,7 @@
 | Từ chối yêu cầu | A05 | BRANCH_MANAGER của chi nhánh | PENDING → REJECTED (Yêu cầu#4) | — | Chỉ đổi yêu cầu → `REJECTED` (Yêu cầu#4); phân ca giữ nguyên. Thông báo ghi outbox cùng transaction (BR-NS-08). |
 | Đăng ký ca theo tuần (thay cả tuần) | A06–A08 | Nhân viên A06–A08, chỉ dữ liệu của mình | — → SCHEDULED (Phân ca#1) · SCHEDULED → CANCELLED (Phân ca#7) | — | Idempotent: gửi lại cùng nội dung không đổi kết quả. Mục thiếu so với phân ca `SELF` hiện có bị hủy (lý do hệ thống ghi 'Nhân viên sửa đăng ký tuần'), mục mới được tạo, mục giữ nguyên không đổi; phân ca `MANAGER` không bị đụng nhưng được tính vào định mức. Không thông báo, không audit (BR-NS-08, 10). Yêu cầu `PENDING` của phân ca bị hủy tự `REJECTED` (Yêu cầu#5). Mọi mục tạo / hủy và Yêu cầu#5 nằm trong **một** transaction. Response chỉ gồm phân ca `SCHEDULED` của tuần (A12). Đọc đăng ký hiện có và định mức trước khi sửa: `GET /me/shift-registrations/{weekStart}`; xem lịch đầy đủ (cả nghỉ / vắng / hủy): `GET /me/shift-assignments`. `items` tối đa 100 phần tử, vượt thì 400 `VALIDATION_FAILED` (Q4, ADR-0137 mục 12). |
 | Thống kê số ca mỗi nhân viên trong tuần | A05 | BRANCH_MANAGER của chi nhánh | — | — | Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` của chi nhánh, kể cả người chưa có ca nào. Sắp `staffName` tăng dần. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12). |
-| Đăng ký ca của tôi trong tuần | A06–A08 | Nhân viên A06–A08, chỉ dữ liệu của mình | — | — | Chỉ đọc, dùng để nạp phân ca hiện có và `requiredShifts` (định mức [CFG]) trước khi gọi `PUT` thay cả tuần. Không kiểm hạn đăng ký: xem được cả tuần đã qua hạn. Cùng dạng response với `PUT`: chỉ phân ca `SCHEDULED` của tuần (A12); tuần chưa có phân ca trả `assignments` rỗng, `shiftCount` = 0. |
+| Đăng ký ca của tôi trong tuần | A06–A08 | Nhân viên A06–A08, chỉ dữ liệu của mình | — | — | Chỉ đọc, dùng để nạp phân ca hiện có và `requiredShifts` (định mức [CFG]) trước khi gọi `PUT` thay cả tuần. Không kiểm hạn đăng ký: xem được cả tuần đã qua hạn. Cùng dạng response với `PUT`: chỉ phân ca `SCHEDULED` của tuần (A12), cả `SELF` và `MANAGER`; tuần chưa có phân ca trả `assignments` rỗng, `shiftCount` = 0. `editableUntil` là 00:00 thứ Hai của `weekStart` theo giờ Việt Nam, trả dạng UTC. |
 
 ---
 
@@ -82,13 +82,13 @@
 - **`GET /me/shift-requests`** — Yêu cầu nghỉ / đổi ca của tôi. Query: `status?`, `page?`, `size?`. Response `200` trang `ShiftRequest`. Lỗi: `400` · `401` · `403`.
 - **`POST /me/shift-requests/{shiftRequestId}/withdraw`** — Rút yêu cầu. Response `200` `ShiftRequest`. Lỗi: `400` · `401` · `403` · `404` Yêu cầu không có hoặc không phải của mình (kể cả yêu cầu của đồng nghiệp cùng chi nhánh) · `409` `INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING`.
 - **`GET /shift-requests`** — Yêu cầu nghỉ / đổi ca của chi nhánh. Query: `status?`, `page?`, `size?`. Response `200` trang `ShiftRequest`. Lỗi: `400` · `401` · `403`.
-- **`POST /shift-requests/{shiftRequestId}/approve`** — Duyệt yêu cầu. Response `200` `ShiftRequest`. Lỗi: `400` `BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích ngừng dùng hoặc chồng giờ · `401` · `403` `ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác · `404` · `409` `INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard 400, A11).
+- **`POST /shift-requests/{shiftRequestId}/approve`** — Duyệt yêu cầu. Response `200` `ShiftRequest`. Lỗi: `400` `BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích đã bắt đầu, ngừng dùng hoặc chồng giờ · `401` · `403` `ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác · `404` · `409` `INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard 400, A11).
 - **`POST /shift-requests/{shiftRequestId}/reject`** — Từ chối yêu cầu. Request `RejectShiftRequestRequest`. Response `200` `ShiftRequest`. Lỗi: `400` `VALIDATION_FAILED` thiếu lý do từ chối (`BR-NS-06`) · `401` · `403` `ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác · `404` · `409` `INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard 400, A11).
 ### Shift registrations
 
 - **`PUT /me/shift-registrations/{weekStart}`** — Đăng ký ca theo tuần (thay cả tuần). Request `PutShiftRegistrationRequest`. Response `200` `ShiftRegistration`. Lỗi: `400` `BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items`, sai kiểu hoặc quá 100 phần tử · `401` · `403` · `409` `CONCURRENCY_CONFLICT` trùng cặp ca – ngày do thao tác song song.
 - **`GET /shift-weekly-summaries`** — Thống kê số ca mỗi nhân viên trong tuần. Query: `weekStart`. Response `200` mảng `ShiftWeeklySummary`. Lỗi: `400` `weekStart` thiếu hoặc không phải thứ Hai (`BR-NS-11`) · `401` · `403`.
-- **`GET /me/shift-registrations/{weekStart}`** — Đăng ký ca của tôi trong tuần. Response `200` `ShiftRegistration`. Lỗi: `400` `BR-NS-11` `weekStart` không phải thứ Hai · `401` · `403`.
+- **`GET /me/shift-registrations/{weekStart}`** — Đăng ký ca của tôi trong tuần. Response `200` `ShiftRegistration`. Lỗi: `400` `BR-NS-11` `weekStart` không phải thứ Hai hoặc năm ngoài 2000–2100 · `weekStart` sai định dạng (`MALFORMED_REQUEST`) · `401` · `403`.
 
 ### Schema
 
@@ -104,7 +104,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`ShiftReasonRequest`** — {`reason`: string}
 - **`ShiftRegistrationItem`** — {`workDate`: date, `shiftDefinitionId`: int64}
 - **`PutShiftRegistrationRequest`** — {`items`: [ShiftRegistrationItem]}
-- **`ShiftRegistration`** — {`weekStart`: date, `requiredShifts`: int32, `shiftCount`: int32, `assignments`: [ShiftAssignment]}
+- **`ShiftRegistration`** — {`weekStart`: date, `requiredShifts`: int32, `shiftCount`: int32, `editableUntil`: date-time, `assignments`: [ShiftAssignment]}
 - **`ShiftWeeklySummary`** — {`staffId`: int64, `staffName`: string, `role`: RECEPTIONIST|VET|CARETAKER, `shiftCount`: int32, `requiredShifts`: int32, `meetsRequirement`: boolean}
 - **`ShiftRequestType`** — enum: `LEAVE`, `SWAP`.
 - **`ShiftRequestStatus`** — enum: `PENDING`, `APPROVED`, `REJECTED`, `WITHDRAWN`. 03 #11

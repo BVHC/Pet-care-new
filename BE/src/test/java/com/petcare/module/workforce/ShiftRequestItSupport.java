@@ -63,8 +63,8 @@ abstract class ShiftRequestItSupport extends ShiftAssignmentItSupport {
 
     protected Map<String, Object> fullRequestRow(long requestId) {
         return jdbc.queryForMap("""
-                SELECT assignment_id, requester_id, request_type, target_shift_definition_id, reason, status,
-                       decided_by, decision_note, closed_at
+                SELECT assignment_id, requester_id, request_type, current_shift_definition_id,
+                       target_shift_definition_id, reason, status, decided_by, decision_note, closed_at
                 FROM shift_requests WHERE id = ?""", requestId);
     }
 
@@ -124,6 +124,131 @@ abstract class ShiftRequestItSupport extends ShiftAssignmentItSupport {
                 SELECT COUNT(*) FROM notification_outbox o, jsonb_each_text(o.payload) AS kv
                 WHERE o.template_code = ? AND o.recipient_account_id = ? AND btrim(kv.value) = ''""",
                 Integer.class, TEMPLATE, recipientId)).as("có giá trị rỗng").isZero();
+    }
+
+    // ---------------------------------------------------------------- từ chối (#14, docs/adr/0139)
+
+    protected static final String NOTE_PREFIX = "ITR";
+    /** Lý do từ chối của test; bắt đầu bằng {@link #NOTE_PREFIX} để nhận ra trong audit. */
+    protected static final String NOTE = NOTE_PREFIX + " Ca này đã đủ người nghỉ";
+    protected static final String REJECTED_APP = "SHIFT_REQUEST_REJECTED_APP";
+    protected static final String REJECTED_MAIL = "SHIFT_REQUEST_REJECTED";
+    protected static final String LIST_BRANCH = "/api/shift-requests";
+
+    protected static String rejectPath(long requestId) {
+        return LIST_BRANCH + "/" + requestId + "/reject";
+    }
+
+    /** Body JSON thô {@code {"decisionNote": ...}} (dấu nháy đơn, đổi sang nháy kép trong {@code call}). */
+    protected static String rejectBody(String note) {
+        return "{'decisionNote':'" + note + "'}";
+    }
+
+    protected int rejectAuditCount(long requestId) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_type = 'shift_requests' AND entity_id = ? AND action = 'SHIFT_REQUEST_REJECTED'""",
+                Integer.class, requestId);
+    }
+
+    /** Dòng outbox "yêu cầu bị từ chối" của một nhân viên: IN_APP theo id tài khoản, EMAIL theo email (không có FK). */
+    protected List<Map<String, Object>> rejectedOutbox(long staffId) {
+        return jdbc.queryForList("""
+                SELECT o.channel, o.template_code, o.recipient_account_id, o.recipient_email, o.payload::text AS payload
+                FROM notification_outbox o
+                WHERE o.template_code IN ('SHIFT_REQUEST_REJECTED', 'SHIFT_REQUEST_REJECTED_APP')
+                  AND (o.recipient_account_id = ? OR o.recipient_email = (SELECT email FROM accounts WHERE id = ?))
+                ORDER BY o.id""", staffId, staffId);
+    }
+
+    /** Xóa dòng outbox từ chối của các nhân viên; gọi <b>trước</b> {@code finish()} (EMAIL không có FK nên không tự dọn). */
+    protected void purgeRejectedOutbox(long... staffIds) {
+        for (long staffId : staffIds) {
+            jdbc.update("""
+                    DELETE FROM notification_outbox
+                    WHERE template_code IN ('SHIFT_REQUEST_REJECTED', 'SHIFT_REQUEST_REJECTED_APP')
+                      AND (recipient_account_id = ? OR recipient_email = (SELECT email FROM accounts WHERE id = ?))""",
+                    staffId, staffId);
+        }
+    }
+
+    protected String assignmentXmin(long assignmentId) {
+        return jdbc.queryForObject("SELECT xmin::text FROM shift_assignments WHERE id = ?", String.class,
+                assignmentId);
+    }
+
+    /**
+     * Ảnh chụp mọi dấu vết của một lần từ chối: dòng yêu cầu, dòng phân ca (kể cả {@code xmin}: mọi UPDATE đều đổi nó),
+     * số dòng audit và outbox từ chối. Hai ảnh bằng nhau nghĩa là lệnh gọi không để lại gì.
+     */
+    protected String rejectFootprint(long requestId, long assignmentId, long staffId) {
+        return fullRequestRow(requestId) + "|assignment=" + assignmentRow(assignmentId) + ":"
+                + assignmentXmin(assignmentId) + "|audit=" + rejectAuditCount(requestId) + "|outbox="
+                + rejectedOutbox(staffId).size();
+    }
+
+    // ---------------------------------------------------------------- duyệt LEAVE (#13, docs/adr/0139, N3-S5a)
+
+    protected static final String APPROVED_APP = "SHIFT_REQUEST_APPROVED_APP";
+    protected static final String APPROVED_MAIL = "SHIFT_REQUEST_APPROVED";
+
+    protected static String approvePath(long requestId) {
+        return LIST_BRANCH + "/" + requestId + "/approve";
+    }
+
+    protected int approveRequestAuditCount(long requestId) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_type = 'shift_requests' AND entity_id = ? AND action = 'SHIFT_REQUEST_APPROVED'""",
+                Integer.class, requestId);
+    }
+
+    protected int onLeaveAuditCount(long assignmentId) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_type = 'shift_assignments' AND entity_id = ? AND action = 'SHIFT_ASSIGNMENT_ON_LEAVE'""",
+                Integer.class, assignmentId);
+    }
+
+    /** Audit đổi ca của phân ca (duyệt {@code SWAP}, Phân ca#5; ADR-0139 mục 20). */
+    protected int swapAuditCount(long assignmentId) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_type = 'shift_assignments' AND entity_id = ? AND action = 'SHIFT_ASSIGNMENT_SWAPPED'""",
+                Integer.class, assignmentId);
+    }
+
+    /** Dòng outbox "yêu cầu được duyệt" của một nhân viên: IN_APP theo id tài khoản, EMAIL theo email (không có FK). */
+    protected List<Map<String, Object>> approvedOutbox(long staffId) {
+        return jdbc.queryForList("""
+                SELECT o.channel, o.template_code, o.recipient_account_id, o.recipient_email, o.payload::text AS payload
+                FROM notification_outbox o
+                WHERE o.template_code IN ('SHIFT_REQUEST_APPROVED', 'SHIFT_REQUEST_APPROVED_APP')
+                  AND (o.recipient_account_id = ? OR o.recipient_email = (SELECT email FROM accounts WHERE id = ?))
+                ORDER BY o.id""", staffId, staffId);
+    }
+
+    /** Xóa dòng outbox duyệt của các nhân viên; gọi <b>trước</b> {@code finish()} (EMAIL không có FK nên không tự dọn). */
+    protected void purgeApprovedOutbox(long... staffIds) {
+        for (long staffId : staffIds) {
+            jdbc.update("""
+                    DELETE FROM notification_outbox
+                    WHERE template_code IN ('SHIFT_REQUEST_APPROVED', 'SHIFT_REQUEST_APPROVED_APP')
+                      AND (recipient_account_id = ? OR recipient_email = (SELECT email FROM accounts WHERE id = ?))""",
+                    staffId, staffId);
+        }
+    }
+
+    /**
+     * Ảnh chụp mọi dấu vết của một lần duyệt: dòng yêu cầu, dòng phân ca (kể cả {@code xmin}: mọi UPDATE đều đổi nó),
+     * số dòng audit của cả hai đối tượng (nghỉ và đổi ca) và outbox duyệt. Hai ảnh bằng nhau nghĩa là lệnh gọi không để
+     * lại gì.
+     */
+    protected String approveFootprint(long requestId, long assignmentId, long staffId) {
+        return fullRequestRow(requestId) + "|assignment=" + assignmentRow(assignmentId) + ":"
+                + assignmentXmin(assignmentId) + "|audit=" + approveRequestAuditCount(requestId) + "/"
+                + onLeaveAuditCount(assignmentId) + "/" + swapAuditCount(assignmentId) + "|outbox="
+                + approvedOutbox(staffId).size();
     }
 
     /**

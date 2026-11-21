@@ -115,6 +115,180 @@ class ShiftNoticesTest {
         assertThat(submitted(List.of(), ShiftRequestType.LEAVE)).isEmpty();
     }
 
+    // ---------------------------------------------------------------- vắng đột xuất được ghi nhận (#7, bước 7)
+
+    /** {@code required_vars} của SHIFT_ABSENCE_RECORDED_APP (V40:110-117): không có giờ ca. */
+    private static final Set<String> ABSENCE_IN_APP_VARS = Set.of("ten_ca", "ngay_lam", "chi_nhanh", "ly_do");
+    /** {@code allowed_vars} của SHIFT_ABSENCE_RECORDED (V40:102-109): thêm lời chào tùy chọn. */
+    private static final Set<String> ABSENCE_EMAIL_VARS = Set.of("ten_ca", "ngay_lam", "chi_nhanh", "ly_do",
+            "ten_nhan_vien");
+
+    @Test
+    void absenceBuildsTheInAppNoticeFirstThenTheEmailWithTheAbsenceTemplates() {
+        List<NotificationRequest> requests = absence("an@example.com");
+
+        assertThat(requests).hasSize(2);
+        NotificationRequest inApp = requests.get(0);
+        assertThat(inApp.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_ABSENCE_RECORDED_APP);
+        assertThat(inApp.channel()).isEqualTo(Channel.IN_APP);
+        assertThat(inApp.recipientAccountId()).isEqualTo(12L);
+        assertThat(inApp.recipientEmail()).isNull();
+        NotificationRequest email = requests.get(1);
+        assertThat(email.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_ABSENCE_RECORDED);
+        assertThat(email.channel()).isEqualTo(Channel.EMAIL);
+        assertThat(email.recipientEmail()).isEqualTo("an@example.com");
+        assertThat(email.recipientAccountId()).isNull();
+    }
+
+    @Test
+    void absencePayloadKeysAreExactlyTheTemplateVariablesAndCarryNoShiftHours() {
+        List<NotificationRequest> requests = absence("an@example.com");
+
+        assertThat(requests.get(0).payload().keySet()).containsExactlyInAnyOrderElementsOf(ABSENCE_IN_APP_VARS);
+        assertThat(requests.get(1).payload().keySet()).containsExactlyInAnyOrderElementsOf(ABSENCE_EMAIL_VARS);
+        assertThat(requests.get(0).payload()).doesNotContainKeys("gio_bat_dau", "gio_ket_thuc");
+    }
+
+    @Test
+    void absenceFormatsTheDateLikeTheOtherNoticesAndKeepsTheReasonVerbatim() {
+        NotificationRequest inApp = absence("an@example.com").get(0);
+
+        assertThat(inApp.payload()).containsEntry("ngay_lam", "05/12/2026").containsEntry("ten_ca", "Ca sáng")
+                .containsEntry("chi_nhanh", "Chi nhánh Quận 1").containsEntry("ly_do", "Nhân viên báo ốm");
+        assertThat(absence("an@example.com").get(1).payload()).containsEntry("ten_nhan_vien", "Nguyễn Văn An");
+    }
+
+    @Test
+    void absenceWithoutAnEmailBuildsOnlyTheInAppNotice() {
+        for (String missing : new String[] {null, "", "   "}) {
+            assertThat(absence(missing)).as("email=%s", missing).singleElement()
+                    .extracting(NotificationRequest::channel).isEqualTo(Channel.IN_APP);
+        }
+    }
+
+    @Test
+    void absenceEveryPayloadValueIsPresentSoNoRequiredVariableRendersEmpty() {
+        for (NotificationRequest request : absence("an@example.com")) {
+            assertThat(request.payload().values()).doesNotContainNull();
+            assertThat(request.payload().values()).allSatisfy(value -> assertThat(value.toString()).isNotBlank());
+        }
+    }
+
+    /** {@code required_vars} của SHIFT_REQUEST_REJECTED_APP (V40:83-84). */
+    private static final Set<String> REJECTED_IN_APP_VARS = Set.of("mo_ta_yeu_cau", "chi_nhanh", "ly_do");
+    /** {@code allowed_vars} của SHIFT_REQUEST_REJECTED (V40:75): thêm lời chào tùy chọn. */
+    private static final Set<String> REJECTED_EMAIL_VARS = Set.of("mo_ta_yeu_cau", "chi_nhanh", "ly_do",
+            "ten_nhan_vien");
+
+    @Test
+    void rejectedBuildsTheInAppNoticeFirstThenTheEmailWithTheRejectedTemplates() {
+        List<NotificationRequest> requests = rejected("an@example.com");
+
+        assertThat(requests).hasSize(2);
+        NotificationRequest inApp = requests.get(0);
+        assertThat(inApp.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_REQUEST_REJECTED_APP);
+        assertThat(inApp.channel()).isEqualTo(Channel.IN_APP);
+        assertThat(inApp.recipientAccountId()).isEqualTo(12L);
+        assertThat(inApp.recipientEmail()).isNull();
+        NotificationRequest email = requests.get(1);
+        assertThat(email.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_REQUEST_REJECTED);
+        assertThat(email.channel()).isEqualTo(Channel.EMAIL);
+        assertThat(email.recipientEmail()).isEqualTo("an@example.com");
+        assertThat(email.recipientAccountId()).isNull();
+    }
+
+    @Test
+    void rejectedPayloadKeysAreExactlyTheTemplateVariablesOfEachChannel() {
+        List<NotificationRequest> requests = rejected("an@example.com");
+
+        assertThat(requests.get(0).payload().keySet()).containsExactlyInAnyOrderElementsOf(REJECTED_IN_APP_VARS);
+        assertThat(requests.get(1).payload().keySet()).containsExactlyInAnyOrderElementsOf(REJECTED_EMAIL_VARS);
+        assertThat(requests.get(0).payload()).containsEntry("mo_ta_yeu_cau", "nghỉ ca Ca sáng ngày 05/12/2026")
+                .containsEntry("chi_nhanh", "Chi nhánh Quận 1").containsEntry("ly_do", "Ca này đã đủ người nghỉ");
+        assertThat(requests.get(1).payload()).containsEntry("ten_nhan_vien", "Nguyễn Văn An");
+    }
+
+    @Test
+    void rejectedWithoutAnEmailBuildsOnlyTheInAppNotice() {
+        for (String missing : new String[] {null, "", "   "}) {
+            assertThat(rejected(missing)).as("email=%s", missing).singleElement()
+                    .extracting(NotificationRequest::channel).isEqualTo(Channel.IN_APP);
+        }
+    }
+
+    /** Biến của mẫu duyệt ở V40: không có {@code ly_do}. */
+    private static final Set<String> APPROVED_IN_APP_VARS = Set.of("mo_ta_yeu_cau", "chi_nhanh");
+    private static final Set<String> APPROVED_EMAIL_VARS = Set.of("mo_ta_yeu_cau", "chi_nhanh", "ten_nhan_vien");
+
+    @Test
+    void approvedBuildsTheInAppNoticeFirstThenTheEmailWithTheApprovedTemplates() {
+        List<NotificationRequest> requests = approved("an@example.com");
+
+        assertThat(requests).hasSize(2);
+        NotificationRequest inApp = requests.get(0);
+        assertThat(inApp.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_REQUEST_APPROVED_APP);
+        assertThat(inApp.channel()).isEqualTo(Channel.IN_APP);
+        assertThat(inApp.recipientAccountId()).isEqualTo(12L);
+        assertThat(inApp.recipientEmail()).isNull();
+        NotificationRequest email = requests.get(1);
+        assertThat(email.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_REQUEST_APPROVED);
+        assertThat(email.channel()).isEqualTo(Channel.EMAIL);
+        assertThat(email.recipientEmail()).isEqualTo("an@example.com");
+        assertThat(email.recipientAccountId()).isNull();
+    }
+
+    @Test
+    void approvedPayloadKeysAreExactlyTheTemplateVariablesOfEachChannelAndCarryNoReason() {
+        List<NotificationRequest> requests = approved("an@example.com");
+
+        assertThat(requests.get(0).payload().keySet()).containsExactlyInAnyOrderElementsOf(APPROVED_IN_APP_VARS);
+        assertThat(requests.get(1).payload().keySet()).containsExactlyInAnyOrderElementsOf(APPROVED_EMAIL_VARS);
+        assertThat(requests.get(0).payload()).containsEntry("mo_ta_yeu_cau", "nghỉ ca Ca sáng ngày 05/12/2026")
+                .containsEntry("chi_nhanh", "Chi nhánh Quận 1");
+        assertThat(requests.get(1).payload()).containsEntry("ten_nhan_vien", "Nguyễn Văn An");
+    }
+
+    @Test
+    void approvedWithoutAnEmailBuildsOnlyTheInAppNotice() {
+        for (String missing : new String[] {null, "", "   "}) {
+            assertThat(approved(missing)).as("email=%s", missing).singleElement()
+                    .extracting(NotificationRequest::channel).isEqualTo(Channel.IN_APP);
+        }
+    }
+
+    @Test
+    void describeRequestIsTheSameSentenceAsTheFrontEndMock() {
+        LocalDate day = LocalDate.of(2026, 11, 25);
+
+        assertThat(ShiftNotices.describeRequest(ShiftRequestType.LEAVE, "Ca sáng", null, day))
+                .isEqualTo("nghỉ ca Ca sáng ngày 25/11/2026");
+        assertThat(ShiftNotices.describeRequest(ShiftRequestType.SWAP, "Ca sáng", "Ca chiều", day))
+                .isEqualTo("đổi ca Ca sáng sang ca Ca chiều ngày 25/11/2026");
+    }
+
+    @Test
+    void describeRequestOfASwapNeedsTheTargetName() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ShiftNotices.describeRequest(ShiftRequestType.SWAP,
+                "Ca sáng", null, LocalDate.of(2026, 11, 25))).isInstanceOf(NullPointerException.class);
+    }
+
+    private static List<NotificationRequest> rejected(String email) {
+        return ShiftNotices.rejected(12L, email, "Nguyễn Văn An",
+                ShiftNotices.describeRequest(ShiftRequestType.LEAVE, "Ca sáng", null, LocalDate.of(2026, 12, 5)),
+                "Chi nhánh Quận 1", "Ca này đã đủ người nghỉ");
+    }
+
+    private static List<NotificationRequest> approved(String email) {
+        return ShiftNotices.approved(12L, email, "Nguyễn Văn An",
+                ShiftNotices.describeRequest(ShiftRequestType.LEAVE, "Ca sáng", null, LocalDate.of(2026, 12, 5)),
+                "Chi nhánh Quận 1");
+    }
+
+    private static List<NotificationRequest> absence(String email) {
+        return ShiftNotices.absence(12L, email, "Nguyễn Văn An", "Ca sáng", LocalDate.of(2026, 12, 5),
+                "Chi nhánh Quận 1", "Nhân viên báo ốm");
+    }
+
     private static List<NotificationRequest> submitted(List<Long> managers, ShiftRequestType type) {
         return ShiftNotices.submitted(managers, "Nguyễn Văn An", type, "Ca sáng", LocalDate.of(2026, 12, 5),
                 "Chi nhánh Quận 1", "Việc gia đình");

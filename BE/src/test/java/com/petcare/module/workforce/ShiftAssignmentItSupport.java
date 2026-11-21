@@ -112,6 +112,92 @@ abstract class ShiftAssignmentItSupport extends ShiftDefinitionItSupport {
                 + "|audit=" + cancelAuditCount(assignmentId) + "|outbox=" + cancelOutbox(staffId).size();
     }
 
+    // ---------------------------------------------------------------- ghi vắng đột xuất (#7, docs/adr/0138 bước 7)
+
+    protected static final String ABSENCE_ACTION = "SHIFT_ASSIGNMENT_ABSENCE_RECORDED";
+    /** Ghi chú hệ thống của Yêu cầu#5 khi phân ca được ghi nhận vắng (khác ghi chú của hủy phân ca). */
+    protected static final String ABSENCE_NOTE = "Phân ca đã được ghi nhận vắng đột xuất";
+
+    protected static String absentPath(long assignmentId) {
+        return ASSIGNMENTS + "/" + assignmentId + "/absent";
+    }
+
+    protected int absenceAuditCount(long assignmentId) {
+        return jdbc.queryForObject("""
+                SELECT COUNT(*) FROM audit_logs
+                WHERE entity_type = 'shift_assignments' AND entity_id = ? AND action = 'SHIFT_ASSIGNMENT_ABSENCE_RECORDED'""",
+                Integer.class, assignmentId);
+    }
+
+    /** Dòng outbox vắng của một nhân viên: IN_APP theo id tài khoản, EMAIL theo email (không có FK tới tài khoản). */
+    protected List<Map<String, Object>> absenceOutbox(long staffId) {
+        return jdbc.queryForList("""
+                SELECT o.channel, o.template_code, o.recipient_account_id, o.recipient_email, o.payload::text AS payload
+                FROM notification_outbox o
+                WHERE o.template_code IN ('SHIFT_ABSENCE_RECORDED', 'SHIFT_ABSENCE_RECORDED_APP')
+                  AND (o.recipient_account_id = ? OR o.recipient_email = (SELECT email FROM accounts WHERE id = ?))
+                ORDER BY o.id""", staffId, staffId);
+    }
+
+    /** Xóa dòng outbox vắng của các nhân viên; gọi <b>trước</b> {@code finish()} (EMAIL không có FK nên không tự dọn). */
+    protected void purgeAbsenceOutbox(long... staffIds) {
+        for (long staffId : staffIds) {
+            jdbc.update("""
+                    DELETE FROM notification_outbox
+                    WHERE template_code IN ('SHIFT_ABSENCE_RECORDED', 'SHIFT_ABSENCE_RECORDED_APP')
+                      AND (recipient_account_id = ? OR recipient_email = (SELECT email FROM accounts WHERE id = ?))""",
+                    staffId, staffId);
+        }
+    }
+
+    /** Như {@link #footprint} nhưng đếm audit và outbox của <b>ghi vắng</b>: hai ảnh bằng nhau = lệnh gọi không để lại gì. */
+    protected String absenceFootprint(long assignmentId, long staffId) {
+        return assignmentRow(assignmentId) + "|requests="
+                + jdbc.queryForList("""
+                        SELECT status || ':' || coalesce(decision_note, '') || ':' || coalesce(closed_at::text, '')
+                        FROM shift_requests WHERE assignment_id = ? ORDER BY id""", String.class, assignmentId)
+                + "|audit=" + absenceAuditCount(assignmentId) + "|outbox=" + absenceOutbox(staffId).size();
+    }
+
+    protected String accountEmail(long accountId) {
+        return jdbc.queryForObject("SELECT email FROM accounts WHERE id = ?", String.class, accountId);
+    }
+
+    /** Giá trị một khóa của payload outbox (theo mẫu và nhân viên); {@code null} khi payload không có khóa đó. */
+    protected String outboxPayloadField(String template, long staffId, String key) {
+        return jdbc.queryForObject("""
+                SELECT o.payload->>? FROM notification_outbox o
+                WHERE o.template_code = ?
+                  AND (o.recipient_account_id = ? OR o.recipient_email = (SELECT email FROM accounts WHERE id = ?))""",
+                String.class, key, template, staffId, staffId);
+    }
+
+    /**
+     * Payload khớp mẫu thật trong DB: đủ {@code required_vars}, không khóa ngoài {@code allowed_vars}, không giá trị
+     * rỗng — nếu không, worker ST20 coi là lỗi và thử lại mãi.
+     */
+    protected void assertOutboxFitsTemplate(String template, long staffId) {
+        List<String> keys = jdbc.queryForList("""
+                SELECT jsonb_object_keys(o.payload) FROM notification_outbox o
+                WHERE o.template_code = ?
+                  AND (o.recipient_account_id = ? OR o.recipient_email = (SELECT email FROM accounts WHERE id = ?))""",
+                String.class, template, staffId, staffId);
+        List<String> required = jdbc.queryForList(
+                "SELECT jsonb_array_elements_text(required_vars) FROM notification_templates WHERE code = ?",
+                String.class, template);
+        List<String> allowed = jdbc.queryForList(
+                "SELECT jsonb_array_elements_text(allowed_vars) FROM notification_templates WHERE code = ?",
+                String.class, template);
+        org.assertj.core.api.Assertions.assertThat(keys).as("%s thiếu biến bắt buộc", template).containsAll(required);
+        org.assertj.core.api.Assertions.assertThat(allowed).as("%s có biến ngoài allowed_vars", template)
+                .containsAll(keys);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*) FROM notification_outbox o, jsonb_each_text(o.payload) AS kv
+                WHERE o.template_code = ? AND btrim(kv.value) = ''
+                  AND (o.recipient_account_id = ? OR o.recipient_email = (SELECT email FROM accounts WHERE id = ?))""",
+                Integer.class, template, staffId, staffId)).as("%s có giá trị rỗng", template).isZero();
+    }
+
     protected static long idOf(Map<String, Object> data, String key) {
         return ((Number) data.get(key)).longValue();
     }

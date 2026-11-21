@@ -139,6 +139,11 @@ class OpenApiContractParityIT {
         // + 2 workforce #4–5 (GET / POST /shift-assignments, lịch phân ca và phân ca hộ, T58 bước 3, docs/adr/0138).
         // + 2 workforce #6, #8 (POST /shift-assignments/{id}/cancel, GET /me/shift-assignments, T58 bước 4, docs/adr/0138).
         // + 3 workforce #9–11 (POST / GET /me/shift-requests, POST /me/shift-requests/{id}/withdraw, yêu cầu nghỉ / đổi ca của nhân viên, T59 bước 1, docs/adr/0138).
+        // + 1 workforce #7 (POST /shift-assignments/{id}/absent, ghi nhận vắng đột xuất, T59 bước 2, docs/adr/0138).
+        // + 1 workforce #12 (GET /shift-requests, danh sách yêu cầu của chi nhánh, T59 bước 3, docs/adr/0138).
+        // + 1 workforce #14 (POST /shift-requests/{id}/reject, quản lý từ chối yêu cầu, T59 bước 4, docs/adr/0139).
+        // + 1 workforce #13 (POST /shift-requests/{id}/approve, quản lý duyệt yêu cầu nghỉ; SWAP còn placeholder, N3-S5a, docs/adr/0139).
+        // + 1 workforce #17 (GET /me/shift-registrations/{weekStart}, đăng ký ca của tôi trong tuần, N3-S6, docs/adr/0138).
         // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V56, docs/adr/0122, 0131): content còn 21.
         assertThat(documentedOps())
 <<<<<<< HEAD
@@ -147,6 +152,7 @@ class OpenApiContractParityIT {
 >>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
 =======
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + workforce đã cài")
+<<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -161,6 +167,9 @@ class OpenApiContractParityIT {
 =======
                 .hasSize(210);
 >>>>>>> 30e5d236 (feat: T59: yêu cầu nghỉ / đổi ca của nhân viên (workforce-v1 #9–11, ADR-0138, D074))
+=======
+                .hasSize(215);
+>>>>>>> 59313c40 (feat: T59: hoàn tất yêu cầu nghỉ / đổi ca của quản lý và đọc đăng ký tuần (workforce-v1 #7, #12–14, #17, ADR-0138, ADR-0139, D074, D076))
     }
 
     @Test

@@ -223,16 +223,24 @@ class SchemaMigrationIT {
 =======
         // V55 Nhân sự: shift_assignments.source + khóa [CFG] workforce.weekly_required_shifts (docs/adr/0123, T58),
         // V56 bỏ 5 cột trạng thái của feedbacks (docs/adr/0122, 0131; trước là V52, đổi số vì trùng V52 của AI, D069),
+<<<<<<< HEAD
 >>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
+=======
+        // V60 shift_requests.current_shift_definition_id (ca lúc gửi, docs/adr/0139 N3-S5b; V57–V59 đã có trên dev, D069),
+>>>>>>> 59313c40 (feat: T59: hoàn tất yêu cầu nghỉ / đổi ca của quản lý và đọc đăng ký tuần (workforce-v1 #7, #12–14, #17, ADR-0138, ADR-0139, D074, D076))
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
 <<<<<<< HEAD
+<<<<<<< HEAD
                         "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "9000");
 =======
                         "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "9000");
 >>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
+=======
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "60", "9000");
+>>>>>>> 59313c40 (feat: T59: hoàn tất yêu cầu nghỉ / đổi ca của quản lý và đọc đăng ký tuần (workforce-v1 #7, #12–14, #17, ADR-0138, ADR-0139, D074, D076))
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 

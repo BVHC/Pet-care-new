@@ -30,8 +30,8 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Phân ca (UC34, UC35, workforce-v1 #4–6, #8; docs/adr/0138). Không chứa logic và không biết mã rule: BR-NS-02 /
- * BR-NS-03 do {@link ShiftAssignmentService} kiểm. #4–6 chỉ BRANCH_MANAGER (A06–A08 không có quyền ở đây, khác với
+ * Phân ca (UC34, UC35, UC38, workforce-v1 #4–8; docs/adr/0138). Không chứa logic và không biết mã rule: BR-NS-02 /
+ * BR-NS-03 / BR-NS-07 do {@link ShiftAssignmentService} kiểm. #4–7 chỉ BRANCH_MANAGER (A06–A08 không có quyền ở đây, khác với
  * {@code GET /shift-definitions}); #8 chỉ nhân viên A06–A08 và chỉ lịch của chính họ.
  */
 @RestController
@@ -98,6 +98,27 @@ public class ShiftAssignmentController {
     public ApiResponse<ShiftAssignmentResponse> cancel(@PathVariable Long shiftAssignmentId,
             @Valid @RequestBody ShiftReasonRequest request) {
         return ApiResponse.ok(shiftAssignments.cancelShiftAssignment(shiftAssignmentId, request), "Đã hủy phân ca");
+    }
+
+    /** workforce-v1 #7. */
+    @Operation(operationId = "recordShiftAbsence", tags = "Shift assignments", summary = "Ghi nhận vắng đột xuất",
+            description = "UC38 · BR-NS-07, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. "
+                + "Chuyển trạng thái: SCHEDULED → ABSENT (Phân ca#4). Cùng một transaction: phân ca → `ABSENT` và "
+                + "yêu cầu `PENDING` của nó → `REJECTED` (Yêu cầu#5; `decision_note` do hệ thống ghi, `decided_by` "
+                + "rỗng); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08).",
+            parameters = {@Parameter(name = "shiftAssignmentId", in = ParameterIn.PATH, example = "31")})
+    @ApiErrorDoc(status = 400, description = "`BR-NS-07` ca của ngày tương lai · quá 7 ngày **[CFG]**; "
+            + "`VALIDATION_FAILED` thiếu lý do")
+    @ApiErrorDoc(status = 403, description = "`ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "`INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước "
+            + "guard 400, A11)")
+    @PostMapping("/shift-assignments/{shiftAssignmentId}/absent")
+    @PreAuthorize(BRANCH_MANAGER)
+    public ApiResponse<ShiftAssignmentResponse> recordAbsence(@PathVariable Long shiftAssignmentId,
+            @Valid @RequestBody ShiftReasonRequest request) {
+        return ApiResponse.ok(shiftAssignments.recordShiftAbsence(shiftAssignmentId, request),
+                "Đã ghi nhận vắng đột xuất");
     }
 
     /** workforce-v1 #8. */

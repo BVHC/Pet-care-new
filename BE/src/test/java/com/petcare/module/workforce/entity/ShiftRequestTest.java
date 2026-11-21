@@ -41,6 +41,14 @@ class ShiftRequestTest {
     }
 
     @Test
+    void submitKeepsTheShiftOfTheAssignmentAtSendingTimeAsASnapshotForBothTypes() {
+        // V60 (ADR-0139 mục 17): duyệt SWAP đổi ca của phân ca, nên yêu cầu tự giữ ca lúc gửi.
+        assertThat(pendingLeave().getCurrentShiftDefinitionId()).isEqualTo(3L);
+        assertThat(ShiftRequest.submit(10L, 2L, 3L, ShiftRequestType.SWAP, 4L, "lý do").getCurrentShiftDefinitionId())
+                .isEqualTo(3L);
+    }
+
+    @Test
     void submitEnforcesSwapTargetRule() {
         assertThatThrownBy(() -> ShiftRequest.submit(10L, 2L, 3L, ShiftRequestType.SWAP, null, "lý do"))
                 .isInstanceOf(NullPointerException.class);

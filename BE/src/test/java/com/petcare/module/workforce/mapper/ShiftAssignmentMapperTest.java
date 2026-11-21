@@ -78,6 +78,36 @@ class ShiftAssignmentMapperTest {
     }
 
     @Test
+    void anAbsentAssignmentShowsItsStatusAndReasonKeepsItsSourceAndShowsNoPendingRequest() {
+        for (ShiftAssignmentSource source : ShiftAssignmentSource.values()) {
+            ShiftAssignment assignment = ShiftAssignment.schedule(5L, 12L, 7L, LocalDate.of(2026, 11, 24), source);
+            ReflectionTestUtils.setField(assignment, "id", 9L);
+            assignment.markAbsent("Nhân viên báo ốm", 77L, Instant.parse("2026-11-25T01:00:00Z"));
+
+            ShiftAssignmentResponse response = mapper.toResponse(assignment, "An", definition(7L, 5L, "Ca",
+                    LocalTime.of(8, 0), LocalTime.of(12, 0)), null);
+
+            assertThat(response.status()).as(source.name()).isEqualTo(ShiftAssignmentStatus.ABSENT);
+            assertThat(response.source()).isEqualTo(source);
+            assertThat(response.reason()).isEqualTo("Nhân viên báo ốm");
+            assertThat(response.pendingRequestId()).isNull();
+        }
+    }
+
+    @Test
+    void theAuditSnapshotOfAnAbsenceShowsScheduledBeforeAndAbsentWithTheReasonAfter() {
+        ShiftAssignment assignment = scheduled(31L, 5L, 12L, 7L, LocalDate.of(2026, 11, 24));
+
+        ShiftAssignmentAuditSnapshot before = mapper.toSnapshot(assignment);
+        assignment.markAbsent("Nhân viên báo ốm", 77L, Instant.parse("2026-11-25T01:00:00Z"));
+
+        assertThat(before).isEqualTo(
+                new ShiftAssignmentAuditSnapshot(12L, 7L, "2026-11-24", "SCHEDULED", "MANAGER", null));
+        assertThat(mapper.toSnapshot(assignment)).isEqualTo(
+                new ShiftAssignmentAuditSnapshot(12L, 7L, "2026-11-24", "ABSENT", "MANAGER", "Nhân viên báo ốm"));
+    }
+
+    @Test
     void anAssignmentMovedToAnotherShiftBySwapShowsTheNewShiftNameAndHoursAndStaysScheduledWithoutAReason() {
         ShiftAssignment assignment = scheduled(31L, 5L, 12L, 7L, LocalDate.of(2026, 11, 24));
         assignment.swapTo(8L);

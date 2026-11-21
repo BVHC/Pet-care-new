@@ -22,6 +22,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
+import com.petcare.module.workforce.entity.ShiftAssignment;
 import com.petcare.module.workforce.entity.ShiftDefinition;
 import com.petcare.module.workforce.repository.ShiftAssignmentRepository;
 import com.petcare.module.workforce.repository.ShiftDefinitionRepository;
@@ -135,6 +136,29 @@ class WorkforceRepositoryIT {
 
         assertThat(assignments.countScheduledFrom(definition, TODAY)).isEqualTo(2);
         assertThat(assignments.countScheduledFrom(definition, TODAY.plusDays(2))).isZero();
+    }
+
+    @Test
+    void scheduledInWeekIsTheStaffsOwnScheduledRowsInclusiveOfBothEndsSortedAndOfAnyBranch() {
+        long morning = data.definition(branch, "Sáng", LocalTime.of(8, 0), LocalTime.of(12, 0), true);
+        long afternoon = data.definition(branch, "Chiều", LocalTime.of(13, 0), LocalTime.of(17, 0), true);
+        long elsewhereDefinition = data.definition(otherBranch, "Khác", LocalTime.of(8, 0), LocalTime.of(12, 0), true);
+        long colleague = data.staff("VET", branch);
+        long late = data.assignment(branch, staff, afternoon, TODAY, "SCHEDULED", "SELF", null);
+        long early = data.assignment(branch, staff, morning, TODAY, "SCHEDULED", "MANAGER", null);
+        long elsewhere = data.assignment(otherBranch, staff, elsewhereDefinition, TODAY.plusDays(3), "SCHEDULED",
+                "MANAGER", null);
+        long last = data.assignment(branch, staff, morning, TODAY.plusDays(6), "SCHEDULED", "SELF", null);
+        data.assignment(branch, staff, morning, TODAY.minusDays(1), "SCHEDULED", "SELF", null);
+        data.assignment(branch, staff, morning, TODAY.plusDays(7), "SCHEDULED", "SELF", null);
+        data.assignment(branch, staff, morning, TODAY.plusDays(1), "ON_LEAVE", "SELF", staff);
+        data.assignment(branch, staff, morning, TODAY.plusDays(2), "CANCELLED", "SELF", staff);
+        data.assignment(branch, staff, morning, TODAY.plusDays(4), "ABSENT", "MANAGER", staff);
+        data.assignment(branch, colleague, morning, TODAY, "SCHEDULED", "SELF", null);
+
+        assertThat(assignments.findScheduledInWeek(staff, TODAY, TODAY.plusDays(6)))
+                .extracting(ShiftAssignment::getId).containsExactly(early, late, elsewhere, last);
+        assertThat(assignments.findScheduledInWeek(staff, TODAY.plusDays(100), TODAY.plusDays(106))).isEmpty();
     }
 
     @Test

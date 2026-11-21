@@ -263,7 +263,7 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 |---|---|---|---|---|---|---|
 | 1 | — → `PENDING` | Gửi yêu cầu | A06, A07, A08 | Phân ca `SCHEDULED` của chính mình; chưa có yêu cầu `PENDING` khác của phân ca; còn ≥ 24 giờ **[CFG]** tới giờ bắt đầu ca; có lý do; `SWAP`: ca đích đang dùng, cùng ngày, không chồng giờ phân ca khác của người gửi | Thông báo BRANCH_MANAGER của chi nhánh | BR-NS-04, 08 · UC36 |
 | 2 | `PENDING` → `WITHDRAWN` | Rút yêu cầu | A06, A07, A08 (người gửi) | — | Phân ca giữ nguyên | BR-NS-05 · UC36 |
-| 3 | `PENDING` → `APPROVED` | Duyệt | A05 | Phân ca còn `SCHEDULED` và chưa bắt đầu; `SWAP`: ca đích còn dùng, không chồng giờ lúc duyệt | `LEAVE`: Phân ca#3 (→ `ON_LEAVE`); `SWAP`: Phân ca#5 (đổi sang ca đích). Thông báo nhân viên; ghi audit | BR-NS-06, 08, 10 · UC37 |
+| 3 | `PENDING` → `APPROVED` | Duyệt | A05 | Phân ca còn `SCHEDULED` và chưa bắt đầu; `SWAP`: ca đích chưa bắt đầu, còn dùng, không chồng giờ lúc duyệt (ADR-0139) | `LEAVE`: Phân ca#3 (→ `ON_LEAVE`); `SWAP`: Phân ca#5 (đổi sang ca đích). Thông báo nhân viên; ghi audit | BR-NS-06, 08, 10 · UC37 |
 | 4 | `PENDING` → `REJECTED` | Từ chối | A05 | Có lý do (`decision_note`) | Phân ca giữ nguyên. Thông báo nhân viên; ghi audit | BR-NS-06, 08, 10 · UC37 |
 | 5 | `PENDING` → `REJECTED` | Phân ca không còn hiệu lực | SYS ← Phân ca#2, #4, #6, #7 | — | `decision_note` do hệ thống ghi; `decided_by` rỗng | BR-NS-07, 09 |
 

@@ -51,7 +51,7 @@ m = Module(
 m.param("ShiftDefinitionId", "shiftDefinitionId", "path", "int64")
 m.param("ShiftAssignmentId", "shiftAssignmentId", "path", "int64")
 m.param("ShiftRequestId", "shiftRequestId", "path", "int64")
-m.param("WeekStart", "weekStart", "path", "date|Thứ Hai của tuần (giờ Việt Nam), dạng yyyy-MM-dd")
+m.param("WeekStart", "weekStart", "path", "date|Thứ Hai của tuần (giờ Việt Nam), dạng yyyy-MM-dd, năm 2000–2100")
 
 m.schema("ShiftDefinition", {
     "shiftDefinitionId": "int64", "branchId": "int64", "name": "string:60",
@@ -76,8 +76,9 @@ m.schema("ShiftRegistrationItem", {"workDate": "date|Phải nằm trong tuần c
 m.schema("PutShiftRegistrationRequest", {"items": "array:ref:ShiftRegistrationItem|Toàn bộ (ngày, ca) nhân viên muốn có trong tuần; thay thế các phân ca SELF hiện có (BR-NS-11)"})
 m.schema("ShiftRegistration", {
     "weekStart": "date", "requiredShifts": "int|[CFG] workforce.weekly_required_shifts (BR-NS-12)",
-    "shiftCount": "int|Số phân ca SCHEDULED của tuần, cả SELF và MANAGER",
-    "assignments": "array:ref:ShiftAssignment|Mọi phân ca của nhân viên trong tuần sau khi lưu",
+    "shiftCount": "int|Số phân ca SCHEDULED của tuần, cả SELF và MANAGER; luôn bằng số phần tử của assignments",
+    "editableUntil": "datetime|Hạn sửa đăng ký tuần: 00:00 thứ Hai của weekStart theo giờ Việt Nam, trả dạng UTC (BR-NS-11); GET không kiểm hạn, chỉ báo để client hiển thị",
+    "assignments": "array:ref:ShiftAssignment|Phân ca SCHEDULED của nhân viên trong tuần (SELF và MANAGER, phân biệt bằng source), sắp theo ngày rồi giờ bắt đầu; tuần chưa có phân ca là mảng rỗng",
 })
 m.schema("ShiftWeeklySummary", {
     "staffId": "int64", "staffName": "string", "role": "enum:RECEPTIONIST,VET,CARETAKER",
@@ -87,7 +88,9 @@ m.schema("ShiftRequestType", None, enum=["LEAVE", "SWAP"])
 m.schema("ShiftRequestStatus", None, enum=["PENDING", "APPROVED", "REJECTED", "WITHDRAWN"], desc="03 #11")
 m.schema("ShiftRequest", {
     "shiftRequestId": "int64", "shiftAssignmentId": "int64", "requesterId": "int64", "requesterName": "string",
-    "workDate": "date", "currentShiftName": "string", "type": "ref:ShiftRequestType",
+    "workDate": "date",
+    "currentShiftName": "string|Tên ca của phân ca lúc gửi yêu cầu (với SWAP đã duyệt là ca trước khi đổi)",
+    "type": "ref:ShiftRequestType",
     "targetShiftDefinitionId": "int64?|Chỉ có với SWAP", "targetShiftName": "string?", "reason": "string",
     "status": "ref:ShiftRequestStatus", "decidedBy": "int64?", "decisionNote": "string?",
     "closedAt": "datetime?", "createdAt": "datetime",
@@ -175,7 +178,7 @@ m.op("get", "/shift-requests", "listShiftRequests", "Yêu cầu nghỉ / đổi 
 m.op("post", "/shift-requests/{shiftRequestId}/approve", "approveShiftRequest", "Duyệt yêu cầu", "Shift requests",
      "UC37", "BR-NS-06, BR-NS-08, BR-NS-10", "A05", BM, "PENDING → APPROVED (Yêu cầu#3); Phân ca#3 hoặc #5",
      resp="ShiftRequest", path_params=["ShiftRequestId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích ngừng dùng hoặc chồng giờ",
+     err_desc={400: "`BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích đã bắt đầu, ngừng dùng hoặc chồng giờ",
                403: "`ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác",
                409: "`INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard 400, A11)"},
      notes="Cùng một transaction: yêu cầu → `APPROVED` (Yêu cầu#3) và phân ca → `ON_LEAVE` (Phân ca#3, `LEAVE`) hoặc đổi sang ca đích (Phân ca#5, `SWAP`); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08).")
@@ -204,5 +207,5 @@ m.op("get", "/shift-weekly-summaries", "listShiftWeeklySummaries", "Thống kê 
 m.op("get", "/me/shift-registrations/{weekStart}", "getMyShiftRegistration", "Đăng ký ca của tôi trong tuần",
      "Shift registrations", "UC35", "BR-NS-11, BR-NS-12", "A06–A08", STAFF, resp="ShiftRegistration",
      path_params=["WeekStart"], errors=(400, 401, 403),
-     err_desc={400: "`BR-NS-11` `weekStart` không phải thứ Hai"},
-     notes="Chỉ đọc, dùng để nạp phân ca hiện có và `requiredShifts` (định mức [CFG]) trước khi gọi `PUT` thay cả tuần. Không kiểm hạn đăng ký: xem được cả tuần đã qua hạn. Cùng dạng response với `PUT`: chỉ phân ca `SCHEDULED` của tuần (A12); tuần chưa có phân ca trả `assignments` rỗng, `shiftCount` = 0.")
+     err_desc={400: "`BR-NS-11` `weekStart` không phải thứ Hai hoặc năm ngoài 2000–2100 · `weekStart` sai định dạng (`MALFORMED_REQUEST`)"},
+     notes="Chỉ đọc, dùng để nạp phân ca hiện có và `requiredShifts` (định mức [CFG]) trước khi gọi `PUT` thay cả tuần. Không kiểm hạn đăng ký: xem được cả tuần đã qua hạn. Cùng dạng response với `PUT`: chỉ phân ca `SCHEDULED` của tuần (A12), cả `SELF` và `MANAGER`; tuần chưa có phân ca trả `assignments` rỗng, `shiftCount` = 0. `editableUntil` là 00:00 thứ Hai của `weekStart` theo giờ Việt Nam, trả dạng UTC.")

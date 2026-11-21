@@ -58,25 +58,34 @@ public class WorkforceItSupport {
                 scheduled ? null : OffsetDateTime.now());
     }
 
-    /** Yêu cầu {@code LEAVE} ở trạng thái {@code status}; cột quyết định điền đúng CHECK. */
+    /**
+     * Yêu cầu {@code LEAVE} ở trạng thái {@code status}; cột quyết định điền đúng CHECK. Ca lúc gửi
+     * ({@code current_shift_definition_id}, V60) lấy đúng như #9: ca đang gắn với phân ca.
+     */
     public long leaveRequest(long assignmentId, long requesterId, String status, Long decidedBy) {
         boolean pending = "PENDING".equals(status);
         return jdbc.queryForObject("""
-                INSERT INTO shift_requests (assignment_id, requester_id, request_type, reason, status, decided_by,
-                                            decision_note, closed_at)
-                VALUES (?, ?, 'LEAVE', 'Việc gia đình', ?, ?, ?, ?) RETURNING id""", Long.class, assignmentId,
-                requesterId, status, "APPROVED".equals(status) ? decidedBy : null,
+                INSERT INTO shift_requests (assignment_id, requester_id, request_type, current_shift_definition_id,
+                                            reason, status, decided_by, decision_note, closed_at)
+                VALUES (?, ?, 'LEAVE', (SELECT shift_definition_id FROM shift_assignments WHERE id = ?),
+                        'Việc gia đình', ?, ?, ?, ?) RETURNING id""", Long.class, assignmentId, requesterId,
+                assignmentId, status, "APPROVED".equals(status) ? decidedBy : null,
                 "REJECTED".equals(status) ? "Ghi chú" : null, pending ? null : OffsetDateTime.now());
     }
 
-    /** Yêu cầu {@code SWAP} sang {@code targetDefinitionId} ở trạng thái {@code status}; cột quyết định điền đúng CHECK. */
+    /**
+     * Yêu cầu {@code SWAP} sang {@code targetDefinitionId} ở trạng thái {@code status}; cột quyết định điền đúng CHECK.
+     * Ca lúc gửi là ca đang gắn với phân ca (như #9).
+     */
     public long swapRequest(long assignmentId, long requesterId, long targetDefinitionId, String status,
             Long decidedBy) {
         boolean pending = "PENDING".equals(status);
         return jdbc.queryForObject("""
-                INSERT INTO shift_requests (assignment_id, requester_id, request_type, target_shift_definition_id,
-                                            reason, status, decided_by, decision_note, closed_at)
-                VALUES (?, ?, 'SWAP', ?, 'Đổi ca', ?, ?, ?, ?) RETURNING id""", Long.class, assignmentId, requesterId,
+                INSERT INTO shift_requests (assignment_id, requester_id, request_type, current_shift_definition_id,
+                                            target_shift_definition_id, reason, status, decided_by, decision_note,
+                                            closed_at)
+                VALUES (?, ?, 'SWAP', (SELECT shift_definition_id FROM shift_assignments WHERE id = ?), ?, 'Đổi ca', ?,
+                        ?, ?, ?) RETURNING id""", Long.class, assignmentId, requesterId, assignmentId,
                 targetDefinitionId, status, "APPROVED".equals(status) ? decidedBy : null,
                 "REJECTED".equals(status) ? "Ghi chú" : null, pending ? null : OffsetDateTime.now());
     }

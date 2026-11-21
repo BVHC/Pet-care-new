@@ -13,8 +13,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * luôn có mặt trong JSON (Jackson không bỏ null). Không trả {@code updatedAt}, chi nhánh hay trạng thái phân ca. Tên
  * người gửi và tên ca được ghép ở service (docs/adr/0138 bước 6).
  * <p>
- * <b>Tên ca là tên hiện tại, không phải ảnh chụp:</b> {@code shift_requests} không lưu ca gốc của phân ca, nên
- * {@code currentShiftName} là ca <i>đang</i> gắn với phân ca (nợ D074).
+ * {@code currentShiftName} là ca của phân ca <b>lúc gửi</b> ({@code shift_requests.current_shift_definition_id}, V60):
+ * sau khi duyệt {@code SWAP} phân ca đã ở ca đích nhưng yêu cầu vẫn nêu ca gốc. Tên ca (cả ca gốc lẫn ca đích) là
+ * tên <i>hiện tại</i> của ca đó, không phải ảnh chụp tên (ADR-0139 mục 5).
  */
 public record ShiftRequestResponse(
         @Schema(description = "Mã yêu cầu", example = "15")
@@ -33,7 +34,8 @@ public record ShiftRequestResponse(
                 format = "date")
         LocalDate workDate,
 
-        @Schema(description = "Tên ca hiện đang gắn với phân ca (không phải ảnh chụp lúc gửi)", example = "Ca sáng")
+        @Schema(description = "Tên ca của phân ca lúc gửi yêu cầu (với SWAP đã duyệt là ca trước khi đổi)",
+                example = "Ca sáng")
         String currentShiftName,
 
         @Schema(description = "LEAVE = nghỉ ca đó; SWAP = đổi sang ca khác cùng ngày", example = "SWAP")

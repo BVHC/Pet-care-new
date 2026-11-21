@@ -20,9 +20,9 @@ import lombok.NoArgsConstructor;
 
 /**
  * Bảng {@code shift_requests} (erd §14.1, ROOT, 03 #11): yêu cầu nghỉ ({@code LEAVE}) hoặc đổi ca cùng ngày
- * ({@code SWAP}) của nhân viên cho một phân ca {@code SCHEDULED} của chính mình (BR-NS-04). Năm cột nội dung yêu cầu
- * ({@code assignment_id}, {@code requester_id}, {@code request_type}, {@code target_shift_definition_id},
- * {@code reason}) là {@code updatable = false}: đó là điều nhân viên đã yêu cầu. Chỉ nhóm {@code status},
+ * ({@code SWAP}) của nhân viên cho một phân ca {@code SCHEDULED} của chính mình (BR-NS-04). Sáu cột nội dung yêu cầu
+ * ({@code assignment_id}, {@code requester_id}, {@code request_type}, {@code current_shift_definition_id},
+ * {@code target_shift_definition_id}, {@code reason}) là {@code updatable = false}: đó là điều nhân viên đã yêu cầu. Chỉ nhóm {@code status},
  * {@code decided_by}, {@code decision_note}, {@code closed_at} đổi khi xử lý.
  * <p>
  * Mỗi method đóng yêu cầu đặt {@code closed_at} và các cột theo CHECK V36 ({@code ck_shift_requests_closed_at},
@@ -55,6 +55,13 @@ public class ShiftRequest extends TimestampedEntity {
     @Column(name = "request_type", nullable = false, updatable = false, length = 30)
     private ShiftRequestType requestType;
 
+    /**
+     * Ca của phân ca <b>lúc gửi</b> (V60, ADR-0139 mục 17): ảnh chụp, vì duyệt {@code SWAP} (Phân ca#5) đổi ca của phân
+     * ca sang ca đích. {@code currentShiftName} của yêu cầu đọc từ cột này.
+     */
+    @Column(name = "current_shift_definition_id", nullable = false, updatable = false)
+    private Long currentShiftDefinitionId;
+
     @Column(name = "target_shift_definition_id", updatable = false)
     private Long targetShiftDefinitionId;
 
@@ -75,8 +82,9 @@ public class ShiftRequest extends TimestampedEntity {
     private Instant closedAt;
 
     /**
-     * Yêu cầu#1: {@code — → PENDING}. {@code SWAP} bắt buộc có ca đích khác ca hiện tại của phân ca
-     * ({@code currentShiftDefinitionId}); {@code LEAVE} không có ca đích ({@code ck_shift_requests_swap_target}).
+     * Yêu cầu#1: {@code — → PENDING}. {@code currentShiftDefinitionId} (ca hiện tại của phân ca) được lưu làm ảnh chụp
+     * ca lúc gửi (V60). {@code SWAP} bắt buộc có ca đích khác ca đó ({@code ck_shift_requests_swap_differs});
+     * {@code LEAVE} không có ca đích ({@code ck_shift_requests_swap_target}).
      * Điều kiện cần Clock / [CFG] / dòng khác (còn ≥ 24 giờ, ca đích đang dùng, chồng giờ, chủ phân ca) do service kiểm.
      */
     public static ShiftRequest submit(Long assignmentId, Long requesterId, Long currentShiftDefinitionId,
@@ -94,6 +102,7 @@ public class ShiftRequest extends TimestampedEntity {
         ShiftRequest entity = new ShiftRequest();
         entity.assignmentId = requireNonNull(assignmentId, "assignmentId");
         entity.requesterId = requireNonNull(requesterId, "requesterId");
+        entity.currentShiftDefinitionId = currentShiftDefinitionId;
         entity.requestType = type;
         entity.targetShiftDefinitionId = targetShiftDefinitionId;
         entity.reason = EntityText.require(reason, EntityText.NOTE_MAX_LENGTH, "reason");

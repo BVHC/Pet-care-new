@@ -78,18 +78,28 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Long
     @Query("SELECT r FROM ShiftRequest r WHERE r.id = :id")
     Optional<ShiftRequest> findByIdForUpdate(@Param("id") Long id);
 
-    /** Người gửi và phân ca của một yêu cầu, đọc <b>không khóa</b> để phân quyền dữ liệu trước khi khóa (rút, #11). */
+    /**
+     * Người gửi, phân ca và ca đích của một yêu cầu, đọc <b>không khóa</b> để phân quyền dữ liệu trước khi khóa (rút #11,
+     * từ chối #14, duyệt #13). Duyệt {@code SWAP} dùng ca đích để khóa ca đó {@code FOR SHARE} trước phân ca (ADR-0139
+     * mục 18); {@code null} với {@code LEAVE}.
+     */
     interface RequestOwner {
         Long getRequesterId();
 
         Long getAssignmentId();
+
+        Long getTargetShiftDefinitionId();
     }
 
     /**
-     * Chủ và phân ca của yêu cầu để kiểm 404 trước mọi khóa; hai cột này {@code updatable = false} nên đọc không khóa
-     * không bị lỗi thời. Rỗng = không có yêu cầu.
+     * Chủ, phân ca và ca đích của yêu cầu để kiểm 404 trước mọi khóa; ba cột này {@code updatable = false} nên đọc không
+     * khóa không bị lỗi thời. Rỗng = không có yêu cầu.
      */
-    @Query("SELECT r.requesterId AS requesterId, r.assignmentId AS assignmentId FROM ShiftRequest r WHERE r.id = :id")
+    @Query("""
+            SELECT r.requesterId AS requesterId, r.assignmentId AS assignmentId,
+                   r.targetShiftDefinitionId AS targetShiftDefinitionId
+            FROM ShiftRequest r WHERE r.id = :id
+            """)
     Optional<RequestOwner> findOwnerById(@Param("id") Long id);
 
     /**
@@ -107,4 +117,22 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Long
             """)
     Page<ShiftRequest> findByRequester(@Param("requesterId") Long requesterId,
             @Param("status") ShiftRequestStatus status, Pageable pageable);
+
+    /**
+     * Yêu cầu của <b>một chi nhánh</b> (workforce-v1 #12), cũ nhất trước: {@code createdAt}, {@code id} tăng dần để quản
+     * lý xử lý theo thứ tự gửi. Chi nhánh là chi nhánh của <b>phân ca</b> (không phải chi nhánh hiện tại của người gửi:
+     * yêu cầu của người đã điều chuyển vẫn thuộc chi nhánh cũ), nối {@code shift_assignments} theo khóa chính.
+     * {@code status} bắt buộc (bên gọi thay "vắng" bằng {@code PENDING}) để đi qua
+     * {@code ix_shift_requests_status_created} (V36). Phải truyền {@code Pageable} chưa sắp (thứ tự nằm trong câu).
+     */
+    @Query(value = """
+            SELECT r FROM ShiftRequest r JOIN ShiftAssignment a ON a.id = r.assignmentId
+            WHERE a.branchId = :branchId AND r.status = :status
+            ORDER BY r.createdAt ASC, r.id ASC
+            """, countQuery = """
+            SELECT count(r) FROM ShiftRequest r JOIN ShiftAssignment a ON a.id = r.assignmentId
+            WHERE a.branchId = :branchId AND r.status = :status
+            """)
+    Page<ShiftRequest> findByBranch(@Param("branchId") Long branchId, @Param("status") ShiftRequestStatus status,
+            Pageable pageable);
 }

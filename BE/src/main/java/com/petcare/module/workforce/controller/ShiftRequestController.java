@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.workforce.dto.CreateShiftRequestRequest;
+import com.petcare.module.workforce.dto.RejectShiftRequestRequest;
 import com.petcare.module.workforce.dto.ShiftRequestResponse;
 import com.petcare.module.workforce.entity.ShiftRequestStatus;
 import com.petcare.module.workforce.service.ShiftRequestService;
@@ -25,9 +26,10 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Yêu cầu nghỉ / đổi ca của nhân viên (UC36, workforce-v1 #9–11; docs/adr/0138 bước 6). Không chứa logic và không biết
- * mã rule: BR-NS-04 / BR-NS-05 do {@link ShiftRequestService} kiểm. Chỉ nhân viên A06–A08 và chỉ dữ liệu của chính họ
- * (BRANCH_MANAGER dùng #12–14 ở bước sau, không dùng {@code /me/*}). Dùng chung hằng quyền {@code STAFF} của
+ * Yêu cầu nghỉ / đổi ca (UC36 workforce-v1 #9–11 của nhân viên, docs/adr/0138 bước 6; UC37 #12 danh sách của
+ * BRANCH_MANAGER, bước 8). Không chứa logic và không biết mã rule: BR-NS-04 / BR-NS-05 do {@link ShiftRequestService}
+ * kiểm. {@code /me/*} chỉ cho nhân viên A06–A08 và chỉ dữ liệu của chính họ; {@code /shift-requests} chỉ cho
+ * BRANCH_MANAGER (từ chối #14 ở bước 9, duyệt #13 chỉ {@code LEAVE} ở N3-S5a, docs/adr/0139). Dùng chung hằng quyền {@code STAFF} / {@code BRANCH_MANAGER} của
  * {@link ShiftAssignmentController} để hai nơi không lệch nhau.
  */
 @RestController
@@ -75,6 +77,66 @@ public class ShiftRequestController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ApiResponse.ok(shiftRequests.listMyShiftRequests(status, page, size), "Yêu cầu nghỉ / đổi ca của tôi");
+    }
+
+    /** workforce-v1 #12. */
+    @Operation(operationId = "listShiftRequests", tags = "Shift requests",
+            summary = "Yêu cầu nghỉ / đổi ca của chi nhánh",
+            description = "UC37 · BR-NS-06. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. "
+                + "`status` vắng = `PENDING`. Cũ nhất trước (`createdAt` tăng dần, trùng thì `shiftRequestId` tăng "
+                + "dần) để xử lý theo thứ tự gửi.",
+            parameters = {
+                    @Parameter(name = "status", in = ParameterIn.QUERY, example = "PENDING"),
+                    @Parameter(name = "page", in = ParameterIn.QUERY, example = "0",
+                            description = "Số trang, bắt đầu từ 0"),
+                    @Parameter(name = "size", in = ParameterIn.QUERY, example = "20")})
+    @ApiErrorDoc(status = 400)
+    @ApiErrorDoc(status = 403)
+    @GetMapping("/shift-requests")
+    @PreAuthorize(ShiftAssignmentController.BRANCH_MANAGER)
+    public ApiResponse<PageResponse<ShiftRequestResponse>> listBranch(
+            @RequestParam(required = false) ShiftRequestStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(shiftRequests.listBranchShiftRequests(status, page, size),
+                "Yêu cầu nghỉ / đổi ca của chi nhánh");
+    }
+
+    /** workforce-v1 #13. */
+    @Operation(operationId = "approveShiftRequest", tags = "Shift requests", summary = "Duyệt yêu cầu",
+            description = "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. "
+                + "Chuyển trạng thái: PENDING → APPROVED (Yêu cầu#3); Phân ca#3 hoặc #5. Cùng một transaction: yêu cầu → "
+                + "`APPROVED` (Yêu cầu#3) và phân ca → `ON_LEAVE` (Phân ca#3, `LEAVE`) hoặc đổi sang ca đích (Phân ca#5, "
+                + "`SWAP`); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08).",
+            parameters = {@Parameter(name = "shiftRequestId", in = ParameterIn.PATH, example = "15")})
+    @ApiErrorDoc(status = 400, description = "`BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích đã bắt đầu, ngừng dùng "
+            + "hoặc chồng giờ")
+    @ApiErrorDoc(status = 403, description = "`ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "`INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard "
+            + "400, A11)")
+    @PostMapping("/shift-requests/{shiftRequestId}/approve")
+    @PreAuthorize(ShiftAssignmentController.BRANCH_MANAGER)
+    public ApiResponse<ShiftRequestResponse> approve(@PathVariable Long shiftRequestId) {
+        return ApiResponse.ok(shiftRequests.approveShiftRequest(shiftRequestId), "Đã duyệt yêu cầu");
+    }
+
+    /** workforce-v1 #14. */
+    @Operation(operationId = "rejectShiftRequest", tags = "Shift requests", summary = "Từ chối yêu cầu",
+            description = "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. "
+                + "Chuyển trạng thái: PENDING → REJECTED (Yêu cầu#4). Chỉ đổi yêu cầu → `REJECTED` (Yêu cầu#4); phân "
+                + "ca giữ nguyên. Thông báo ghi outbox cùng transaction (BR-NS-08).",
+            parameters = {@Parameter(name = "shiftRequestId", in = ParameterIn.PATH, example = "15")})
+    @ApiErrorDoc(status = 400, description = "`VALIDATION_FAILED` thiếu lý do từ chối (`BR-NS-06`)")
+    @ApiErrorDoc(status = 403, description = "`ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác")
+    @ApiErrorDoc(status = 404)
+    @ApiErrorDoc(status = 409, description = "`INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard "
+            + "400, A11)")
+    @PostMapping("/shift-requests/{shiftRequestId}/reject")
+    @PreAuthorize(ShiftAssignmentController.BRANCH_MANAGER)
+    public ApiResponse<ShiftRequestResponse> reject(@PathVariable Long shiftRequestId,
+            @Valid @RequestBody RejectShiftRequestRequest request) {
+        return ApiResponse.ok(shiftRequests.rejectShiftRequest(shiftRequestId, request), "Đã từ chối yêu cầu");
     }
 
     /** workforce-v1 #11. */
