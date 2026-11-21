@@ -305,7 +305,8 @@ public class ShiftAssignmentService {
         return responses;
     }
 
-    private static String describe(List<OverlappingShift> overlaps) {
+    /** Dùng chung với {@code ShiftRequestService} (SWAP chồng giờ, cùng định nghĩa chồng giờ của #5). */
+    static String describe(List<OverlappingShift> overlaps) {
         return overlaps.stream()
                 .map(o -> o.getShiftName() + " (" + o.getStartTime().format(HOUR_MINUTE) + "–"
                         + o.getEndTime().format(HOUR_MINUTE) + ")")

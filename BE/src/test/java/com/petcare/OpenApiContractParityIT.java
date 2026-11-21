@@ -138,6 +138,7 @@ class OpenApiContractParityIT {
         // + 3 workforce #1–3 (GET / POST / PATCH /shift-definitions, ca làm việc, T58 bước 2, docs/adr/0138).
         // + 2 workforce #4–5 (GET / POST /shift-assignments, lịch phân ca và phân ca hộ, T58 bước 3, docs/adr/0138).
         // + 2 workforce #6, #8 (POST /shift-assignments/{id}/cancel, GET /me/shift-assignments, T58 bước 4, docs/adr/0138).
+        // + 3 workforce #9–11 (POST / GET /me/shift-requests, POST /me/shift-requests/{id}/withdraw, yêu cầu nghỉ / đổi ca của nhân viên, T59 bước 1, docs/adr/0138).
         // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V56, docs/adr/0122, 0131): content còn 21.
         assertThat(documentedOps())
 <<<<<<< HEAD
@@ -148,6 +149,7 @@ class OpenApiContractParityIT {
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + workforce đã cài")
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
                 .hasSize(203);
 >>>>>>> a4b69193 (feat: T58: CRUD ca làm việc (workforce-v1 #1–3, ADR-0138, D070))
 =======
@@ -156,6 +158,9 @@ class OpenApiContractParityIT {
 =======
                 .hasSize(207);
 >>>>>>> 9cb2a85c (feat: T58: hủy phân ca và lịch làm việc của tôi (workforce-v1 #6, #8, ADR-0138, D071, D072))
+=======
+                .hasSize(210);
+>>>>>>> 30e5d236 (feat: T59: yêu cầu nghỉ / đổi ca của nhân viên (workforce-v1 #9–11, ADR-0138, D074))
     }
 
     @Test

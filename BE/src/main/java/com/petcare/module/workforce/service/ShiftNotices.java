@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Map;
 import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
 import com.petcare.module.identity.api.NotificationTemplateCode;
+import com.petcare.module.workforce.entity.ShiftRequestType;
 
 /**
  * Dựng yêu cầu thông báo của module workforce (BR-NS-08, docs/adr/0138 bước 4): chỉ <b>dựng</b>, không gọi
@@ -51,6 +53,34 @@ final class ShiftNotices {
             mail.put("ten_nhan_vien", staffName);
             requests.add(new NotificationRequest(NotificationTemplateCode.SHIFT_ASSIGNMENT_CANCELLED, Channel.EMAIL,
                     null, email, mail, null));
+        }
+        return List.copyOf(requests);
+    }
+
+    /**
+     * Yêu cầu nghỉ / đổi ca mới (BR-NS-08, workforce-v1 #9): mỗi quản lý nhận một {@code SHIFT_REQUEST_SUBMITTED_APP}
+     * (chỉ IN_APP: mẫu V40 không có bản EMAIL cho quản lý). {@code loai_yeu_cau} đọc được trong cả tiêu đề lẫn nội dung
+     * ("Yêu cầu nghỉ ca làm việc mới", "… gửi yêu cầu đổi ca Ca sáng …"); {@code switch} không có {@code default} nên
+     * thêm giá trị enum là biên dịch lỗi. Mẫu không có biến ca đích nên thông báo không nêu ca đích. Danh sách người nhận
+     * rỗng thì trả rỗng (bên gọi không {@code enqueue} gì và ghi cảnh báo).
+     */
+    static List<NotificationRequest> submitted(Collection<Long> managerIds, String requesterName,
+            ShiftRequestType type, String shiftName, LocalDate workDate, String branchName, String reason) {
+        String kind = switch (type) {
+            case LEAVE -> "nghỉ";
+            case SWAP -> "đổi";
+        };
+        List<NotificationRequest> requests = new ArrayList<>(managerIds.size());
+        for (Long managerId : managerIds) {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("ten_nhan_vien", requesterName);
+            payload.put("loai_yeu_cau", kind);
+            payload.put("ten_ca", shiftName);
+            payload.put("ngay_lam", workDate.format(DATE));
+            payload.put("chi_nhanh", branchName);
+            payload.put("ly_do", reason);
+            requests.add(new NotificationRequest(NotificationTemplateCode.SHIFT_REQUEST_SUBMITTED_APP, Channel.IN_APP,
+                    managerId, null, payload, null));
         }
         return List.copyOf(requests);
     }

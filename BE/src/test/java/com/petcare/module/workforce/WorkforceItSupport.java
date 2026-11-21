@@ -69,6 +69,18 @@ public class WorkforceItSupport {
                 "REJECTED".equals(status) ? "Ghi chú" : null, pending ? null : OffsetDateTime.now());
     }
 
+    /** Yêu cầu {@code SWAP} sang {@code targetDefinitionId} ở trạng thái {@code status}; cột quyết định điền đúng CHECK. */
+    public long swapRequest(long assignmentId, long requesterId, long targetDefinitionId, String status,
+            Long decidedBy) {
+        boolean pending = "PENDING".equals(status);
+        return jdbc.queryForObject("""
+                INSERT INTO shift_requests (assignment_id, requester_id, request_type, target_shift_definition_id,
+                                            reason, status, decided_by, decision_note, closed_at)
+                VALUES (?, ?, 'SWAP', ?, 'Đổi ca', ?, ?, ?, ?) RETURNING id""", Long.class, assignmentId, requesterId,
+                targetDefinitionId, status, "APPROVED".equals(status) ? decidedBy : null,
+                "REJECTED".equals(status) ? "Ghi chú" : null, pending ? null : OffsetDateTime.now());
+    }
+
     public void cleanUp() {
         for (long branch : branches) {
             jdbc.update("""

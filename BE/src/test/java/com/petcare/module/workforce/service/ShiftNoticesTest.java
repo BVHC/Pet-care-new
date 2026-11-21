@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
 import com.petcare.module.identity.api.NotificationTemplateCode;
+import com.petcare.module.workforce.entity.ShiftRequestType;
 
 /**
  * {@link ShiftNotices} (docs/adr/0138 bước 4): khóa payload khớp {@code required_vars} / {@code allowed_vars} của mẫu
@@ -77,6 +78,46 @@ class ShiftNoticesTest {
             assertThat(request.payload().values()).doesNotContainNull();
             assertThat(request.payload().values()).allSatisfy(value -> assertThat(value.toString()).isNotBlank());
         }
+    }
+
+    // ---------------------------------------------------------------- yêu cầu nghỉ / đổi ca mới (#9, bước 6)
+
+    /** {@code required_vars} = {@code allowed_vars} của SHIFT_REQUEST_SUBMITTED_APP (V40:46-52). */
+    private static final Set<String> SUBMITTED_VARS = Set.of("ten_nhan_vien", "loai_yeu_cau", "ten_ca", "ngay_lam",
+            "chi_nhanh", "ly_do");
+
+    @Test
+    void submittedBuildsOneInAppNoticePerManagerWithExactlyTheTemplateVariables() {
+        List<NotificationRequest> requests = submitted(List.of(90L, 91L), ShiftRequestType.LEAVE);
+
+        assertThat(requests).hasSize(2);
+        assertThat(requests).extracting(NotificationRequest::recipientAccountId).containsExactly(90L, 91L);
+        for (NotificationRequest request : requests) {
+            assertThat(request.templateCode()).isEqualTo(NotificationTemplateCode.SHIFT_REQUEST_SUBMITTED_APP);
+            assertThat(request.channel()).isEqualTo(Channel.IN_APP);
+            assertThat(request.recipientEmail()).isNull();
+            assertThat(request.payload().keySet()).containsExactlyInAnyOrderElementsOf(SUBMITTED_VARS);
+            assertThat(request.payload().values()).allSatisfy(value -> assertThat(value.toString()).isNotBlank());
+        }
+    }
+
+    @Test
+    void submittedSaysNghiForALeaveAndDoiForASwapAndFormatsTheDateLikeTheOtherNotices() {
+        assertThat(submitted(List.of(90L), ShiftRequestType.LEAVE).get(0).payload())
+                .containsEntry("loai_yeu_cau", "nghỉ").containsEntry("ngay_lam", "05/12/2026")
+                .containsEntry("ten_nhan_vien", "Nguyễn Văn An").containsEntry("ten_ca", "Ca sáng")
+                .containsEntry("chi_nhanh", "Chi nhánh Quận 1").containsEntry("ly_do", "Việc gia đình");
+        assertThat(submitted(List.of(90L), ShiftRequestType.SWAP).get(0).payload()).containsEntry("loai_yeu_cau", "đổi");
+    }
+
+    @Test
+    void submittedForNoManagerBuildsNothing() {
+        assertThat(submitted(List.of(), ShiftRequestType.LEAVE)).isEmpty();
+    }
+
+    private static List<NotificationRequest> submitted(List<Long> managers, ShiftRequestType type) {
+        return ShiftNotices.submitted(managers, "Nguyễn Văn An", type, "Ca sáng", LocalDate.of(2026, 12, 5),
+                "Chi nhánh Quận 1", "Việc gia đình");
     }
 
     private static List<NotificationRequest> cancelled(String email) {
