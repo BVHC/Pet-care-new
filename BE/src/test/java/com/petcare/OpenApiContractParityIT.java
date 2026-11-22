@@ -56,7 +56,11 @@ class OpenApiContractParityIT {
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
             "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml", "report-v1.yaml",
+<<<<<<< HEAD
             "ai-v1.yaml", "fees-v1.yaml", "shop-v1.yaml");
+=======
+            "ai-v1.yaml", "workforce-v1.yaml");
+>>>>>>> a4b69193 (feat: T58: CRUD ca làm việc (workforce-v1 #1–3, ADR-0138, D070))
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -118,6 +122,7 @@ class OpenApiContractParityIT {
         // + 1 ai #1 (POST /public/ai/chat, T77b, docs/adr/0141)
         // + 2 ai #2, #3 (POST /me/ai/chat, GET /me/ai/pets/{petId}/vaccination-summary, T77c, docs/adr/0142)
         // + 3 ai #4, #12, #13 (GET /me/ai/pets/{petId}/recommendations, GET và PUT /ai/item-profiles, T78, docs/adr/0133)
+<<<<<<< HEAD
         // + 1 ai #14 (POST /ai/documents/import, nạp tài liệu từ file, T89, docs/adr/0134)
         // + 2 fees #1–2 (task 115, docs/adr/0140)
         // + 4 shop cart (task 116, docs/adr/0143)
@@ -128,6 +133,49 @@ class OpenApiContractParityIT {
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop đã cài")
                 .hasSize(220);
+=======
+        // + 1 ai #14 (POST /ai/documents/import, nạp tài liệu từ file, T89, docs/adr/0134).
+        // + 3 workforce #1–3 (GET / POST / PATCH /shift-definitions, ca làm việc, T58 bước 2, docs/adr/0138).
+        // + 2 workforce #4–5 (GET / POST /shift-assignments, lịch phân ca và phân ca hộ, T58 bước 3, docs/adr/0138).
+        // + 2 workforce #6, #8 (POST /shift-assignments/{id}/cancel, GET /me/shift-assignments, T58 bước 4, docs/adr/0138).
+        // + 3 workforce #9–11 (POST / GET /me/shift-requests, POST /me/shift-requests/{id}/withdraw, yêu cầu nghỉ / đổi ca của nhân viên, T59 bước 1, docs/adr/0138).
+        // + 1 workforce #7 (POST /shift-assignments/{id}/absent, ghi nhận vắng đột xuất, T59 bước 2, docs/adr/0138).
+        // + 1 workforce #12 (GET /shift-requests, danh sách yêu cầu của chi nhánh, T59 bước 3, docs/adr/0138).
+        // + 1 workforce #14 (POST /shift-requests/{id}/reject, quản lý từ chối yêu cầu, T59 bước 4, docs/adr/0139).
+        // + 1 workforce #13 (POST /shift-requests/{id}/approve, quản lý duyệt yêu cầu nghỉ; SWAP còn placeholder, N3-S5a, docs/adr/0139).
+        // + 1 workforce #17 (GET /me/shift-registrations/{weekStart}, đăng ký ca của tôi trong tuần, N3-S6, docs/adr/0138).
+        // + 1 workforce #15 (PUT /me/shift-registrations/{weekStart}, đăng ký ca theo tuần, N3-S7, docs/adr/0138).
+        // + 1 workforce #16 (GET /shift-weekly-summaries, thống kê số ca mỗi nhân viên trong tuần, N3-S8, docs/adr/0138).
+        // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V56, docs/adr/0122, 0131): content còn 21.
+        assertThat(documentedOps())
+<<<<<<< HEAD
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai đã cài")
+                .hasSize(200);
+>>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
+=======
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + workforce đã cài")
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+<<<<<<< HEAD
+                .hasSize(203);
+>>>>>>> a4b69193 (feat: T58: CRUD ca làm việc (workforce-v1 #1–3, ADR-0138, D070))
+=======
+                .hasSize(205);
+>>>>>>> 7988f3c1 (feat: T58: phân ca hộ và lịch ca chi nhánh (workforce-v1 #4–5, ADR-0138))
+=======
+                .hasSize(207);
+>>>>>>> 9cb2a85c (feat: T58: hủy phân ca và lịch làm việc của tôi (workforce-v1 #6, #8, ADR-0138, D071, D072))
+=======
+                .hasSize(210);
+>>>>>>> 30e5d236 (feat: T59: yêu cầu nghỉ / đổi ca của nhân viên (workforce-v1 #9–11, ADR-0138, D074))
+=======
+                .hasSize(215);
+>>>>>>> 59313c40 (feat: T59: hoàn tất yêu cầu nghỉ / đổi ca của quản lý và đọc đăng ký tuần (workforce-v1 #7, #12–14, #17, ADR-0138, ADR-0139, D074, D076))
+=======
+                .hasSize(217);
+>>>>>>> b0c9c2e9 (feat: T59: đăng ký ca theo tuần và thống kê tuần của quản lý (workforce-v1 #15, #16, ADR-0138, D062, D077))
     }
 
     @Test

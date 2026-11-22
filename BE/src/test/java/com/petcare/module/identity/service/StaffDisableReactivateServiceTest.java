@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
@@ -31,6 +32,7 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -45,6 +47,7 @@ import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.identity.api.Role;
+import com.petcare.module.identity.api.StaffLeftBranchEvent;
 import com.petcare.module.identity.dto.ReactivateStaffRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.entity.Account;
@@ -108,9 +111,10 @@ class StaffDisableReactivateServiceTest {
     private final BranchApi branchLocks = mock(BranchApi.class);
     private final VisitQueryApi visitQueries = mock(VisitQueryApi.class);
     private final CashierShiftQueryApi cashierShifts = mock(CashierShiftQueryApi.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final StaffAccountService service = new StaffAccountService(accounts, staffProfiles,
             new AccountTransitionHandler(), new StaffHierarchyPolicy(), branchScope, branches, sessions, notifications,
-            audit, mapper, presence, branchLocks, visitQueries, cashierShifts);
+            audit, mapper, presence, branchLocks, visitQueries, cashierShifts, events);
 
     @BeforeEach
     void setUp() {
@@ -138,7 +142,8 @@ class StaffDisableReactivateServiceTest {
         StaffResponse response = service.disableStaff(TARGET);
 
         assertThat(response).isEqualTo(mapper.toResponse(after, false));
-        InOrder order = inOrder(staffProfiles, branchLocks, accounts, visitQueries, cashierShifts, sessions, audit);
+        InOrder order = inOrder(staffProfiles, branchLocks, accounts, visitQueries, cashierShifts, sessions, audit,
+                events);
         order.verify(staffProfiles).findStaffRow(TARGET);
         order.verify(branchLocks).lockForStaffChange(Set.of(ACTIVE_BRANCH));
         order.verify(accounts).findByIdForUpdate(TARGET);
@@ -148,7 +153,10 @@ class StaffDisableReactivateServiceTest {
         order.verify(sessions).revokeAll(TARGET);
         order.verify(audit).record(any());
         order.verify(staffProfiles).flush();
+        // BR-NS-09: sự kiện phát SAU flush (vi phạm ràng buộc của identity nổ trước workforce), TRƯỚC khi dựng response
+        order.verify(events).publishEvent(new StaffLeftBranchEvent(TARGET, ACTIVE_BRANCH));
         order.verify(staffProfiles).findStaffDetail(TARGET);
+        verifyNoMoreInteractions(events);
         assertThat(target.account().getStatus()).isEqualTo(AccountStatus.DISABLED);
         assertThat(target.profile().getBranchId()).isEqualTo(ACTIVE_BRANCH);
 
@@ -175,6 +183,8 @@ class StaffDisableReactivateServiceTest {
         verify(sessions).revokeAll(TARGET);
         verify(staffProfiles, never()).countActiveBranchManagers(anyLong());
         verifyNoInteractions(visitQueries, cashierShifts);
+        // Không có chi nhánh cũ để rời: không phát sự kiện (workforce không có gì để hủy)
+        verifyNoInteractions(events);
     }
 
     @Test
@@ -186,6 +196,20 @@ class StaffDisableReactivateServiceTest {
         service.disableStaff(TARGET);
 
         assertThat(target.account().getStatus()).isEqualTo(AccountStatus.DISABLED);
+        // Chi nhánh trong sự kiện là của hồ sơ đã khóa, không phải của người gọi hay của request
+        verify(events).publishEvent(new StaffLeftBranchEvent(TARGET, ACTIVE_BRANCH));
+    }
+
+    /** Kích hoạt lại không khôi phục phân ca đã hủy và không phải "rời chi nhánh": không phát (BR-NS-09, lịch sử giữ nguyên). */
+    @Test
+    void reactivatingNeverPublishesStaffLeftBranch() {
+        Target target = target(Role.VET, AccountStatus.DISABLED, ACTIVE_BRANCH);
+        givenDetail(AccountStatus.ACTIVE, OTHER_ACTIVE_BRANCH);
+
+        service.reactivateStaff(TARGET, new ReactivateStaffRequest(OTHER_ACTIVE_BRANCH), PASSWORD);
+
+        assertThat(target.account().getStatus()).isEqualTo(AccountStatus.ACTIVE);
+        verifyNoInteractions(events);
     }
 
     /** BR-QT-12: kể cả người đã DISABLED đang bị khóa — 400 đứng trước 409 (00-method L70). */
@@ -598,7 +622,8 @@ class StaffDisableReactivateServiceTest {
         verify(staffProfiles, never()).flush();
         verify(staffProfiles, never()).save(any());
         verify(accounts, never()).save(any());
-        verifyNoInteractions(audit, sessions, notifications);
+        // Mọi nhánh lỗi dừng trước điểm phát: không có sự kiện nào rời identity
+        verifyNoInteractions(audit, sessions, notifications, events);
     }
 
     private static void assertRule(ThrowingCallable call, String ruleId, String message) {

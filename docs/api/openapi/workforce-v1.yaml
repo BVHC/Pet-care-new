@@ -25,7 +25,7 @@ paths:
     get:
       tags: ["Shift definitions"]
       summary: "Danh sách ca làm việc của chi nhánh"
-      description: "UC34 · BR-NS-01. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không phân trang. `activeOnly` vắng = false (cả ca ngừng dùng). Sắp theo `startTime` tăng dần."
+      description: "UC34, UC35, UC36 · BR-NS-01. Actor: A05, A06–A08. Quyền: BRANCH_MANAGER của chi nhánh; A06–A08 của chi nhánh mình (chỉ đọc). Chuyển trạng thái: —. Không phân trang. BRANCH_MANAGER: `activeOnly` vắng = false (cả ca ngừng dùng). A06–A08 chỉ nhận ca đang dùng, `activeOnly` bị bỏ qua (A10); nhân viên cần danh sách này để điền `items` của `PUT` đăng ký tuần và chọn ca đích của `SWAP`. Sắp theo `startTime` tăng dần."
       operationId: listShiftDefinitions
       security:
         - bearerAuth: []
@@ -98,11 +98,17 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` hai yêu cầu cùng tạo / đổi tên thành một tên trùng nhau cùng lúc (ràng buộc tên duy nhất): tải lại và thử lại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/shift-definitions/{shiftDefinitionId}":
     patch:
       tags: ["Shift definitions"]
       summary: "Sửa / ngừng dùng ca làm việc"
-      description: "UC34 · BR-NS-01, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Chỉ các trường có trong body được đổi."
+      description: "UC34 · BR-NS-01, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Chỉ các trường có trong body được đổi; body không có trường nào là lỗi. `active = true` bật lại ca đã ngừng dùng (A10)."
       operationId: updateShiftDefinition
       security:
         - bearerAuth: []
@@ -131,7 +137,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-NS-01` tên trùng · sửa giờ khi ca đã có phân ca · ngừng dùng khi ca còn phân ca `SCHEDULED` từ hôm nay"
+          description: "`BR-NS-01` tên trùng · giờ bắt đầu không nhỏ hơn giờ kết thúc · sửa giờ khi ca đã có phân ca · ngừng dùng khi ca còn phân ca `SCHEDULED` từ hôm nay; `VALIDATION_FAILED` body không có trường nào · sai kiểu / quá dài"
           content:
             "application/json":
               schema:
@@ -139,14 +145,24 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED_SCOPE_MISMATCH` ca thuộc chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` hai yêu cầu cùng tạo / đổi tên thành một tên trùng nhau cùng lúc (ràng buộc tên duy nhất): tải lại và thử lại"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/shift-assignments":
     get:
       tags: ["Shift assignments"]
       summary: "Lịch phân ca của chi nhánh"
-      description: "UC34 · BR-NS-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Sắp `workDate`, `startTime` tăng dần, trùng thì `shiftAssignmentId` tăng dần."
+      description: "UC34 · BR-NS-03. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Sắp `workDate`, `startTime` tăng dần, trùng thì `shiftAssignmentId` tăng dần. Chi nhánh đông nhân viên có thể vượt một trang (`size` tối đa 100): màn lịch tuần gọi thêm trang. Luôn là chi nhánh của người gọi; `staffId` của chi nhánh khác cho trang rỗng."
       operationId: listShiftAssignments
       security:
         - bearerAuth: []
@@ -202,7 +218,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`from` / `to` thiếu hoặc `to` < `from` hoặc khoảng quá 62 ngày (`BR-NS-03`)"
+          description: "`from` / `to` thiếu hoặc sai kiểu (`MALFORMED_REQUEST`) · `to` < `from` hoặc khoảng quá 62 ngày tính cả hai đầu (`BR-NS-03`, A9)"
           content:
             "application/json":
               schema:
@@ -214,7 +230,7 @@ paths:
     post:
       tags: ["Shift assignments"]
       summary: "Phân ca cho nhân viên"
-      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → SCHEDULED (Phân ca#1). Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không kiểm định mức tuần (BR-NS-12). Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`."
+      description: "UC34 · BR-NS-02, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: — → SCHEDULED (Phân ca#1). Phân hộ (đường dự phòng, ví dụ nhân viên mới vào giữa tuần): tạo phân ca `source = MANAGER`. Không thông báo cho nhân viên (BR-NS-08 không liệt kê phân hộ). Không kiểm định mức tuần (BR-NS-12). Chồng giờ là hai khoảng giờ giao nhau thật sự; hai ca liền kề (kết thúc = bắt đầu) không chồng. Nhân viên tự đăng ký dùng `PUT /me/shift-registrations/{weekStart}`."
       operationId: createShiftAssignment
       security:
         - bearerAuth: []
@@ -251,7 +267,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: "Không tìm thấy nhân viên hoặc ca trong chi nhánh"
+          description: "Không tìm thấy nhân viên hoặc ca trong chi nhánh (id của chi nhánh khác và id không tồn tại trả cùng một dạng lỗi)"
           content:
             "application/json":
               schema:
@@ -260,7 +276,7 @@ paths:
     post:
       tags: ["Shift assignments"]
       summary: "Hủy phân ca"
-      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: SCHEDULED → CANCELLED (Phân ca#2). Yêu cầu `PENDING` của phân ca tự `REJECTED` (Yêu cầu#5)."
+      description: "UC34 · BR-NS-02, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: SCHEDULED → CANCELLED (Phân ca#2). Cùng một transaction: phân ca → `CANCELLED` và yêu cầu `PENDING` của nó → `REJECTED` (Yêu cầu#5; `decision_note` do hệ thống ghi, `decided_by` rỗng); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08)."
       operationId: cancelShiftAssignment
       security:
         - bearerAuth: []
@@ -271,7 +287,7 @@ paths:
         content:
           "application/json":
             schema:
-              $ref: "#/components/schemas/ReasonRequest"
+              $ref: "#/components/schemas/ShiftReasonRequest"
       responses:
         "200":
           description: OK
@@ -297,11 +313,15 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Phân ca không còn `SCHEDULED`"
+          description: "`INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11)"
           content:
             "application/json":
               schema:
@@ -310,7 +330,7 @@ paths:
     post:
       tags: ["Shift assignments"]
       summary: "Ghi nhận vắng đột xuất"
-      description: "UC38 · BR-NS-07, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: SCHEDULED → ABSENT (Phân ca#4). Yêu cầu `PENDING` của phân ca tự `REJECTED` (Yêu cầu#5)."
+      description: "UC38 · BR-NS-07, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: SCHEDULED → ABSENT (Phân ca#4). Cùng một transaction: phân ca → `ABSENT` và yêu cầu `PENDING` của nó → `REJECTED` (Yêu cầu#5; `decision_note` do hệ thống ghi, `decided_by` rỗng); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08)."
       operationId: recordShiftAbsence
       security:
         - bearerAuth: []
@@ -321,7 +341,7 @@ paths:
         content:
           "application/json":
             schema:
-              $ref: "#/components/schemas/ReasonRequest"
+              $ref: "#/components/schemas/ShiftReasonRequest"
       responses:
         "200":
           description: OK
@@ -347,11 +367,15 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED_SCOPE_MISMATCH` phân ca thuộc chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Phân ca không còn `SCHEDULED`"
+          description: "`INVALID_STATE_TRANSITION` phân ca không còn `SCHEDULED` (kiểm trước guard 400, A11)"
           content:
             "application/json":
               schema:
@@ -436,7 +460,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-NS-04` phân ca không `SCHEDULED` · còn dưới 24 giờ **[CFG]** · đã có yêu cầu chờ · `SWAP` thiếu / thừa ca đích, ca đích khác ngày hoặc chồng giờ"
+          description: "`BR-NS-04` phân ca không `SCHEDULED` · còn dưới 24 giờ **[CFG]** · đã có yêu cầu chờ · `SWAP` thiếu ca đích, `LEAVE` có ca đích · ca đích không đang dùng hoặc trùng ca hiện tại · ca đích chồng giờ phân ca *khác* của người đó trong ngày (không tính chính ca đang đổi); `VALIDATION_FAILED` thiếu / quá dài `reason`"
           content:
             "application/json":
               schema:
@@ -446,7 +470,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          description: "Không tìm thấy phân ca của mình"
+          description: "Không tìm thấy phân ca của mình · ca đích không có trong chi nhánh"
           content:
             "application/json":
               schema:
@@ -501,7 +525,7 @@ paths:
     post:
       tags: ["Shift requests"]
       summary: "Rút yêu cầu"
-      description: "UC36 · BR-NS-05. Actor: A06–A08. Quyền: Người gửi. Chuyển trạng thái: PENDING → WITHDRAWN (Yêu cầu#2)."
+      description: "UC36 · BR-NS-05. Actor: A06–A08. Quyền: Người gửi. Chuyển trạng thái: PENDING → WITHDRAWN (Yêu cầu#2). Chỉ đổi yêu cầu → `WITHDRAWN` (Yêu cầu#2); phân ca giữ nguyên."
       operationId: withdrawShiftRequest
       security:
         - bearerAuth: []
@@ -530,9 +554,13 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Yêu cầu không có hoặc không phải của mình (kể cả yêu cầu của đồng nghiệp cùng chi nhánh)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "Yêu cầu không còn `PENDING`"
+          description: "`INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING`"
           content:
             "application/json":
               schema:
@@ -588,7 +616,7 @@ paths:
     post:
       tags: ["Shift requests"]
       summary: "Duyệt yêu cầu"
-      description: "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: PENDING → APPROVED (Yêu cầu#3); Phân ca#3 hoặc #5."
+      description: "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: PENDING → APPROVED (Yêu cầu#3); Phân ca#3 hoặc #5. Cùng một transaction: yêu cầu → `APPROVED` (Yêu cầu#3) và phân ca → `ON_LEAVE` (Phân ca#3, `LEAVE`) hoặc đổi sang ca đích (Phân ca#5, `SWAP`); một bước lỗi thì rollback cả hai. Thông báo ghi outbox cùng transaction (BR-NS-08)."
       operationId: approveShiftRequest
       security:
         - bearerAuth: []
@@ -611,7 +639,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích ngừng dùng hoặc chồng giờ"
+          description: "`BR-NS-06` phân ca đã bắt đầu · `SWAP`: ca đích đã bắt đầu, ngừng dùng hoặc chồng giờ"
           content:
             "application/json":
               schema:
@@ -619,11 +647,15 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Yêu cầu không còn `PENDING`"
+          description: "`INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard 400, A11)"
           content:
             "application/json":
               schema:
@@ -632,7 +664,7 @@ paths:
     post:
       tags: ["Shift requests"]
       summary: "Từ chối yêu cầu"
-      description: "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: PENDING → REJECTED (Yêu cầu#4)."
+      description: "UC37 · BR-NS-06, BR-NS-08, BR-NS-10. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: PENDING → REJECTED (Yêu cầu#4). Chỉ đổi yêu cầu → `REJECTED` (Yêu cầu#4); phân ca giữ nguyên. Thông báo ghi outbox cùng transaction (BR-NS-08)."
       operationId: rejectShiftRequest
       security:
         - bearerAuth: []
@@ -669,11 +701,15 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED_SCOPE_MISMATCH` yêu cầu thuộc chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Yêu cầu không còn `PENDING`"
+          description: "`INVALID_STATE_TRANSITION` yêu cầu không còn `PENDING` (kiểm trước guard 400, A11)"
           content:
             "application/json":
               schema:
@@ -682,7 +718,7 @@ paths:
     put:
       tags: ["Shift registrations"]
       summary: "Đăng ký ca theo tuần (thay cả tuần)"
-      description: "UC35 · BR-NS-11, BR-NS-12. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển trạng thái: — → SCHEDULED (Phân ca#1) · SCHEDULED → CANCELLED (Phân ca#7). Idempotent: gửi lại cùng nội dung không đổi kết quả. Mục thiếu so với phân ca `SELF` hiện có bị hủy (lý do hệ thống ghi 'Nhân viên sửa đăng ký tuần'), mục mới được tạo, mục giữ nguyên không đổi; phân ca `MANAGER` không bị đụng nhưng được tính vào định mức. Không thông báo, không audit (BR-NS-08, 10). Yêu cầu `PENDING` của phân ca bị hủy tự `REJECTED` (Yêu cầu#5). Xem lịch dùng `GET /me/shift-assignments`."
+      description: "UC35 · BR-NS-11, BR-NS-12. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển trạng thái: — → SCHEDULED (Phân ca#1) · SCHEDULED → CANCELLED (Phân ca#7). Idempotent: gửi lại cùng nội dung không đổi kết quả. Mục thiếu so với phân ca `SELF` hiện có bị hủy (lý do hệ thống ghi 'Nhân viên sửa đăng ký tuần'), mục mới được tạo, mục giữ nguyên không đổi; phân ca `MANAGER` không bị đụng nhưng được tính vào định mức. Không thông báo, không audit (BR-NS-08, 10). Yêu cầu `PENDING` của phân ca bị hủy tự `REJECTED` (Yêu cầu#5). Mọi mục tạo / hủy và Yêu cầu#5 nằm trong **một** transaction. Response chỉ gồm phân ca `SCHEDULED` của tuần (A12). Đọc đăng ký hiện có và định mức trước khi sửa: `GET /me/shift-registrations/{weekStart}`; xem lịch đầy đủ (cả nghỉ / vắng / hủy): `GET /me/shift-assignments`. `items` tối đa 100 phần tử, vượt thì 400 `VALIDATION_FAILED` (Q4, ADR-0137 mục 12)."
       operationId: putMyShiftRegistration
       security:
         - bearerAuth: []
@@ -711,7 +747,52 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức. Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi"
+          description: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items`, phần tử hoặc trường `workDate` / `shiftDefinitionId` null, hoặc quá 100 phần tử · `MALFORMED_REQUEST` body hoặc `weekStart` sai kiểu, sai định dạng"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: "`ACCESS_DENIED` sai vai trò · `ACCESS_DENIED_SCOPE_MISMATCH` tài khoản không còn là nhân viên A06–A08 đang hoạt động của một chi nhánh (đọc lại dưới khóa)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` trùng cặp ca – ngày do thao tác song song"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+    get:
+      tags: ["Shift registrations"]
+      summary: "Đăng ký ca của tôi trong tuần"
+      description: "UC35 · BR-NS-11, BR-NS-12. Actor: A06–A08. Quyền: Nhân viên A06–A08, chỉ dữ liệu của mình. Chuyển trạng thái: —. Chỉ đọc, dùng để nạp phân ca hiện có và `requiredShifts` (định mức [CFG]) trước khi gọi `PUT` thay cả tuần. Không kiểm hạn đăng ký: xem được cả tuần đã qua hạn. Cùng dạng response với `PUT`: chỉ phân ca `SCHEDULED` của tuần (A12), cả `SELF` và `MANAGER`; tuần chưa có phân ca trả `assignments` rỗng, `shiftCount` = 0. `editableUntil` là 00:00 thứ Hai của `weekStart` theo giờ Việt Nam, trả dạng UTC."
+      operationId: getMyShiftRegistration
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/WeekStart"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/ShiftRegistration"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`BR-NS-11` `weekStart` không phải thứ Hai hoặc năm ngoài 2000–2100 · `weekStart` sai định dạng (`MALFORMED_REQUEST`)"
           content:
             "application/json":
               schema:
@@ -720,17 +801,11 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-        "409":
-          description: "`CONCURRENCY_CONFLICT` trùng cặp ca – ngày do thao tác song song"
-          content:
-            "application/json":
-              schema:
-                $ref: "#/components/schemas/Error"
   "/shift-weekly-summaries":
     get:
       tags: ["Shift registrations"]
       summary: "Thống kê số ca mỗi nhân viên trong tuần"
-      description: "UC34 · BR-NS-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` của chi nhánh, kể cả người chưa có ca nào. Sắp `staffName` tăng dần. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12)."
+      description: "UC34 · BR-NS-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` và không bị khóa của chi nhánh người gọi, kể cả người chưa có ca nào. Sắp `staffName` tăng dần (trùng tên thì `staffId`). `shiftCount` đếm phân ca `SCHEDULED` của tuần, cả `SELF` và `MANAGER`, ở mọi chi nhánh (khớp `GET /me/shift-registrations/{weekStart}`); `ON_LEAVE`, `ABSENT`, `CANCELLED` không đếm. `requiredShifts` là [CFG] `workforce.weekly_required_shifts` hiện hành; `meetsRequirement` = `shiftCount` ≥ `requiredShifts`. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12)."
       operationId: listShiftWeeklySummaries
       security:
         - bearerAuth: []
@@ -760,7 +835,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`weekStart` thiếu hoặc không phải thứ Hai (`BR-NS-12`)"
+          description: "`BR-NS-11` `weekStart` không phải thứ Hai hoặc năm ngoài 2000–2100 · `weekStart` thiếu hoặc sai định dạng (`MALFORMED_REQUEST`)"
           content:
             "application/json":
               schema:
@@ -768,7 +843,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED` sai vai trò · `ACCESS_DENIED_SCOPE_MISMATCH` người gọi không thuộc chi nhánh nào"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -822,7 +901,7 @@ components:
       schema:
         type: string
         format: date
-      description: "Thứ Hai của tuần (giờ Việt Nam), dạng yyyy-MM-dd"
+      description: "Thứ Hai của tuần (giờ Việt Nam), dạng yyyy-MM-dd, năm 2000–2100"
   schemas:
     Error:
       type: object
@@ -980,7 +1059,7 @@ components:
         workDate:
           type: string
           format: date
-    ReasonRequest:
+    ShiftReasonRequest:
       type: object
       required: [reason]
       properties:
@@ -1008,9 +1087,10 @@ components:
           items:
             $ref: "#/components/schemas/ShiftRegistrationItem"
           description: "Toàn bộ (ngày, ca) nhân viên muốn có trong tuần; thay thế các phân ca SELF hiện có (BR-NS-11)"
+          maxItems: 100
     ShiftRegistration:
       type: object
-      required: [weekStart, requiredShifts, shiftCount, assignments]
+      required: [weekStart, requiredShifts, shiftCount, editableUntil, assignments]
       properties:
         weekStart:
           type: string
@@ -1022,12 +1102,16 @@ components:
         shiftCount:
           type: integer
           format: int32
-          description: "Số phân ca SCHEDULED của tuần, cả SELF và MANAGER"
+          description: "Số phân ca SCHEDULED của tuần, cả SELF và MANAGER; luôn bằng số phần tử của assignments"
+        editableUntil:
+          type: string
+          format: date-time
+          description: "Hạn sửa đăng ký tuần: 00:00 thứ Hai của weekStart theo giờ Việt Nam, trả dạng UTC (BR-NS-11); GET không kiểm hạn, chỉ báo để client hiển thị"
         assignments:
           type: array
           items:
             $ref: "#/components/schemas/ShiftAssignment"
-          description: "Mọi phân ca của nhân viên trong tuần sau khi lưu"
+          description: "Phân ca SCHEDULED của nhân viên trong tuần (SELF và MANAGER, phân biệt bằng source), sắp theo ngày rồi giờ bắt đầu; tuần chưa có phân ca là mảng rỗng"
     ShiftWeeklySummary:
       type: object
       required: [staffId, staffName, role, shiftCount, requiredShifts, meetsRequirement]
@@ -1076,6 +1160,7 @@ components:
           format: date
         currentShiftName:
           type: string
+          description: "Tên ca của phân ca lúc gửi yêu cầu (với SWAP đã duyệt là ca trước khi đổi)"
         type:
           $ref: "#/components/schemas/ShiftRequestType"
         targetShiftDefinitionId:

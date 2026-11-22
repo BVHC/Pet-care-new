@@ -75,9 +75,10 @@ public enum ConfigKey {
     FEEDBACK_MAX_PER_DAY("feedback.max_per_day", INT),                     // BR-DG-01
     FEEDBACK_RETENTION_DAYS("feedback.retention_days", INT),               // BR-DG-05 (V51, docs/adr/0122)
 
-    // NS — nhân sự (docs/02 BR-NS-04, BR-NS-07, docs/adr/0113; V40)
+    // NS — nhân sự (docs/02 BR-NS-04, BR-NS-07, BR-NS-12, docs/adr/0113, 0123; V40, V55)
     WORKFORCE_REQUEST_LEAD_HOURS("workforce.request_lead_hours", INT),     // BR-NS-04
     WORKFORCE_ABSENCE_REPORT_MAX_DAYS("workforce.absence_report_max_days", INT), // BR-NS-07
+    WORKFORCE_WEEKLY_REQUIRED_SHIFTS("workforce.weekly_required_shifts", INT), // BR-NS-12 (V55, docs/adr/0123)
 
     // AI (docs/07 §4.6, docs/adr/0110; V35). Tên có ba đoạn <nhóm>.<mục>.<tên>
     AI_CHAT_MAX_QUESTION_CHARS("ai.chat.max_question_chars", INT),                       // BR-AI-08

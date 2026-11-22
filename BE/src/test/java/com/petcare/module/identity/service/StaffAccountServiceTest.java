@@ -24,6 +24,7 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.branch.api.BranchApi;
@@ -83,9 +84,10 @@ class StaffAccountServiceTest {
     private final BranchApi branchLocks = mock(BranchApi.class);
     private final VisitQueryApi visitQueries = mock(VisitQueryApi.class);
     private final CashierShiftQueryApi cashierShifts = mock(CashierShiftQueryApi.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final StaffAccountService service = new StaffAccountService(accounts, staffProfiles,
             new AccountTransitionHandler(), new StaffHierarchyPolicy(), branchScope, branches, sessions, notifications,
-            audit, mapper, presence, branchLocks, visitQueries, cashierShifts);
+            audit, mapper, presence, branchLocks, visitQueries, cashierShifts, events);
 
     @BeforeEach
     void setUp() {

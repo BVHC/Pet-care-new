@@ -1212,8 +1212,8 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | shift_definition_id | BIGINT | NN, FK→shift_definitions | Đổi khi duyệt `SWAP` (Phân ca#5) |
 | work_date | DATE | NN | Theo giờ Việt Nam |
 | status | VARCHAR(30) | NN, CHECK | `SCHEDULED`, `ON_LEAVE`, `ABSENT`, `CANCELLED` |
-| source | VARCHAR(30) | NN, CHECK | `SELF` (nhân viên tự đăng ký, BR-NS-11), `MANAGER` (quản lý phân hộ, BR-NS-02). *(ADR-0123; V36 chưa có cột, thêm ở migration của T58)* |
-| reason | VARCHAR(300) | ? | Lý do vắng đột xuất hoặc hủy |
+| source | VARCHAR(30) | NN, CHECK | `SELF` (nhân viên tự đăng ký, BR-NS-11), `MANAGER` (quản lý phân hộ, BR-NS-02). *(ADR-0123; V36 chưa có cột, thêm ở V55 của T58)* |
+| reason | VARCHAR(300) | ? | Lý do vắng đột xuất, hủy, hoặc nghỉ được duyệt (`ON_LEAVE`: chép lý do của yêu cầu nghỉ, ADR-0138) |
 | status_changed_by | BIGINT | ?, FK→accounts | Người xử lý; NULL nếu hệ thống chuyển |
 | status_changed_at | TIMESTAMPTZ | ? | Lúc rời `SCHEDULED` |
 
@@ -1232,6 +1232,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | assignment_id | BIGINT | NN, FK→shift_assignments | |
 | requester_id | BIGINT | NN, FK→accounts | Người gửi = nhân viên của phân ca (BR-NS-04) |
 | request_type | VARCHAR(30) | NN, CHECK | `LEAVE`, `SWAP` |
+| current_shift_definition_id | BIGINT | NN, FK→shift_definitions | Ca của phân ca **lúc gửi** (ảnh chụp; V60, ADR-0139): duyệt `SWAP` đổi ca của phân ca nên yêu cầu tự giữ ca gốc |
 | target_shift_definition_id | BIGINT | ?, FK→shift_definitions | Ca đích của `SWAP` |
 | reason | VARCHAR(300) | NN | Lý do của nhân viên |
 | status | VARCHAR(30) | NN, CHECK | `PENDING`, `APPROVED`, `REJECTED`, `WITHDRAWN` |
@@ -1240,6 +1241,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | closed_at | TIMESTAMPTZ | ? | Lúc rời `PENDING` |
 
 - `CHECK ((request_type = 'SWAP') = (target_shift_definition_id IS NOT NULL))`
+- `CHECK (target_shift_definition_id IS NULL OR target_shift_definition_id <> current_shift_definition_id)` (V60)
 - `CHECK ((status = 'PENDING') = (closed_at IS NULL))`
 - `CHECK (status <> 'REJECTED' OR decision_note IS NOT NULL)`; `CHECK (status <> 'APPROVED' OR decided_by IS NOT NULL)`
 - `UNIQUE (assignment_id) WHERE status = 'PENDING'` — tối đa 1 yêu cầu chờ mỗi phân ca (BR-NS-04)
