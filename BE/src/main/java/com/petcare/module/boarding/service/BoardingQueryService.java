@@ -56,6 +56,12 @@ public class BoardingQueryService implements BoardingQueryApi {
     }
 
     @Override
+    public Optional<StaySummary> findCurrentStay(Long petId) {
+        return jdbc.query(STAY_SELECT + " WHERE b.pet_id = ? AND b.status IN ('CHECKED_IN', 'OVERDUE')",
+                (rs, n) -> toSummary(rs), petId).stream().findFirst();
+    }
+
+    @Override
     public boolean isPetInStay(Long petId) {
         return Boolean.TRUE.equals(jdbc.queryForObject("""
                 SELECT EXISTS (SELECT 1 FROM boarding_bookings WHERE pet_id = ? AND status IN ('CHECKED_IN', 'OVERDUE'))

@@ -758,7 +758,7 @@ paths:
     get:
       tags: [Public]
       summary: "Dịch vụ công khai"
-      description: "UC15 · BR-CK-01, 02, BR-SP-04. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE."
+      description: "UC15 · BR-CK-01, 02, BR-SP-04. Actor: A01, A02. Quyền: Public. Chuyển trạng thái: —. Chỉ dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE; không gồm loại `INPATIENT` (BR-LT-18)."
       operationId: listPublicServices
       security: []
       parameters:
@@ -1007,8 +1007,8 @@ components:
       description: "Khám/Tiêm, Thẩm mỹ, Lưu trú (05 §0)"
     MedicalType:
       type: string
-      enum: [EXAM, VACCINE]
-      description: "Chỉ nhóm MEDICAL (BR-SP-06)"
+      enum: [EXAM, VACCINE, INPATIENT]
+      description: "Chỉ nhóm MEDICAL (BR-SP-06). `INPATIENT`: dịch vụ nội trú, giá theo ngày, chỉ dùng qua nhập viện (BR-LT-18, ADR-0148)"
     ProductType:
       type: string
       enum: [GOODS, DRUG, VACCINE]

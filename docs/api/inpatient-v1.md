@@ -35,7 +35,7 @@
 
 | Thao tác | Actor | Quyền / phạm vi | Chuyển trạng thái | Idempotent | Ghi chú |
 |---|---|---|---|---|---|
-| Nhập viện | A07 | VET của chi nhánh | — → ADMITTED (Nhập viện#1) | — | Từ lưu trú: tạo Visit điều trị gán VET gọi (Order không có dòng tự sinh), đặt chỗ giữ nguyên `CHECKED_IN`, thú ở nguyên chuồng (BR-LT-13, BR-LT-17). |
+| Nhập viện | A07 | VET của chi nhánh | — → ADMITTED (Nhập viện#1) | — | Từ lưu trú: tạo Visit điều trị gán VET gọi (Order không có dòng tự sinh), đặt chỗ giữ nguyên trạng thái (`CHECKED_IN` hoặc `OVERDUE`), thú ở nguyên chuồng (BR-LT-13, BR-LT-17). Visit điều trị là Visit#7, Order#14; chuồng điều trị là Chuồng#6, #7 (03). |
 | Ca nội trú của chi nhánh | A06, A07, A08 | A06 chỉ xem; A07; A08 theo BR-LT-15 | — | — | `status` vắng = `ADMITTED`. Nhập viện sớm nhất trước. |
 | Chi tiết ca nội trú | A06, A07, A08 | A06 chỉ xem; A07; A08 theo BR-LT-15 | — | — | — |
 | Xuất viện | A07 | VET của chi nhánh | ADMITTED → DISCHARGED (Nhập viện#2) | — | Thêm **một** dòng dịch vụ nội trú (số lượng = ngày xuất − ngày nhập + 1, đơn giá = `unitPrice` đã chốt) vào Order của Visit trong cùng transaction; giải phóng chuồng nếu được cấp riêng. `DECEASED` không tự đánh dấu thú mất (BR-LT-14). |
@@ -43,7 +43,7 @@
 | Y lệnh của ca nội trú | A06, A07, A08 | A06 chỉ xem; A07; A08 theo BR-LT-15 | — | — | Không phân trang. Sắp `scheduledAt` tăng dần, trùng thì `orderId` tăng dần. |
 | Đánh dấu đã thực hiện y lệnh | A07, A08 | A07; A08 chỉ việc không phải thuốc | ORDERED → DONE (Y lệnh nội trú#2) | — | — |
 | Hủy y lệnh | A07 | VET của chi nhánh | ORDERED → CANCELLED (Y lệnh nội trú#3) | — | — |
-| Ghi chỉ số theo dõi | A07, A08 | A07, A08 của chi nhánh | — | — | Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET phụ trách và khách theo cách của nhật ký lưu trú (BR-LT-12); cân nặng ghi vào hồ sơ cân (BR-KH-04). |
+| Ghi chỉ số theo dõi | A07, A08 | A07, A08 của chi nhánh | — | — | Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET phụ trách (IN_APP) và khách bằng cặp mẫu `INPATIENT_OBSERVATION_ABNORMAL` / `_APP` (BR-LT-16, ADR-0148); cân nặng ghi vào hồ sơ cân (BR-KH-04). |
 | Chỉ số theo dõi của ca nội trú | A06, A07, A08 | A06 chỉ xem; A07; A08 theo BR-LT-15 | — | — | Mới nhất trước. |
 
 ---
@@ -52,7 +52,7 @@
 
 ### Admissions
 
-- **`POST /admissions`** — Nhập viện. Request `AdmitRequest`. Response `201` `Admission`. Lỗi: `400` `BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thiếu `kennelId` khi nhập từ khám / có `kennelId` khi nhập từ lưu trú · thú đã mất · `401` · `403` · `404` Không tìm thấy Visit / đặt chỗ / dịch vụ / chuồng · `409` Thú đã có ca nội trú `ADMITTED`.
+- **`POST /admissions`** — Nhập viện. Request `AdmitRequest`. Response `201` `Admission`. Lỗi: `400` `BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` / `OVERDUE` · thú đang lưu trú mà nhập từ khám · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thiếu `kennelId` khi nhập từ khám / có `kennelId` khi nhập từ lưu trú · thú đã mất · `401` · `403` · `404` Không tìm thấy Visit / đặt chỗ / dịch vụ / chuồng · `409` Thú đã có ca nội trú `ADMITTED`.
 - **`GET /admissions`** — Ca nội trú của chi nhánh. Query: `status?`, `page?`, `size?`. Response `200` trang `AdmissionSummary`. Lỗi: `400` · `401` · `403`.
 - **`GET /admissions/{admissionId}`** — Chi tiết ca nội trú. Response `200` `Admission`. Lỗi: `400` · `401` · `403` · `404`.
 - **`POST /admissions/{admissionId}/discharge`** — Xuất viện. Request `DischargeRequest`. Response `200` `Admission`. Lỗi: `400` `BR-LT-14` còn y lệnh `ORDERED` · thiếu tóm tắt · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25).
@@ -105,6 +105,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A1 | Thêm loại `INPATIENT` vào thuộc tính loại của dịch vụ nhóm Khám / Tiêm, giá theo ngày | BR-LT-13; BE-2 xác nhận |
 | A2 | Nội trú dùng chung chuồng với lưu trú: nhập từ lưu trú giữ chuồng cũ, nhập từ khám lấy chuồng `AVAILABLE` | UC55 không nêu chuồng riêng; ADR-0124 |
 | A3 | Phí lưu trú theo đêm và phí nội trú theo ngày tính riêng (thú bị tính cả hai cho những ngày điều trị) | BR-LT-17; ADR-0124 |
+| A4 | Chưa có khoảng lâm sàng cho nhiệt độ, nhịp tim, nhịp thở: 400 "giá trị ngoài khoảng" của #9 hiện chỉ là ngoài giới hạn lưu trữ của cột (nhiệt độ `NUMERIC(4,1)`, nhịp 1…32 767) và cân nặng ≤ 0 (BR-KH-04); PO chốt khoảng thì mới chặn theo lâm sàng | BR-LT-16; ADR-0149 mục 8 |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

@@ -25,6 +25,7 @@ m = Module(
         ("A1", "Thêm loại `INPATIENT` vào thuộc tính loại của dịch vụ nhóm Khám / Tiêm, giá theo ngày", "BR-LT-13; BE-2 xác nhận"),
         ("A2", "Nội trú dùng chung chuồng với lưu trú: nhập từ lưu trú giữ chuồng cũ, nhập từ khám lấy chuồng `AVAILABLE`", "UC55 không nêu chuồng riêng; ADR-0124"),
         ("A3", "Phí lưu trú theo đêm và phí nội trú theo ngày tính riêng (thú bị tính cả hai cho những ngày điều trị)", "BR-LT-17; ADR-0124"),
+        ("A4", "Chưa có khoảng lâm sàng cho nhiệt độ, nhịp tim, nhịp thở: 400 \"giá trị ngoài khoảng\" của #9 hiện chỉ là ngoài giới hạn lưu trữ của cột (nhiệt độ `NUMERIC(4,1)`, nhịp 1…32 767) và cân nặng ≤ 0 (BR-KH-04); PO chốt khoảng thì mới chặn theo lâm sàng", "BR-LT-16; ADR-0149 mục 8"),
     ],
     questions=[
         ("Q1", "BE-2 xác nhận `INPATIENT` trong `services.medical_type`, dùng chung chuồng, `VisitOrderApi.addServiceLine(visitId, serviceId, quantity, unitPrice, actorId)` và guard kết thúc lưu trú", "Đã xác nhận bằng lời qua Mạnh 2026-11-09, chưa có văn bản của BE-2", "09 §C; ADR-0124"),
@@ -40,7 +41,7 @@ m.schema("AdmissionOrderType", None, enum=["MEDICATION", "FEEDING", "MONITORING"
 m.schema("AdmissionOrderStatus", None, enum=["ORDERED", "DONE", "CANCELLED"], desc="03 #25")
 m.schema("Appetite", None, enum=["NORMAL", "REDUCED", "NONE"])
 m.schema("AdmitRequest", {
-    "visitId": "int64?|Nhập viện từ lượt khám `IN_PROGRESS` của mình", "boardingBookingId": "int64?|Hoặc chuyển từ đặt chỗ `CHECKED_IN` (BR-LT-13). Đúng một trong hai",
+    "visitId": "int64?|Nhập viện từ lượt khám `IN_PROGRESS` của mình", "boardingBookingId": "int64?|Hoặc chuyển từ đặt chỗ `CHECKED_IN` hoặc `OVERDUE` (BR-LT-13). Đúng một trong hai",
     "serviceId": "int64|Dịch vụ loại `INPATIENT`", "kennelId": "int64?|Chuồng `AVAILABLE`. Bắt buộc với `visitId`; **cấm** với `boardingBookingId` (thú ở nguyên chuồng của đặt chỗ, BR-LT-13)",
 })
 m.schema("Admission", {
@@ -84,9 +85,9 @@ TRANS = "`INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25)
 
 m.op("post", "/admissions", "admitPet", "Nhập viện", "Admissions", "UC55", "BR-LT-13", "A07", VET,
      "— → ADMITTED (Nhập viện#1)", body="AdmitRequest", resp="Admission", status=201, errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thiếu `kennelId` khi nhập từ khám / có `kennelId` khi nhập từ lưu trú · thú đã mất",
+     err_desc={400: "`BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` / `OVERDUE` · thú đang lưu trú mà nhập từ khám · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thiếu `kennelId` khi nhập từ khám / có `kennelId` khi nhập từ lưu trú · thú đã mất",
                404: "Không tìm thấy Visit / đặt chỗ / dịch vụ / chuồng", 409: "Thú đã có ca nội trú `ADMITTED`"},
-     notes="Từ lưu trú: tạo Visit điều trị gán VET gọi (Order không có dòng tự sinh), đặt chỗ giữ nguyên `CHECKED_IN`, thú ở nguyên chuồng (BR-LT-13, BR-LT-17).")
+     notes="Từ lưu trú: tạo Visit điều trị gán VET gọi (Order không có dòng tự sinh), đặt chỗ giữ nguyên trạng thái (`CHECKED_IN` hoặc `OVERDUE`), thú ở nguyên chuồng (BR-LT-13, BR-LT-17). Visit điều trị là Visit#7, Order#14; chuồng điều trị là Chuồng#6, #7 (03).")
 m.op("get", "/admissions", "listAdmissions", "Ca nội trú của chi nhánh", "Admissions", "UC55", "BR-LT-17", "A06, A07, A08",
      ALL, resp="AdmissionSummary", page=True, query=["status=enum:ADMITTED,DISCHARGED", "page", "size"],
      errors=(400, 401, 403), notes="`status` vắng = `ADMITTED`. Nhập viện sớm nhất trước.")
@@ -119,7 +120,7 @@ m.op("post", "/admissions/{admissionId}/observations", "createObservation", "Ghi
      "BR-LT-16", "A07, A08", "A07, A08 của chi nhánh", body="CreateObservationRequest", resp="Observation", status=201,
      path_params=["AdmissionId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-LT-16` không có chỉ số hay ghi chú nào · giá trị ngoài khoảng", 409: "Ca không `ADMITTED`"},
-     notes="Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET phụ trách và khách theo cách của nhật ký lưu trú (BR-LT-12); cân nặng ghi vào hồ sơ cân (BR-KH-04).")
+     notes="Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET phụ trách (IN_APP) và khách bằng cặp mẫu `INPATIENT_OBSERVATION_ABNORMAL` / `_APP` (BR-LT-16, ADR-0148); cân nặng ghi vào hồ sơ cân (BR-KH-04).")
 m.op("get", "/admissions/{admissionId}/observations", "listObservations", "Chỉ số theo dõi của ca nội trú", "Observations",
      "UC56", "BR-LT-16", "A06, A07, A08", ALL, resp="Observation", page=True, path_params=["AdmissionId"],
      query=["page", "size"], errors=(400, 401, 403, 404), notes="Mới nhất trước.")

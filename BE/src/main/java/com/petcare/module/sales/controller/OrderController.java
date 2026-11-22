@@ -144,7 +144,7 @@ public class OrderController {
             parameters = {
                     @Parameter(name = "orderId", in = ParameterIn.PATH, example = "101")})
     @ApiErrorDoc(status = 400, description = "`BR-SP-01` thuốc kê đơn (dùng kê đơn) · sản phẩm / dịch vụ ngừng kinh "
-            + "doanh")
+            + "doanh · `BR-LT-18` dịch vụ loại `INPATIENT` (chỉ sinh lúc xuất viện)")
     @ApiErrorDoc(status = 403, description = "`BR-BH-02` vai trò không được thêm loại dòng này")
     @ApiErrorDoc(status = 404)
     @ApiErrorDoc(status = 409, description = "Order không OPEN (khi PENDING chỉ lễ tân thêm GOODS) / đã PAID, "
@@ -165,7 +165,7 @@ public class OrderController {
             parameters = {
                     @Parameter(name = "orderId", in = ParameterIn.PATH, example = "101"),
                     @Parameter(name = "lineId", in = ParameterIn.PATH, example = "31")})
-    @ApiErrorDoc(status = 400)
+    @ApiErrorDoc(status = 400, description = "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT`")
     @ApiErrorDoc(status = 403, description = "`BR-BH-02` không phải chủ dòng, hoặc dòng dịch vụ / thuốc đã khóa khi "
             + "PENDING")
     @ApiErrorDoc(status = 404)

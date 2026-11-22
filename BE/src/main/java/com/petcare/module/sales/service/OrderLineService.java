@@ -10,6 +10,7 @@ import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi.ProductInfo;
 import com.petcare.module.catalog.api.CatalogQueryApi.ServiceInfo;
 import com.petcare.module.catalog.api.ProductType;
+import com.petcare.module.catalog.api.MedicalType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.inventory.api.StockQueryApi;
 import com.petcare.module.sales.api.OrderSource;
@@ -151,6 +152,11 @@ public class OrderLineService {
     }
 
     private void requireServiceUsable(SalesOrder order, ServiceInfo service) {
+        // BR-LT-18 (docs/adr/0148): dòng dịch vụ nội trú chỉ sinh một lần lúc xuất viện (VisitOrderApi.addServiceLine).
+        if (service.medicalType() == MedicalType.INPATIENT) {
+            throw new BusinessRuleViolationException("BR-LT-18",
+                    "Dịch vụ nội trú chỉ được tính khi xuất viện, không thêm hoặc đổi thành dòng tay");
+        }
         if (!service.active()) {
             throw new InvalidOrderLineRequestException("Dịch vụ #" + service.serviceId() + " đã ngừng kinh doanh");
         }

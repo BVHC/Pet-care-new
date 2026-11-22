@@ -404,6 +404,23 @@ class OrderLineServiceTest {
         assertThat(order.getLines()).isEmpty();
     }
 
+    /** BR-LT-18 (docs/adr/0148): dòng nội trú chỉ sinh lúc xuất viện, VET không tự thêm tay được. */
+    @Test
+    void inpatientServiceIsRefusedAsAManualLine() {
+        actingAs("VET");
+        SalesOrder order = visitOrder(OrderStatus.OPEN);
+        visitAssignedTo(ME);
+        when(catalog.findService(10L)).thenReturn(Optional.of(
+                new ServiceInfo(10L, "Nội trú", ServiceGroup.MEDICAL, MedicalType.INPATIENT, 300_000, true)));
+
+        assertThatThrownBy(() -> service.addLine(ORDER_ID, serviceReq()))
+                .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-18"));
+
+        assertThat(order.getLines()).isEmpty();
+        verify(branches, never()).isServiceEnabled(any(), any());
+    }
+
     // ---------------------------------------------------------------- sửa
 
     @Test
@@ -508,6 +525,23 @@ class OrderLineServiceTest {
         assertThat(auto.getDescription()).isEqualTo("Tiêm phòng");
         assertThat(auto.getUnitPrice()).isEqualTo(220_000);
         assertThat(order.getTotalAmount()).isEqualTo(220_000);
+    }
+
+    @Test
+    void autoServiceCannotBeReplacedByAnInpatientService() {
+        actingAs("VET");
+        SalesOrder order = visitOrder(OrderStatus.OPEN);
+        OrderLine auto = existing(order, 1, OrderLineType.SERVICE, ME, true, 1, 150_000);
+        when(catalog.findService(12L)).thenReturn(Optional.of(
+                new ServiceInfo(12L, "Nội trú", ServiceGroup.MEDICAL, MedicalType.INPATIENT, 300_000, true)));
+
+        assertThatThrownBy(() -> service.updateLine(ORDER_ID, 1L, new UpdateOrderLineRequest(null, 12L)))
+                .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-18"));
+
+        assertThat(auto.getServiceId()).as("dòng giữ nguyên dịch vụ và giá").isEqualTo(10L);
+        assertThat(auto.getUnitPrice()).isEqualTo(150_000);
+        assertThat(order.getTotalAmount()).isEqualTo(150_000);
     }
 
     @Test

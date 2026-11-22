@@ -108,7 +108,7 @@ Tạm ngừng (`SUSPENDED`) và đóng cửa (`CLOSED`, UC13) là máy trạng t
 | Trạng thái | Loại | Ý nghĩa | Ràng buộc khi ở trạng thái này |
 |---|---|---|---|
 | `WAITING` | INIT | Trong hàng đợi, chưa gọi | `assignee_id` có thể trống; lễ tân gán / gán lại tự do; hủy được |
-| `IN_PROGRESS` | MID | Nhân viên phụ trách đã gọi lượt | Không hủy được. Chỉ gán lại khi người phụ trách không còn `ACTIVE`. VET ghi bệnh án, kê đơn, tiêm |
+| `IN_PROGRESS` | MID (INIT với Visit điều trị, Visit#7) | Nhân viên phụ trách đã gọi lượt | Không hủy được. Chỉ gán lại khi người phụ trách không còn `ACTIVE`. VET ghi bệnh án, kê đơn, tiêm |
 | `COMPLETED` | FINAL | Hoàn tất | Bệnh án khóa, chỉ thêm bản bổ sung (ghi audit) |
 | `CANCELLED` | FINAL | Hủy khi chưa gọi | — |
 
@@ -118,8 +118,9 @@ Tạm ngừng (`SUSPENDED`) và đóng cửa (`CLOSED`, UC13) là máy trạng t
 | 2 | `WAITING` → `WAITING` | Gán / gán lại nhân viên | A06 | Nhân viên `ACTIVE` của chi nhánh, đúng chức vụ (VET: Khám/Tiêm; CARETAKER: Thẩm mỹ) | Cảnh báo nếu offline, không chặn | BR-TN-05, 06, 08 · UC45 |
 | 3 | `WAITING` → `IN_PROGRESS` | Gọi lượt | A07, A08 | Lượt được gán cho chính người gọi | — | BR-TN-05 · UC46 |
 | 4 | `IN_PROGRESS` → `IN_PROGRESS` | Gán lại lượt đã gọi | A05 (A04 nếu chi nhánh không còn BRANCH_MANAGER `ACTIVE`) | Người phụ trách hiện tại không còn `ACTIVE`; người mới đúng chức vụ; có lý do | Bệnh án cũ giữ nguyên kèm tên người ghi; quyền xóa dòng Order của người cũ chuyển cho người mới. Ghi audit | BR-TN-08 · UC45 |
-| 5 | `IN_PROGRESS` → `COMPLETED` | Hoàn tất lượt | Nhân viên phụ trách | Có dịch vụ loại Khám: bắt buộc có chẩn đoán. Chỉ có dịch vụ loại Tiêm: có ≥ 1 mũi tiêm. Thẩm mỹ: không điều kiện thêm | Lịch hẹn → `COMPLETED` (nếu có). Order → `PENDING`. Bệnh án khóa | BR-KB-01, 02, BR-SP-06 · UC48, UC49, UC52 |
+| 5 | `IN_PROGRESS` → `COMPLETED` | Hoàn tất lượt | Nhân viên phụ trách | Có dịch vụ loại Khám: bắt buộc có chẩn đoán. Chỉ có dịch vụ loại Tiêm: có ≥ 1 mũi tiêm. Thẩm mỹ: không điều kiện thêm. Còn ca nội trú `ADMITTED` của Visit: không hoàn tất (409). Lượt chỉ có dịch vụ `INPATIENT` (Visit điều trị): không cần chẩn đoán hay mũi tiêm (BR-LT-14) | Lịch hẹn → `COMPLETED` (nếu có). Order → `PENDING`. Bệnh án khóa | BR-KB-01, 02, BR-SP-06, BR-LT-14 · UC48, UC49, UC52 |
 | 6 | `WAITING` → `CANCELLED` | Hủy lượt khách bỏ về | A06 | Lượt chưa được gọi | Order → `CANCELLED` (kèm dòng tự sinh). Lịch hẹn → `CANCELLED`, `late_cancel = false` | BR-TN-07 · UC45 |
+| 7 | — → `IN_PROGRESS` | Nhập viện từ lưu trú (Visit điều trị) | SYS ← Nhập viện#1 (đường b) | Thú có đặt chỗ lưu trú `CHECKED_IN` / `OVERDUE`; VET nhập viện được gán làm người phụ trách; không qua hàng đợi, không kiểm giờ mở cửa (thú đã ở phòng khám) | Order (nguồn Visit) → `OPEN` **không có dòng dịch vụ tự sinh** (Order#14); không có lịch hẹn | BR-LT-13, BR-LT-18 · UC55 |
 
 Sự kiện trong `IN_PROGRESS` không đổi trạng thái nhưng có hệ quả: ghi nhận mũi tiêm thì trừ kho vaccine ngay theo FEFO, sinh dòng Order vaccine, ghi ngày tái chủng và hủy nhắc / Care Task tái chủng của mũi cũ cùng loại vaccine (BR-KB-04, BR-TB-03); **xóa mũi tiêm ghi nhầm** thì hoàn kho vào đúng lô và xóa dòng Order vaccine trong cùng transaction (BR-KB-04); ghi ngày tái khám (BR-KB-06); kê đơn thiếu tồn thì VET chọn giảm số lượng hoặc **mua ngoài** (BR-KB-03).
 
@@ -145,6 +146,7 @@ Sự kiện trong `IN_PROGRESS` không đổi trạng thái nhưng có hệ qu�
 | 8 | `PENDING` → `PAID` | Thu tiền | A06 | Lễ tân có ca `OPEN` của chính mình; số tiền = tổng Order; tồn khả dụng đủ cho mọi dòng hàng, thuốc (bỏ qua vaccine). Thu gộp được nhiều Order của cùng khách, cùng chi nhánh | Trừ kho FEFO (ST06) cùng transaction với kiểm tra tồn; ghi giao dịch vào ca; ghi audit; được giao hàng | BR-TG-01…04, BR-BH-04, 06 · UC70 |
 | 9 | `PENDING` → `CANCELLED` (`BOARDING`) | Hủy phiên trả thú | A06 | Thú còn trong chuồng (đặt chỗ `CHECKED_IN`/`OVERDUE`); có lý do | Đặt chỗ giữ nguyên trạng thái, tiếp tục tính đêm. Ghi audit | BR-LT-09 · UC59 |
 | 10 | `PENDING` → `CANCELLED` | Hủy Order khách không thanh toán | A05 | Nguồn `VISIT` / `RETAIL`, hoặc `BOARDING` khi thú không còn trong chuồng; có lý do | Không đổi kho, bệnh án, lịch hẹn, lưu trú. Tính là thất thu (BR-BC-02). Ghi audit | BR-BH-05 · UC66 |
+| 14 | — → `OPEN` (`VISIT`) | Nhập viện từ lưu trú | SYS ← Visit#7 | — | Không có dòng dịch vụ tự sinh (ngoại lệ của Order#1); dòng dịch vụ nội trú chỉ được thêm một lần lúc xuất viện (Nhập viện#2, BR-LT-14) | BR-LT-13, BR-BH-01 · UC55 |
 
 Trong `PENDING`, thiếu tồn lúc thu: từ chối thu; dòng bán lẻ thì lễ tân xóa / giảm, dòng thuốc kê đơn thì chuyển sang mua ngoài (ghi audit). Không đổi trạng thái (BR-BH-04).
 
@@ -183,7 +185,7 @@ Trong `PENDING`, thiếu tồn lúc thu: từ chối thu; dòng bán lẻ thì l
 | `OCCUPIED` | MID | Đang có 1 thú | Tính vào sức chứa. Không chuyển bảo trì, không xóa |
 | `MAINTENANCE` | MID | Ngừng sử dụng | Không tính vào sức chứa |
 
-Chuồng **không được gán khi đặt chỗ**; chỉ gán lúc nhận thú (Đặt chỗ#3) và phải **đúng loại chuồng đã đặt**. Xóa chuồng chỉ khi không `OCCUPIED`.
+Chuồng **không được gán khi đặt chỗ**; chỉ gán lúc nhận thú (Đặt chỗ#3) và phải **đúng loại chuồng đã đặt**; ngoại lệ là chuồng điều trị khi nhập viện từ lượt khám (Chuồng#6), không kiểm loại. Xóa chuồng chỉ khi không `OCCUPIED`.
 
 | # | Từ → Sang | Sự kiện | Người kích hoạt | Điều kiện | Hệ quả | Nguồn |
 |---|---|---|---|---|---|---|
@@ -192,6 +194,8 @@ Chuồng **không được gán khi đặt chỗ**; chỉ gán lúc nhận thú 
 | 3 | `OCCUPIED` → `AVAILABLE` | Kết thúc lưu trú | SYS ← Đặt chỗ#10, #11 | — | — | BR-LT-09, 12 |
 | 4 | `AVAILABLE` → `MAINTENANCE` | Chuyển bảo trì | A05 | — | Giảm sức chứa. Nếu thiếu chỗ cho đặt chỗ đã có: cảnh báo kèm danh sách, không tự hủy | BR-LT-01 · UC54 |
 | 5 | `MAINTENANCE` → `AVAILABLE` | Hết bảo trì | A05 | — | Tăng sức chứa | BR-LT-01 · UC54 |
+| 6 | `AVAILABLE` → `OCCUPIED` | Nhập viện từ lượt khám (chuồng điều trị) | SYS ← Nhập viện#1 (đường a) | Chuồng `AVAILABLE` bất kỳ của chi nhánh; không kiểm loài, cân nặng hay sức chứa đặt chỗ | — | BR-LT-13 |
+| 7 | `OCCUPIED` → `AVAILABLE` | Xuất viện (chuồng điều trị) | SYS ← Nhập viện#2 (đường a) | — | — | BR-LT-14 |
 
 ## 8. Ca thu ngân
 `cashier_shifts.status` (+ `cashier_shifts.is_after_hours`) · TG · Tầng 1
@@ -303,6 +307,8 @@ Có hai loại ca, phân biệt bằng cờ `is_after_hours` đặt lúc mở ca
 |---|---|
 | Visit#1 Tiếp nhận | Lịch hẹn → `CHECKED_IN`; Order (`VISIT`) → `OPEN` |
 | Visit#5 Hoàn tất | Lịch hẹn → `COMPLETED`; Order → `PENDING`; bệnh án khóa |
+| Nhập viện#1 (`09` §C, ADR-0148) | Đường (a): chuồng điều trị → `OCCUPIED` (Chuồng#6). Đường (b): Visit điều trị → `IN_PROGRESS` (Visit#7) + Order (`VISIT`) → `OPEN` không dòng tự sinh (Order#14); đặt chỗ lưu trú giữ nguyên trạng thái |
+| Nhập viện#2 Xuất viện | Thêm một dòng dịch vụ nội trú vào Order (số ngày × `unit_price`); đường (a): chuồng → `AVAILABLE` (Chuồng#7) |
 | Visit#6 Hủy lượt | Lịch hẹn → `CANCELLED`; Order → `CANCELLED` |
 | Visit — ghi nhận mũi tiêm (`IN_PROGRESS`) | Trừ kho FEFO; dòng Order vaccine; Care Task tái chủng của mũi cũ cùng loại → `CANCELLED` |
 | Visit — xóa mũi tiêm ghi nhầm (`IN_PROGRESS`) | Hoàn kho đúng lô; xóa dòng Order vaccine |
