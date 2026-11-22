@@ -74,6 +74,8 @@ m.schema("CreateShiftAssignmentRequest", {"staffId": "int64", "shiftDefinitionId
 m.schema("ShiftReasonRequest", {"reason": "string:300"})
 m.schema("ShiftRegistrationItem", {"workDate": "date|Phải nằm trong tuần của đường dẫn", "shiftDefinitionId": "int64|Ca đang dùng của chi nhánh"})
 m.schema("PutShiftRegistrationRequest", {"items": "array:ref:ShiftRegistrationItem|Toàn bộ (ngày, ca) nhân viên muốn có trong tuần; thay thế các phân ca SELF hiện có (BR-NS-11)"})
+m.schemas["PutShiftRegistrationRequest"]["properties"]["items"]["maxItems"] = 100  # ADR-0137 mục 12, Q4
+m.schemas["PutShiftRegistrationRequest"]["properties"]["items"]["maxItems"] = 100  # ADR-0137 mục 12, Q4
 m.schema("ShiftRegistration", {
     "weekStart": "date", "requiredShifts": "int|[CFG] workforce.weekly_required_shifts (BR-NS-12)",
     "shiftCount": "int|Số phân ca SCHEDULED của tuần, cả SELF và MANAGER; luôn bằng số phần tử của assignments",
@@ -196,14 +198,16 @@ m.op("put", "/me/shift-registrations/{weekStart}", "putMyShiftRegistration", "Đ
      "Shift registrations", "UC35", "BR-NS-11, BR-NS-12", "A06–A08", STAFF,
      "— → SCHEDULED (Phân ca#1) · SCHEDULED → CANCELLED (Phân ca#7)", body="PutShiftRegistrationRequest",
      resp="ShiftRegistration", path_params=["WeekStart"], errors=(400, 401, 403, 409),
-     err_desc={400: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items`, sai kiểu hoặc quá 100 phần tử",
+     err_desc={400: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items`, phần tử hoặc trường `workDate` / `shiftDefinitionId` null, hoặc quá 100 phần tử · `MALFORMED_REQUEST` body hoặc `weekStart` sai kiểu, sai định dạng",
+               403: "`ACCESS_DENIED` sai vai trò · `ACCESS_DENIED_SCOPE_MISMATCH` tài khoản không còn là nhân viên A06–A08 đang hoạt động của một chi nhánh (đọc lại dưới khóa)",
                409: "`CONCURRENCY_CONFLICT` trùng cặp ca – ngày do thao tác song song"},
      notes="Idempotent: gửi lại cùng nội dung không đổi kết quả. Mục thiếu so với phân ca `SELF` hiện có bị hủy (lý do hệ thống ghi 'Nhân viên sửa đăng ký tuần'), mục mới được tạo, mục giữ nguyên không đổi; phân ca `MANAGER` không bị đụng nhưng được tính vào định mức. Không thông báo, không audit (BR-NS-08, 10). Yêu cầu `PENDING` của phân ca bị hủy tự `REJECTED` (Yêu cầu#5). Mọi mục tạo / hủy và Yêu cầu#5 nằm trong **một** transaction. Response chỉ gồm phân ca `SCHEDULED` của tuần (A12). Đọc đăng ký hiện có và định mức trước khi sửa: `GET /me/shift-registrations/{weekStart}`; xem lịch đầy đủ (cả nghỉ / vắng / hủy): `GET /me/shift-assignments`. `items` tối đa 100 phần tử, vượt thì 400 `VALIDATION_FAILED` (Q4, ADR-0137 mục 12).")
 m.op("get", "/shift-weekly-summaries", "listShiftWeeklySummaries", "Thống kê số ca mỗi nhân viên trong tuần",
      "Shift registrations", "UC34", "BR-NS-12", "A05", BM, resp="array:ShiftWeeklySummary", query=["weekStart!=date"],
      errors=(400, 401, 403),
-     err_desc={400: "`weekStart` thiếu hoặc không phải thứ Hai (`BR-NS-11`)"},
-     notes="Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` của chi nhánh, kể cả người chưa có ca nào. Sắp `staffName` tăng dần. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12).")
+     err_desc={400: "`BR-NS-11` `weekStart` không phải thứ Hai hoặc năm ngoài 2000–2100 · `weekStart` thiếu hoặc sai định dạng (`MALFORMED_REQUEST`)",
+               403: "`ACCESS_DENIED` sai vai trò · `ACCESS_DENIED_SCOPE_MISMATCH` người gọi không thuộc chi nhánh nào"},
+     notes="Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` và không bị khóa của chi nhánh người gọi, kể cả người chưa có ca nào. Sắp `staffName` tăng dần (trùng tên thì `staffId`). `shiftCount` đếm phân ca `SCHEDULED` của tuần, cả `SELF` và `MANAGER`, ở mọi chi nhánh (khớp `GET /me/shift-registrations/{weekStart}`); `ON_LEAVE`, `ABSENT`, `CANCELLED` không đếm. `requiredShifts` là [CFG] `workforce.weekly_required_shifts` hiện hành; `meetsRequirement` = `shiftCount` ≥ `requiredShifts`. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12).")
 m.op("get", "/me/shift-registrations/{weekStart}", "getMyShiftRegistration", "Đăng ký ca của tôi trong tuần",
      "Shift registrations", "UC35", "BR-NS-11, BR-NS-12", "A06–A08", STAFF, resp="ShiftRegistration",
      path_params=["WeekStart"], errors=(400, 401, 403),

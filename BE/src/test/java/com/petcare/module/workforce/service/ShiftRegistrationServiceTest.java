@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,14 +21,18 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.InOrder;
 
 import com.petcare.module.identity.api.ConfigKey;
+import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.workforce.dto.ShiftAssignmentResponse;
 import com.petcare.module.workforce.dto.ShiftRegistrationResponse;
 import com.petcare.module.workforce.entity.ShiftAssignment;
 import com.petcare.module.workforce.entity.ShiftAssignmentSource;
 import com.petcare.module.workforce.entity.ShiftAssignmentStatus;
+import com.petcare.module.workforce.fsm.ShiftAssignmentTransitionHandler;
 import com.petcare.module.workforce.mapper.ShiftRegistrationMapper;
 import com.petcare.module.workforce.repository.ShiftAssignmentRepository;
+import com.petcare.module.workforce.repository.ShiftDefinitionRepository;
+import com.petcare.module.workforce.repository.ShiftRequestRepository;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
@@ -49,8 +54,10 @@ class ShiftRegistrationServiceTest {
     private final ShiftAssignmentService shiftAssignments = mock(ShiftAssignmentService.class);
     private final SystemConfigApi configs = mock(SystemConfigApi.class);
     private final ShiftRegistrationMapper mapper = Mappers.getMapper(ShiftRegistrationMapper.class);
-    private final ShiftRegistrationService service = new ShiftRegistrationService(branchScope, assignments,
-            shiftAssignments, mapper, configs);
+    private final ShiftRegistrationService service = new ShiftRegistrationService(branchScope,
+            mock(StaffDirectoryApi.class), assignments, mock(ShiftDefinitionRepository.class),
+            mock(ShiftRequestRepository.class), shiftAssignments, new ShiftAssignmentTransitionHandler(), mapper,
+            configs, Clock.systemUTC());
 
     {
         when(branchScope.current()).thenReturn(principal);

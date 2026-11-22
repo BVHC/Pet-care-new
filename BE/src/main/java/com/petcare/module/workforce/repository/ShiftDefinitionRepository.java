@@ -1,5 +1,6 @@
 package com.petcare.module.workforce.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,6 +36,18 @@ public interface ShiftDefinitionRepository extends JpaRepository<ShiftDefinition
     @Lock(LockModeType.PESSIMISTIC_READ)
     @Query("SELECT d FROM ShiftDefinition d WHERE d.id = :id")
     Optional<ShiftDefinition> findByIdForShare(@Param("id") Long id);
+
+    /**
+     * {@code FOR SHARE} cho <b>nhiều</b> ca của <b>đúng một chi nhánh</b>, theo {@code id} tăng dần (thứ tự khóa cố định,
+     * ADR-0123 mục 8): đăng ký tuần #15 khóa mọi ca trong lô trước khi ghi phân ca. Lọc {@code branchId} nằm <b>trong
+     * câu</b> nên ca của chi nhánh khác (hay không tồn tại) không bị khóa và không có trong kết quả; bên gọi coi id thiếu
+     * là lỗi mục. Cùng loại khóa và cùng lý do với {@link #findByIdForShare} (xung đột với {@code FOR NO KEY UPDATE} của
+     * {@code PATCH} ca). Bên gọi không truyền tập rỗng ({@code IN ()} là SQL sai).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT d FROM ShiftDefinition d WHERE d.id IN :ids AND d.branchId = :branchId ORDER BY d.id ASC")
+    List<ShiftDefinition> lockForShareInBranch(@Param("ids") Collection<Long> ids, @Param("branchId") Long branchId);
 
     /**
      * Chi nhánh của ca, đọc không khóa và không nạp entity để phân quyền trước khi khóa (khuôn

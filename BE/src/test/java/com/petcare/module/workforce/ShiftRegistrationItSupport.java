@@ -33,6 +33,61 @@ abstract class ShiftRegistrationItSupport extends ShiftAssignmentItSupport {
         return LocalDate.of(year, 12, 31).with(TemporalAdjusters.lastInMonth(DayOfWeek.MONDAY));
     }
 
+    // ---------------------------------------------------------------- ghi #15 (docs/adr/0138, N3-S7)
+
+    /** Lý do hệ thống của Phân ca#7 và ghi chú của Yêu cầu#5 khi phân ca bị bỏ khỏi đăng ký tuần. */
+    protected static final String SELF_EDIT_REASON = "Nhân viên sửa đăng ký tuần";
+    protected static final String EDITED_NOTE = "Phân ca đã bị bỏ khi nhân viên sửa đăng ký tuần";
+
+    /** {@code PUT /me/shift-registrations/{weekStart}} với body JSON thô (dấu nháy đơn đổi sang nháy kép trong {@code call}). */
+    protected ResponseEntity<Map<String, Object>> put(String token, Object weekStart, String json) {
+        return call(HttpMethod.PUT, REGISTRATIONS + weekStart, token, json);
+    }
+
+    protected static String item(LocalDate day, long definitionId) {
+        return "{'workDate':'" + day + "','shiftDefinitionId':" + definitionId + "}";
+    }
+
+    protected static String itemsBody(String... items) {
+        return "{'items':[" + String.join(",", items) + "]}";
+    }
+
+    /** Mọi phân ca (mọi trạng thái, mọi tuần) của một nhân viên theo ngày, ca, id. */
+    protected List<Map<String, Object>> rowsOf(long staffId) {
+        return jdbc.queryForList("""
+                SELECT id, branch_id, shift_definition_id, work_date::text AS work_date, status, source, reason,
+                       status_changed_by, status_changed_at
+                FROM shift_assignments WHERE staff_id = ? ORDER BY work_date, shift_definition_id, id""", staffId);
+    }
+
+    protected List<Map<String, Object>> scheduledRowsOf(long staffId) {
+        return rowsOf(staffId).stream().filter(row -> "SCHEDULED".equals(row.get("status"))).toList();
+    }
+
+    /** {@code xmin} từng phân ca của một nhân viên (id → xmin): bằng nhau trước / sau nghĩa là không dòng nào bị ghi. */
+    protected Map<Long, String> xminsOf(long staffId) {
+        Map<Long, String> out = new java.util.TreeMap<>();
+        jdbc.queryForList("SELECT id, xmin::text AS x FROM shift_assignments WHERE staff_id = ?", staffId)
+                .forEach(row -> out.put(((Number) row.get("id")).longValue(), (String) row.get("x")));
+        return out;
+    }
+
+    /**
+     * {@link #footprint(long...)} gọi bằng tên khác: {@code footprint(a, b)} với hai {@code long} bị chọn nhầm sang
+     * {@code footprint(assignmentId, staffId)} của lớp cha (ném {@code EmptyResultDataAccessException}).
+     */
+    protected String trace(long... staffIds) {
+        return footprint(staffIds);
+    }
+
+    protected long totalAuditCount() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM audit_logs", Long.class);
+    }
+
+    protected long totalOutboxCount() {
+        return jdbc.queryForObject("SELECT COUNT(*) FROM notification_outbox", Long.class);
+    }
+
     protected ResponseEntity<Map<String, Object>> registration(String token, Object weekStart) {
         return call(HttpMethod.GET, REGISTRATIONS + weekStart, token);
     }

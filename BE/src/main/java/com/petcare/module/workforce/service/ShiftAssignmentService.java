@@ -104,7 +104,8 @@ public class ShiftAssignmentService {
     /** Ghi chú hệ thống của Yêu cầu#5 khi phân ca được ghi nhận vắng đột xuất (BR-NS-07; lý do thật nằm ở phân ca). */
     static final String PENDING_REQUEST_ABSENCE_NOTE = "Phân ca đã được ghi nhận vắng đột xuất";
 
-    private static final Set<Role> SCHEDULABLE_ROLES = Set.of(Role.RECEPTIONIST, Role.VET, Role.CARETAKER);
+    /** Vai trò có lịch làm việc (BR-NS-02); dùng chung với {@code ShiftRegistrationService} (#15 đọc lại dưới khóa). */
+    static final Set<Role> SCHEDULABLE_ROLES = Set.of(Role.RECEPTIONIST, Role.VET, Role.CARETAKER);
     private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm");
 
     private final BranchScope branchScope;

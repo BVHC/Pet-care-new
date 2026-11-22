@@ -57,7 +57,13 @@ class WorkforceControllerSecurityTest {
     @Test
     void everyShiftRegistrationHandlerCarriesExactlyTheContractRoles() {
         assertThat(roles(ShiftRegistrationController.class)).isEqualTo(Map.of(
-                "getMine", STAFF));
+                "getMine", STAFF,
+                "putMine", STAFF));
+    }
+
+    @Test
+    void theWeeklySummaryHandlerIsForTheBranchManagerOnly() {
+        assertThat(roles(ShiftWeeklySummaryController.class)).isEqualTo(Map.of("list", BRANCH_MANAGER));
     }
 
     @Test

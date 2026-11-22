@@ -77,6 +77,50 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
     List<ShiftAssignment> findScheduledInWeek(@Param("staffId") Long staffId, @Param("from") LocalDate from,
             @Param("to") LocalDate to);
 
+    /** Số phân ca {@code SCHEDULED} của một nhân viên trong một tuần (một dòng mỗi nhân viên có ít nhất một phân ca). */
+    interface StaffShiftCount {
+        Long getStaffId();
+
+        Long getShiftCount();
+    }
+
+    /**
+     * Thống kê tuần của quản lý (workforce-v1 #16): số phân ca {@code SCHEDULED} trong {@code [from, to]} của từng nhân
+     * viên trong {@code staffIds}, cả hai nguồn {@code SELF} và {@code MANAGER} và <b>mọi chi nhánh</b> (cùng cách đếm
+     * với {@link #findScheduledInWeek} của #17, nên số quản lý thấy bằng số nhân viên thấy). Nhân viên không có phân ca
+     * thì không có dòng (bên gọi điền 0). Một câu cho cả tập, đi qua {@code ix_shift_assignments_staff_date}; bên gọi
+     * không truyền tập rỗng ({@code IN ()} là SQL sai) và đã tự phân quyền (id lấy từ nhân viên của chi nhánh người gọi).
+     */
+    @Query("""
+            SELECT a.staffId AS staffId, COUNT(a) AS shiftCount FROM ShiftAssignment a
+            WHERE a.staffId IN :staffIds
+              AND a.status = com.petcare.module.workforce.entity.ShiftAssignmentStatus.SCHEDULED
+              AND a.workDate >= :from AND a.workDate <= :to
+            GROUP BY a.staffId
+            """)
+    List<StaffShiftCount> countScheduledInWeek(@Param("staffIds") Collection<Long> staffIds,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /**
+     * Phân ca {@code SCHEDULED} của một nhân viên trong {@code [from, to]} (một tuần), <b>khóa {@code FOR NO KEY UPDATE}</b>
+     * theo {@code id} tăng dần (thứ tự khóa cố định): đăng ký tuần #15 đọc và khóa tập này dưới khóa {@code accounts} rồi mới
+     * tính phần khác biệt. Cả hai nguồn {@code SELF} và {@code MANAGER} (BR-NS-12 đếm cả hai, chồng giờ kiểm với cả hai);
+     * chỉ {@code SELF} bị hủy. Không join ca nên khóa chỉ rơi vào {@code shift_assignments}; giờ của ca đọc riêng qua
+     * {@code ShiftDefinitionRepository} (ca đã có phân ca thì không sửa giờ được, BR-NS-01). Đi qua
+     * {@code ix_shift_assignments_staff_date}; {@code status} là lọc sau trên tập ≤ 7 ngày.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT a FROM ShiftAssignment a
+            WHERE a.staffId = :staffId
+              AND a.status = com.petcare.module.workforce.entity.ShiftAssignmentStatus.SCHEDULED
+              AND a.workDate >= :from AND a.workDate <= :to
+            ORDER BY a.id ASC
+            """)
+    List<ShiftAssignment> lockScheduledInWeek(@Param("staffId") Long staffId, @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
+
     /** Một phân ca {@code SCHEDULED} đang giao giờ với ca mới (để báo lỗi nêu đúng phân ca đang chồng). */
     interface OverlappingShift {
         Long getAssignmentId();

@@ -747,7 +747,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items`, sai kiểu hoặc quá 100 phần tử"
+          description: "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của tuần) · ngày ngoài tuần · ca ngừng dùng hoặc không thuộc chi nhánh · trùng cặp (ngày, ca) trong lô · chồng giờ với phân ca khác (kể cả `MANAGER`); `BR-NS-12` tập kết quả của tuần chưa đủ định mức (kể cả `items` rỗng). Một lỗi thì không lưu gì, `message` liệt kê mọi mục lỗi; `VALIDATION_FAILED` thiếu `items`, phần tử hoặc trường `workDate` / `shiftDefinitionId` null, hoặc quá 100 phần tử · `MALFORMED_REQUEST` body hoặc `weekStart` sai kiểu, sai định dạng"
           content:
             "application/json":
               schema:
@@ -755,7 +755,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED` sai vai trò · `ACCESS_DENIED_SCOPE_MISMATCH` tài khoản không còn là nhân viên A06–A08 đang hoạt động của một chi nhánh (đọc lại dưới khóa)"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "`CONCURRENCY_CONFLICT` trùng cặp ca – ngày do thao tác song song"
           content:
@@ -801,7 +805,7 @@ paths:
     get:
       tags: ["Shift registrations"]
       summary: "Thống kê số ca mỗi nhân viên trong tuần"
-      description: "UC34 · BR-NS-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` của chi nhánh, kể cả người chưa có ca nào. Sắp `staffName` tăng dần. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12)."
+      description: "UC34 · BR-NS-12. Actor: A05. Quyền: BRANCH_MANAGER của chi nhánh. Chuyển trạng thái: —. Không phân trang. Mọi nhân viên A06–A08 `ACTIVE` và không bị khóa của chi nhánh người gọi, kể cả người chưa có ca nào. Sắp `staffName` tăng dần (trùng tên thì `staffId`). `shiftCount` đếm phân ca `SCHEDULED` của tuần, cả `SELF` và `MANAGER`, ở mọi chi nhánh (khớp `GET /me/shift-registrations/{weekStart}`); `ON_LEAVE`, `ABSENT`, `CANCELLED` không đếm. `requiredShifts` là [CFG] `workforce.weekly_required_shifts` hiện hành; `meetsRequirement` = `shiftCount` ≥ `requiredShifts`. Chỉ để quản lý theo dõi, không chặn gì (BR-NS-12)."
       operationId: listShiftWeeklySummaries
       security:
         - bearerAuth: []
@@ -831,7 +835,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`weekStart` thiếu hoặc không phải thứ Hai (`BR-NS-11`)"
+          description: "`BR-NS-11` `weekStart` không phải thứ Hai hoặc năm ngoài 2000–2100 · `weekStart` thiếu hoặc sai định dạng (`MALFORMED_REQUEST`)"
           content:
             "application/json":
               schema:
@@ -839,7 +843,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "`ACCESS_DENIED` sai vai trò · `ACCESS_DENIED_SCOPE_MISMATCH` người gọi không thuộc chi nhánh nào"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -1079,6 +1087,7 @@ components:
           items:
             $ref: "#/components/schemas/ShiftRegistrationItem"
           description: "Toàn bộ (ngày, ca) nhân viên muốn có trong tuần; thay thế các phân ca SELF hiện có (BR-NS-11)"
+          maxItems: 100
     ShiftRegistration:
       type: object
       required: [weekStart, requiredShifts, shiftCount, editableUntil, assignments]
