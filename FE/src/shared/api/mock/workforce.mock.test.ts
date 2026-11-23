@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCOUNTS, authAs, failure, pinClock } from '../../../test/boarding-harness';
 import type { PageResponse } from '../../types';
 import type { AppNotification } from '../../types/care';
-import type { ShiftAssignment, ShiftDefinition, ShiftRequest } from '../../types/workforce';
+import type { ShiftAssignment, ShiftDefinition, ShiftRegistration, ShiftRequest, ShiftWeeklySummary } from '../../types/workforce';
 import { addDays } from '../../utils/branch-schedule';
 import { ruleIdOf } from '../api-error';
 import { staffLeftBranch } from './workforce.mock';
 import { installMockApi } from './mock-api';
 
-// Nhân sự (workforce-v1 #1–14) — BE tầng 3 chưa cài, mock theo ASSUMPTION W1–W10 ở đầu workforce.mock.ts. Đồng hồ ghim ở thứ Sáu 23/10/2026 09:00 giờ Việt Nam (ca sáng 07:30 hôm nay
+// Nhân sự (workforce-v1 #1–17) — mock khớp số đo trên BE thật 8083 (bản sao petcare_t66, 23/11/2026); chỗ BE im lặng theo W-chú thích ở đầu workforce.mock.ts. Đồng hồ ghim ở thứ Sáu 23/10/2026 09:00 giờ Việt Nam (ca sáng 07:30 hôm nay
 // đã bắt đầu, ca chiều 13:00 chưa). Dữ liệu mẫu (ngày tương đối với hôm nay T): nhân viên 4 (reception), 5 (doctor), 6 (caretaker), 21 (doctor2) có lịch T−7…T+10 luân phiên ca sáng (#1) / ca chiều (#2);
 // nhân viên 22 (doctor3) và 23 (doctor4) chưa có phân ca nào. Yêu cầu mẫu: #1 nhân viên 5 xin NGHỈ T+3 (PENDING), #2 nhân viên 6 xin ĐỔI sang ca chiều T+4 (PENDING), #3 nhân viên 4 nghỉ T+5 (APPROVED →
 // ON_LEAVE), #4 nhân viên 21 T+6 (REJECTED), #5 nhân viên 5 T+7 (WITHDRAWN), #6 nhân viên 4 T+8 (REJECTED do hệ thống, phân ca CANCELLED); nhân viên 4 ABSENT ở T−2.
@@ -93,6 +93,16 @@ describe('ca làm việc (#1)', () => {
   });
 });
 
+describe('ca làm việc cho A06–A08 (#1, A10)', () => {
+  it('lễ tân, bác sĩ, chăm sóc gọi được: chỉ ca đang dùng của chi nhánh mình, activeOnly bị bỏ qua; ADMIN, SUPER_MANAGER, khách vẫn 403', async () => {
+    for (const who of ['desk', 'vet', 'caretaker'] as const) {
+      expect((await definitions(who)).map((d) => d.name)).toEqual(['Ca sáng', 'Ca hành chính', 'Ca chiều', 'Ca tối']);
+      expect((await definitions(who, { activeOnly: false })).map((d) => d.name)).not.toContain('Ca đêm cũ');
+    }
+    for (const who of ['admin', 'chain', 'customer'] as const) expectFail(await rejected(who, 'get', '/api/shift-definitions'), 403, 'ACCESS_DENIED');
+  });
+});
+
 describe('tạo ca (#2, BR-NS-01)', () => {
   it('201, cắt khoảng trắng tên, đang dùng, chỉ thấy ở chi nhánh của mình', async () => {
     const res = await send('manager', 'post', '/api/shift-definitions', { name: '  Ca đặc biệt ', startTime: '09:00', endTime: '10:30' });
@@ -108,46 +118,66 @@ describe('tạo ca (#2, BR-NS-01)', () => {
     expect((await send('manager2', 'post', '/api/shift-definitions', { name: 'Ca tối', startTime: '17:30', endTime: '21:00' })).status).toBe(201);
   });
 
-  it('giờ bắt đầu không nhỏ hơn giờ kết thúc → 400 BR-NS-01; tên trùng được báo trước giờ sai (thứ tự của yaml)', async () => {
+  it('giờ bắt đầu không nhỏ hơn giờ kết thúc → 400 BR-NS-01; giờ sai được báo TRƯỚC tên trùng (đo BE)', async () => {
     ruleFailure(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca lạ', startTime: '12:00', endTime: '12:00' }), 'BR-NS-01', /Giờ bắt đầu phải nhỏ hơn/);
     ruleFailure(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca lạ', startTime: '18:00', endTime: '06:00' }), 'BR-NS-01');
-    ruleFailure(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca sáng', startTime: '18:00', endTime: '06:00' }), 'BR-NS-01', /đã tồn tại/);
+    ruleFailure(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca sáng', startTime: '18:00', endTime: '06:00' }), 'BR-NS-01', /Giờ bắt đầu phải nhỏ hơn/);
   });
 
-  it('VALIDATION_FAILED: thiếu / trống / quá 60 ký tự / sai dạng giờ (kể cả giờ 24–29 mà pattern của yaml cho qua)', async () => {
-    expectFail(await rejected('manager', 'post', '/api/shift-definitions', {}), 400, 'VALIDATION_FAILED', /name: .*startTime: .*endTime: /);
-    expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: '   ', startTime: '08:00', endTime: '09:00' }), 400, 'VALIDATION_FAILED', /^name: /);
-    expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: 'x'.repeat(61), startTime: '08:00', endTime: '09:00' }), 400, 'VALIDATION_FAILED', /^name: .*60/);
+  it('VALIDATION_FAILED: thiếu / trống / quá 60 ký tự, câu báo của BE', async () => {
+    expectFail(
+      await rejected('manager', 'post', '/api/shift-definitions', {}),
+      400,
+      'VALIDATION_FAILED',
+      'name: Vui lòng nhập tên ca; startTime: Vui lòng nhập giờ bắt đầu; endTime: Vui lòng nhập giờ kết thúc',
+    );
+    expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: '   ', startTime: '08:00', endTime: '09:00' }), 400, 'VALIDATION_FAILED', 'name: Vui lòng nhập tên ca');
+    expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: 'x'.repeat(61), startTime: '08:00', endTime: '09:00' }), 400, 'VALIDATION_FAILED', 'name: Tên ca tối đa 60 ký tự');
     expect((await send('manager', 'post', '/api/shift-definitions', { name: 'x'.repeat(60), startTime: '08:00', endTime: '09:00' })).status).toBe(201);
-    for (const bad of ['8:30', '08:60', '24:00', '29:30', '08-30', ' ']) {
-      expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca lỗi', startTime: bad, endTime: '23:59' }), 400, 'VALIDATION_FAILED', /^startTime: /);
+    // Giờ rỗng / toàn khoảng trắng đọc như vắng (BE: @NotNull).
+    for (const blank of [' ', '', null]) {
+      expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca lỗi', startTime: blank, endTime: '23:59' }), 400, 'VALIDATION_FAILED', 'startTime: Vui lòng nhập giờ bắt đầu');
     }
     expect((await send('manager', 'post', '/api/shift-definitions', { name: 'Ca cuối ngày', startTime: '00:00', endTime: '23:59' })).status).toBe(201);
   });
 
-  it('MALFORMED_REQUEST: body không phải object, trường sai kiểu; đến TRƯỚC vai trò, còn VALIDATION_FAILED đến SAU vai trò', async () => {
+  it('giờ sai dạng (8:30, 08:60, 25:00, 08:00:00, 08-30) → 400 MALFORMED_REQUEST như BE; riêng 24:00 BE nhận thành 00:00', async () => {
+    for (const bad of ['8:30', '08:60', '25:00', '29:30', '08-30', '08:00:00']) {
+      expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca lỗi', startTime: bad, endTime: '23:59' }), 400, 'MALFORMED_REQUEST');
+    }
+    const res = await send('manager', 'post', '/api/shift-definitions', { name: 'Ca nửa đêm', startTime: '24:00', endTime: '06:00' });
+    expect(res.data.data).toMatchObject({ startTime: '00:00', endTime: '06:00' });
+    ruleFailure(await rejected('manager', 'post', '/api/shift-definitions', { name: 'Ca lỗi 24', startTime: '08:00', endTime: '24:00' }), 'BR-NS-01', /Giờ bắt đầu phải nhỏ hơn/);
+  });
+
+  it('MALFORMED_REQUEST và VALIDATION_FAILED đều đến TRƯỚC vai trò (đo BE: @Valid chạy khi nạp tham số, @PreAuthorize sau đó)', async () => {
     expectFail(await rejected('manager', 'post', '/api/shift-definitions', { name: 123, startTime: '08:00', endTime: '09:00' }), 400, 'MALFORMED_REQUEST');
     expectFail(await rejected('manager', 'post', '/api/shift-definitions', '[1,2]'), 400, 'MALFORMED_REQUEST');
     expectFail(await rejected('manager', 'post', '/api/shift-definitions'), 400, 'MALFORMED_REQUEST');
     expectFail(await rejected('customer', 'post', '/api/shift-definitions', { name: 123 }), 400, 'MALFORMED_REQUEST');
-    expectFail(await rejected('customer', 'post', '/api/shift-definitions', {}), 403, 'ACCESS_DENIED');
+    expectFail(await rejected('customer', 'post', '/api/shift-definitions', {}), 400, 'VALIDATION_FAILED');
+    expectFail(await rejected('desk', 'post', '/api/shift-definitions', { name: 'x' }), 400, 'VALIDATION_FAILED');
+    expectFail(await rejected('desk', 'post', '/api/shift-definitions', { name: 'Ca lạ', startTime: '08:00', endTime: '09:00' }), 403, 'ACCESS_DENIED');
   });
 });
 
 describe('sửa / ngừng dùng ca (#3, BR-NS-01)', () => {
   const patch = (who: Who, id: number | string, body: unknown) => send(who, 'patch', `/api/shift-definitions/${id}`, body);
 
-  it('chỉ trường có trong body được đổi; {} và null giữ nguyên; đổi tên, không đổi giờ ca đã có phân ca', async () => {
+  it('chỉ trường có trong body được đổi; body {} hoặc toàn null → 400 VALIDATION_FAILED (đo BE); đổi tên, không đổi giờ ca đã có phân ca', async () => {
     const before = (await definitions()).find((d) => d.shiftDefinitionId === 1)!;
-    expect((await patch('manager', 1, {})).data.data).toEqual(before);
-    expect((await patch('manager', 1, { name: null, startTime: null, endTime: null, active: null })).data.data).toEqual(before);
+    const none = 'notEmpty: Cần gửi ít nhất một trường cần sửa (name, startTime, endTime, active)';
+    expectFail(await failure(patch('manager', 1, {})), 400, 'VALIDATION_FAILED', none);
+    expectFail(await failure(patch('manager', 1, { name: null, startTime: null, endTime: null, active: null })), 400, 'VALIDATION_FAILED', none);
+    expectFail(await failure(patch('desk', 1, {})), 400, 'VALIDATION_FAILED', none); // trước vai trò
+    expect((await patch('manager', 1, { name: null, active: null, endTime: '12:00' })).data.data).toEqual(before);
     expect((await patch('manager', 1, { name: ' Ca sáng sớm ' })).data.data).toEqual({ ...before, name: 'Ca sáng sớm' });
     // Gửi lại đúng giờ hiện tại coi như không đổi giờ.
     expect((await patch('manager', 1, { startTime: '07:30', endTime: '12:00' })).status).toBe(200);
   });
 
   it('sửa giờ ca đã có phân ca → 400 BR-NS-01; ca chưa có phân ca thì sửa được', async () => {
-    ruleFailure((await failure(patch('manager', 1, { startTime: '07:00' }))) as AxiosResponse, 'BR-NS-01', /không sửa được giờ/);
+    ruleFailure((await failure(patch('manager', 1, { startTime: '07:00' }))) as AxiosResponse, 'BR-NS-01', 'Ca đã có phân ca, không đổi được giờ; hãy tạo ca mới (BR-NS-01)');
     const fresh = await newShift('Ca mới', '09:00', '10:00');
     const res = await patch('manager', fresh.shiftDefinitionId, { startTime: '08:30', endTime: '11:00' });
     expect(res.data.data).toMatchObject({ startTime: '08:30', endTime: '11:00' });
@@ -161,8 +191,16 @@ describe('sửa / ngừng dùng ca (#3, BR-NS-01)', () => {
     expect((await patch('manager', fresh.shiftDefinitionId, { name: 'ca mới' })).status).toBe(200);
   });
 
+  it('thứ tự kiểm BR-NS-01 (đo BE): giờ sai → tên trùng → sửa giờ khi đã có phân ca → ngừng dùng khi còn phân ca', async () => {
+    // Ca #1 (07:30–12:00) có phân ca; "Ca chiều" là tên của ca #2.
+    ruleFailure(await failure(patch('manager', 1, { name: 'Ca chiều', startTime: '13:00' })), 'BR-NS-01', /Giờ bắt đầu phải nhỏ hơn/);
+    ruleFailure(await failure(patch('manager', 1, { name: 'Ca chiều', startTime: '07:00' })), 'BR-NS-01', /đã tồn tại/);
+    ruleFailure(await failure(patch('manager', 1, { active: false, startTime: '13:00' })), 'BR-NS-01', /Giờ bắt đầu phải nhỏ hơn/);
+    ruleFailure(await failure(patch('manager', 1, { active: false, startTime: '07:00' })), 'BR-NS-01', /không đổi được giờ/);
+  });
+
   it('ngừng dùng: bị chặn khi còn phân ca SCHEDULED từ hôm nay; không bị chặn khi chỉ còn phân ca đã qua / đã hủy; bật lại được', async () => {
-    ruleFailure(await failure(patch('manager', 1, { active: false })), 'BR-NS-01', /chưa ngừng dùng được/);
+    ruleFailure(await failure(patch('manager', 1, { active: false })), 'BR-NS-01', 'Ca còn phân ca từ hôm nay trở đi, không ngừng dùng được (BR-NS-01)');
     const fresh = await newShift('Ca tạm', '09:00', '10:00');
     expect((await patch('manager', fresh.shiftDefinitionId, { active: false })).data.data.active).toBe(false);
     expect((await patch('manager', fresh.shiftDefinitionId, { active: true })).data.data.active).toBe(true);
@@ -174,16 +212,15 @@ describe('sửa / ngừng dùng ca (#3, BR-NS-01)', () => {
   });
 
   it('404 khi không có, 403 phạm vi khi của chi nhánh khác; VALIDATION_FAILED đến trước phạm vi; id sai kiểu / active sai kiểu → MALFORMED_REQUEST', async () => {
-    expectFail(await failure(patch('manager', 999, {})), 404, 'RESOURCE_NOT_FOUND');
+    expectFail(await failure(patch('manager', 999, { name: 'x' })), 404, 'RESOURCE_NOT_FOUND');
     expectFail(await failure(patch('manager2', 1, { name: 'Ca trộm' })), 403, 'ACCESS_DENIED_SCOPE_MISMATCH', 'Không có quyền truy cập dữ liệu này');
     expectFail(await failure(patch('manager2', 1, { name: '' })), 400, 'VALIDATION_FAILED');
     expectFail(await failure(patch('manager', 1, { name: ' ' })), 400, 'VALIDATION_FAILED');
     expectFail(await failure(patch('manager', 1, { name: 'x'.repeat(61) })), 400, 'VALIDATION_FAILED');
-    expectFail(await failure(patch('manager', 1, { startTime: '25:00' })), 400, 'VALIDATION_FAILED');
+    expectFail(await failure(patch('manager', 1, { startTime: '25:00' })), 400, 'MALFORMED_REQUEST');
     expectFail(await failure(patch('manager', 'abc', {})), 400, 'MALFORMED_REQUEST', "Tham số 'shiftDefinitionId' sai kiểu dữ liệu");
-    expectFail(await failure(patch('manager', 1, { active: 'false' })), 400, 'MALFORMED_REQUEST');
     expectFail(await failure(patch('customer', 'abc', {})), 400, 'MALFORMED_REQUEST');
-    expectFail(await failure(patch('customer', 1, {})), 403, 'ACCESS_DENIED');
+    expectFail(await failure(patch('customer', 1, { name: 'Ca trộm' })), 403, 'ACCESS_DENIED');
   });
 });
 
@@ -200,7 +237,7 @@ describe('lịch phân ca của chi nhánh (#4, BR-NS-03)', () => {
     }
     expect(rows.every((a) => a.branchId === 1 && a.workDate >= day(-9) && a.workDate <= day(11))).toBe(true);
     expect(Object.keys(rows[0]).sort()).toEqual(
-      ['branchId', 'endTime', 'pendingRequestId', 'reason', 'shiftAssignmentId', 'shiftDefinitionId', 'shiftName', 'staffId', 'staffName', 'startTime', 'status', 'workDate'],
+      ['branchId', 'endTime', 'pendingRequestId', 'reason', 'shiftAssignmentId', 'shiftDefinitionId', 'shiftName', 'source', 'staffId', 'staffName', 'startTime', 'status', 'workDate'],
     );
     expect(await assignments({}, 'manager2')).toEqual([]);
     // Không gửi size: mặc định 20 dòng mỗi trang.
@@ -252,7 +289,7 @@ describe('phân ca (#5, BR-NS-02)', () => {
     expect(res.status).toBe(201);
     expect(res.data.data).toMatchObject({
       branchId: 1, staffId: 22, staffName: 'BS. Ngọc Lan', shiftDefinitionId: 1, shiftName: 'Ca sáng', startTime: '07:30', endTime: '12:00', workDate: day(2),
-      status: 'SCHEDULED', reason: null, pendingRequestId: null,
+      status: 'SCHEDULED', source: 'MANAGER', reason: null, pendingRequestId: null,
     });
     expect((await mine('doctor3')).map((a) => a.shiftAssignmentId)).toEqual([res.data.data.shiftAssignmentId]);
     expect((await assign(22, 2, day(0))).workDate).toBe(day(0));
@@ -262,11 +299,11 @@ describe('phân ca (#5, BR-NS-02)', () => {
 
   it('trùng đúng cặp ca – ngày, chồng giờ phân ca khác trong ngày → 400 BR-NS-02 nêu ca đang chồng; chạm đầu mút thì không chồng; ngày khác thì được', async () => {
     await assign(22, 1, day(2)); // 07:30–12:00
-    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 1, workDate: day(2) }), 'BR-NS-02', /đã được phân ca "Ca sáng"/);
-    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 3, workDate: day(2) }), 'BR-NS-02', /Chồng giờ với ca "Ca sáng" \(07:30–12:00\)/);
+    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 1, workDate: day(2) }), 'BR-NS-02', 'Nhân viên đã có phân ca trùng hoặc chồng giờ: Ca sáng (07:30–12:00) (BR-NS-02)');
+    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 3, workDate: day(2) }), 'BR-NS-02', 'Nhân viên đã có phân ca trùng hoặc chồng giờ: Ca sáng (07:30–12:00) (BR-NS-02)');
     await assign(22, 2, day(2)); // 13:00–17:30, không chồng
     await assign(22, 4, day(2)); // 17:30–21:00 chạm đầu mút ca chiều
-    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 3, workDate: day(2) }), 'BR-NS-02', /Chồng giờ/);
+    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 3, workDate: day(2) }), 'BR-NS-02', /trùng hoặc chồng giờ: /);
     expect((await assign(22, 3, day(3))).shiftName).toBe('Ca hành chính');
     // Phân ca đã hủy không còn tính khi kiểm chồng giờ.
     const sang = await assignmentOf(22, day(2));
@@ -277,9 +314,18 @@ describe('phân ca (#5, BR-NS-02)', () => {
 
   it('ngày quá khứ, ca ngừng dùng, người không phải A06–A08 → 400 BR-NS-02', async () => {
     ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 1, workDate: day(-1) }), 'BR-NS-02', /quá khứ/);
-    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 5, workDate: day(1) }), 'BR-NS-02', /ngừng dùng/);
+    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 5, workDate: day(1) }), 'BR-NS-02', 'Ca đã ngừng dùng, không phân ca được (BR-NS-02)');
     // Quản lý chính chi nhánh (A05) thuộc chi nhánh nhưng không phải A06–A08.
-    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 3, shiftDefinitionId: 1, workDate: day(1) }), 'BR-NS-02', /lễ tân, bác sĩ thú y hoặc nhân viên chăm sóc/);
+    ruleFailure(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 3, shiftDefinitionId: 1, workDate: day(1) }), 'BR-NS-02', 'Chỉ phân ca cho lễ tân, bác sĩ hoặc nhân viên chăm sóc đang hoạt động của chi nhánh (BR-NS-02)');
+  });
+
+  it('thứ tự kiểm (đo BE): 404 nhân viên → 404 ca → ngày quá khứ → nhân viên không hợp lệ → ca ngừng dùng → trùng / chồng giờ', async () => {
+    const post5 = (body: object) => rejected('manager', 'post', '/api/shift-assignments', body);
+    expectFail(await post5({ staffId: 99999, shiftDefinitionId: 999, workDate: day(2) }), 404, 'RESOURCE_NOT_FOUND', /nhân viên #99999/);
+    expectFail(await post5({ staffId: 22, shiftDefinitionId: 999, workDate: day(-1) }), 404, 'RESOURCE_NOT_FOUND', /ca làm việc #999/);
+    ruleFailure(await post5({ staffId: 22, shiftDefinitionId: 5, workDate: day(-1) }), 'BR-NS-02', /quá khứ/); // ngày trước ca ngừng dùng
+    ruleFailure(await post5({ staffId: 3, shiftDefinitionId: 1, workDate: day(-1) }), 'BR-NS-02', /quá khứ/); // ngày trước nhân viên không hợp lệ
+    ruleFailure(await post5({ staffId: 3, shiftDefinitionId: 5, workDate: day(2) }), 'BR-NS-02', /Chỉ phân ca cho lễ tân/); // nhân viên trước ca ngừng dùng
   });
 
   it('404: nhân viên không có / ở chi nhánh khác / không phải nhân viên, ca không có / của chi nhánh khác; 404 đến trước các guard BR', async () => {
@@ -294,11 +340,12 @@ describe('phân ca (#5, BR-NS-02)', () => {
   });
 
   it('thiếu trường → VALIDATION_FAILED; ngày không có thật / sai kiểu → MALFORMED_REQUEST (trước vai trò)', async () => {
-    expectFail(await rejected('manager', 'post', '/api/shift-assignments', {}), 400, 'VALIDATION_FAILED', /staffId: .*shiftDefinitionId: .*workDate: /);
+    expectFail(await rejected('manager', 'post', '/api/shift-assignments', {}), 400, 'VALIDATION_FAILED', 'staffId: Vui lòng chọn nhân viên; shiftDefinitionId: Vui lòng chọn ca làm việc; workDate: Vui lòng chọn ngày làm');
     expectFail(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 1, workDate: '2026-02-30' }), 400, 'MALFORMED_REQUEST');
     expectFail(await rejected('manager', 'post', '/api/shift-assignments', { staffId: '22', shiftDefinitionId: 1, workDate: day(1) }), 400, 'MALFORMED_REQUEST');
     expectFail(await rejected('manager', 'post', '/api/shift-assignments', { staffId: 22.5, shiftDefinitionId: 1, workDate: day(1) }), 400, 'MALFORMED_REQUEST');
-    expectFail(await rejected('desk', 'post', '/api/shift-assignments', { staffId: 22 }), 403, 'ACCESS_DENIED');
+    expectFail(await rejected('desk', 'post', '/api/shift-assignments', { staffId: 22 }), 400, 'VALIDATION_FAILED'); // trước vai trò
+    expectFail(await rejected('desk', 'post', '/api/shift-assignments', { staffId: 22, shiftDefinitionId: 1, workDate: day(2) }), 403, 'ACCESS_DENIED');
   });
 });
 
@@ -325,16 +372,16 @@ describe('hủy phân ca (#6, BR-NS-02)', () => {
     await cancel('manager', target.shiftAssignmentId);
     expect((await assignments({ staffId: 5 })).find((a) => a.shiftAssignmentId === target.shiftAssignmentId)).toMatchObject({ status: 'CANCELLED', pendingRequestId: null });
     const [rejectedRequest] = (await requestsOf('doctor', { status: 'REJECTED' })).filter((r) => r.shiftRequestId === 1);
-    expect(rejectedRequest).toMatchObject({ status: 'REJECTED', decidedBy: null, decisionNote: 'Phân ca đã bị hủy.' });
+    expect(rejectedRequest).toMatchObject({ status: 'REJECTED', decidedBy: null, decisionNote: 'Phân ca đã bị quản lý hủy' });
     expect(rejectedRequest.closedAt).toEqual(expect.any(String));
     expect(await pendingList()).toHaveLength(1);
   });
 
-  it('ca đã bắt đầu → 400 BR-NS-02 (dùng ghi vắng đột xuất); đến TRƯỚC 409 nên phân ca đã qua cũng ra 400', async () => {
+  it('ca đã bắt đầu còn SCHEDULED → 400 BR-NS-02 (dùng ghi vắng đột xuất); phân ca đã qua mà không còn SCHEDULED → 409 TRƯỚC (A11, đo BE)', async () => {
     const started = await assignmentOf(4, day(0)); // Ca sáng 07:30, bây giờ 09:00
-    ruleFailure(await failure(cancel('manager', started.shiftAssignmentId)), 'BR-NS-02', /ghi nhận vắng đột xuất/);
+    ruleFailure(await failure(cancel('manager', started.shiftAssignmentId)), 'BR-NS-02', 'Ca đã bắt đầu, không hủy được; hãy ghi nhận vắng đột xuất (BR-NS-02)');
     const absent = await assignmentOf(4, day(-2));
-    ruleFailure(await failure(cancel('manager', absent.shiftAssignmentId)), 'BR-NS-02');
+    expectFail(await failure(cancel('manager', absent.shiftAssignmentId)), 409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái phân ca từ ABSENT sang CANCELLED');
   });
 
   it('không còn SCHEDULED → 409 INVALID_STATE_TRANSITION (hủy lại, đã ON_LEAVE)', async () => {
@@ -347,15 +394,16 @@ describe('hủy phân ca (#6, BR-NS-02)', () => {
 
   it('thiếu / trống / quá 300 ký tự → VALIDATION_FAILED (sau vai trò); 404; 403 phạm vi; id sai kiểu → MALFORMED_REQUEST', async () => {
     const target = await assignmentOf(5, day(2));
-    expectFail(await failure(cancel('manager', target.shiftAssignmentId, {})), 400, 'VALIDATION_FAILED', /^reason: Lý do không được để trống/);
+    expectFail(await failure(cancel('manager', target.shiftAssignmentId, {})), 400, 'VALIDATION_FAILED', 'reason: Vui lòng nhập lý do');
     expectFail(await failure(cancel('manager', target.shiftAssignmentId, { reason: '  ' })), 400, 'VALIDATION_FAILED');
-    expectFail(await failure(cancel('manager', target.shiftAssignmentId, { reason: 'x'.repeat(301) })), 400, 'VALIDATION_FAILED', /300/);
+    expectFail(await failure(cancel('manager', target.shiftAssignmentId, { reason: 'x'.repeat(301) })), 400, 'VALIDATION_FAILED', 'reason: Lý do tối đa 300 ký tự');
     expectFail(await failure(cancel('manager', target.shiftAssignmentId, { reason: 5 })), 400, 'MALFORMED_REQUEST');
     expectFail(await failure(cancel('manager', 99999)), 404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy phân ca #99999');
     expectFail(await failure(cancel('manager2', target.shiftAssignmentId)), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
     expectFail(await failure(cancel('manager2', target.shiftAssignmentId, {})), 400, 'VALIDATION_FAILED');
     expectFail(await failure(cancel('manager', 'abc')), 400, 'MALFORMED_REQUEST');
-    expectFail(await failure(cancel('desk', target.shiftAssignmentId, {})), 403, 'ACCESS_DENIED');
+    expectFail(await failure(cancel('desk', target.shiftAssignmentId, {})), 400, 'VALIDATION_FAILED'); // trước vai trò
+    expectFail(await failure(cancel('desk', target.shiftAssignmentId)), 403, 'ACCESS_DENIED');
   });
 });
 
@@ -377,28 +425,29 @@ describe('ghi nhận vắng đột xuất (#7, BR-NS-07)', () => {
 
   it('ngày tương lai → 400 BR-NS-07; quá 7 ngày → 400 BR-NS-07; đúng 7 ngày thì được', async () => {
     const future = await assignmentOf(5, day(2));
-    ruleFailure(await failure(absent('manager', future.shiftAssignmentId)), 'BR-NS-07', /ngày tương lai/);
+    ruleFailure(await failure(absent('manager', future.shiftAssignmentId)), 'BR-NS-07', 'Ca của ngày tương lai chưa ghi nhận vắng được; hãy hủy phân ca hoặc để nhân viên xin nghỉ (BR-NS-07)');
     const tooOld = await assignmentOf(21, day(-9));
-    ruleFailure(await failure(absent('manager', tooOld.shiftAssignmentId)), 'BR-NS-07', /trong 7 ngày/);
+    ruleFailure(await failure(absent('manager', tooOld.shiftAssignmentId)), 'BR-NS-07', 'Chỉ ghi nhận vắng cho ca trong vòng 7 ngày gần đây (BR-NS-07)');
     const sevenDays = await assignmentOf(5, day(-7));
     expect((await absent('manager', sevenDays.shiftAssignmentId)).data.data.status).toBe('ABSENT');
   });
 
-  it('yêu cầu PENDING của phân ca tự bị từ chối; ca đã ABSENT / CANCELLED ghi lại → 409 (guard ngày đến trước 409)', async () => {
+  it('ca đã ABSENT / CANCELLED ghi lại → 409, đến trước guard ngày (A11)', async () => {
     // Phân ca hôm nay không có yêu cầu mẫu; tạo yêu cầu cho ca ngày mai rồi để nó qua ngày không thực tế, nên dùng ca T−1 của nhân viên 5 (không có yêu cầu) làm ca 409.
     const yesterday = await assignmentOf(5, day(-1));
     await absent('manager', yesterday.shiftAssignmentId);
     expectFail(await failure(absent('manager', yesterday.shiftAssignmentId)), 409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái phân ca từ ABSENT sang ABSENT');
     const already = await assignmentOf(4, day(-2));
     expectFail(await failure(absent('manager', already.shiftAssignmentId)), 409, 'INVALID_STATE_TRANSITION');
-    // Ca tương lai đã hủy: guard ngày (400) đến trước 409.
+    // Ca tương lai đã hủy: 409 đến TRƯỚC guard ngày (A11, đo BE).
     const cancelled = await assignmentOf(4, day(8));
-    ruleFailure(await failure(absent('manager', cancelled.shiftAssignmentId)), 'BR-NS-07', /ngày tương lai/);
+    expectFail(await failure(absent('manager', cancelled.shiftAssignmentId)), 409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái phân ca từ CANCELLED sang ABSENT');
   });
 
   it('lý do bắt buộc (VALIDATION_FAILED), 404, 403 phạm vi, vai trò', async () => {
     const target = await assignmentOf(5, day(-1));
-    expectFail(await failure(absent('manager', target.shiftAssignmentId, {})), 400, 'VALIDATION_FAILED', /^reason: /);
+    expectFail(await failure(absent('manager', target.shiftAssignmentId, {})), 400, 'VALIDATION_FAILED', 'reason: Vui lòng nhập lý do');
+    expectFail(await failure(absent('doctor', target.shiftAssignmentId, {})), 400, 'VALIDATION_FAILED'); // trước vai trò
     expectFail(await failure(absent('manager', target.shiftAssignmentId, { reason: 'y'.repeat(301) })), 400, 'VALIDATION_FAILED');
     expectFail(await failure(absent('manager', 99999)), 404, 'RESOURCE_NOT_FOUND');
     expectFail(await failure(absent('manager2', target.shiftAssignmentId)), 403, 'ACCESS_DENIED_SCOPE_MISMATCH');
@@ -462,7 +511,7 @@ describe('gửi yêu cầu nghỉ / đổi ca (#9, BR-NS-04)', () => {
     const res = await request('doctor3', { shiftAssignmentId: a.shiftAssignmentId, type: 'SWAP', targetShiftDefinitionId: 2, reason: 'Sáng bận việc riêng' });
     expect(res.status).toBe(201);
     expect(res.data.data).toMatchObject({ type: 'SWAP', targetShiftDefinitionId: 2, targetShiftName: 'Ca chiều', currentShiftName: 'Ca sáng' });
-    expect((await notices('manager')).find((n) => n.type === 'SHIFT_REQUEST_SUBMITTED')?.title).toBe('Yêu cầu đổi ca ca làm việc mới');
+    expect((await notices('manager')).find((n) => n.type === 'SHIFT_REQUEST_SUBMITTED')?.title).toBe('Yêu cầu đổi ca làm việc mới');
   });
 
   it('phải gửi trước giờ bắt đầu ca ít nhất 24 giờ: đúng 24 giờ được, chậm 1 phút thì không; ca đã bắt đầu cũng không', async () => {
@@ -480,9 +529,9 @@ describe('gửi yêu cầu nghỉ / đổi ca (#9, BR-NS-04)', () => {
 
   it('phân ca không SCHEDULED, đã có yêu cầu chờ → 400 BR-NS-04', async () => {
     const onLeave = await assignmentOf(4, day(5));
-    ruleFailure(await failure(request('desk', { shiftAssignmentId: onLeave.shiftAssignmentId, type: 'LEAVE', reason: 'Nghỉ nữa' })), 'BR-NS-04', /đang chờ làm việc/);
+    ruleFailure(await failure(request('desk', { shiftAssignmentId: onLeave.shiftAssignmentId, type: 'LEAVE', reason: 'Nghỉ nữa' })), 'BR-NS-04', 'Chỉ phân ca đang chờ làm mới được gửi yêu cầu (BR-NS-04)');
     const pending = await assignmentOf(5, day(3));
-    ruleFailure(await failure(request('doctor', { shiftAssignmentId: pending.shiftAssignmentId, type: 'LEAVE', reason: 'Nghỉ nữa' })), 'BR-NS-04', /đang chờ duyệt/);
+    ruleFailure(await failure(request('doctor', { shiftAssignmentId: pending.shiftAssignmentId, type: 'LEAVE', reason: 'Nghỉ nữa' })), 'BR-NS-04', 'Phân ca này đã có yêu cầu đang chờ xử lý (BR-NS-04)');
     // Yêu cầu cũ đã rút / đã đóng thì gửi lại được.
     const withdrawn = await assignmentOf(5, day(7));
     expect((await request('doctor', { shiftAssignmentId: withdrawn.shiftAssignmentId, type: 'LEAVE', reason: 'Nghỉ luôn' })).status).toBe(201);
@@ -494,20 +543,32 @@ describe('gửi yêu cầu nghỉ / đổi ca (#9, BR-NS-04)', () => {
     const base = { shiftAssignmentId: sang.shiftAssignmentId, reason: 'Đổi ca' };
     ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP' })), 'BR-NS-04', /phải chọn ca đích/);
     ruleFailure(await failure(request('doctor3', { ...base, type: 'LEAVE', targetShiftDefinitionId: 2 })), 'BR-NS-04', /không có ca đích/);
-    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 5 })), 'BR-NS-04', /ngừng dùng/);
+    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 5 })), 'BR-NS-04', 'Ca đích đã ngừng dùng (BR-NS-04)');
     ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 1 })), 'BR-NS-04', /trùng với ca hiện tại/);
-    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 3 })), 'BR-NS-04', /Ca đích chồng giờ với ca "Ca chiều" \(13:00–17:30\)/);
-    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 2 })), 'BR-NS-04', /Ca đích chồng giờ/); // chính ca chiều đã phân trong ngày
+    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 3 })), 'BR-NS-04', 'Ca đích chồng giờ với phân ca khác trong ngày: Ca chiều (13:00–17:30) (BR-NS-04)');
+    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 2 })), 'BR-NS-04', /Ca đích chồng giờ với phân ca khác trong ngày: /); // chính ca chiều đã phân trong ngày
     expect((await request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 4 })).status).toBe(201); // 17:30–21:00 chỉ chạm đầu mút ca chiều
     expectFail(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 6 })), 404, 'RESOURCE_NOT_FOUND', /ca làm việc #6/);
     expectFail(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 999 })), 404, 'RESOURCE_NOT_FOUND');
   });
 
+  it('thứ tự kiểm (đo BE): 404 phân ca → hình dạng LEAVE / SWAP → 404 ca đích → phân ca không SCHEDULED → còn dưới 24 giờ → ca đích ngừng dùng', async () => {
+    const soon = await assign(22, 1, day(1)); // 07:30 ngày mai: còn 22 giờ 30 phút
+    const base = { shiftAssignmentId: soon.shiftAssignmentId, reason: 'Thử thứ tự' };
+    ruleFailure(await failure(request('doctor3', { ...base, type: 'LEAVE', targetShiftDefinitionId: 2 })), 'BR-NS-04', /không có ca đích/); // hình dạng trước giờ
+    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP' })), 'BR-NS-04', /phải chọn ca đích/);
+    expectFail(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 999 })), 404, 'RESOURCE_NOT_FOUND', /ca làm việc #999/); // 404 ca đích trước giờ
+    ruleFailure(await failure(request('doctor3', { ...base, type: 'SWAP', targetShiftDefinitionId: 5 })), 'BR-NS-04', /ít nhất 24 giờ/); // giờ trước ca đích ngừng dùng
+    const cancelled = await assignmentOf(4, day(8)); // CANCELLED
+    ruleFailure(await failure(request('desk', { shiftAssignmentId: cancelled.shiftAssignmentId, type: 'SWAP', reason: 'x' })), 'BR-NS-04', /phải chọn ca đích/); // hình dạng trước trạng thái
+    expectFail(await failure(request('doctor3', { shiftAssignmentId: (await assignmentOf(4, day(3))).shiftAssignmentId, type: 'SWAP', reason: 'x' })), 404, 'RESOURCE_NOT_FOUND', /phân ca #/); // người khác: 404 trước hình dạng
+  });
+
   it('phân ca của người khác hoặc không có → 404 (không lộ sự tồn tại); thiếu trường → VALIDATION_FAILED; kiểu sai → MALFORMED_REQUEST', async () => {
     const other = await assignmentOf(6, day(5));
-    expectFail(await failure(request('desk', { shiftAssignmentId: other.shiftAssignmentId, type: 'LEAVE', reason: 'x' })), 404, 'RESOURCE_NOT_FOUND', /Không tìm thấy phân ca #\d+ của bạn/);
+    expectFail(await failure(request('desk', { shiftAssignmentId: other.shiftAssignmentId, type: 'LEAVE', reason: 'x' })), 404, 'RESOURCE_NOT_FOUND', /^Không tìm thấy phân ca #\d+$/);
     expectFail(await failure(request('desk', { shiftAssignmentId: 99999, type: 'LEAVE', reason: 'x' })), 404, 'RESOURCE_NOT_FOUND');
-    expectFail(await failure(request('desk', {})), 400, 'VALIDATION_FAILED', /shiftAssignmentId: .*type: .*reason: /);
+    expectFail(await failure(request('desk', {})), 400, 'VALIDATION_FAILED', 'shiftAssignmentId: Vui lòng chọn phân ca; type: Vui lòng chọn loại yêu cầu; reason: Vui lòng nhập lý do');
     expectFail(await failure(request('desk', { shiftAssignmentId: other.shiftAssignmentId, type: 'LEAVE', reason: ' ' })), 400, 'VALIDATION_FAILED');
     expectFail(await failure(request('desk', { shiftAssignmentId: other.shiftAssignmentId, type: 'LEAVE', reason: 'x'.repeat(301) })), 400, 'VALIDATION_FAILED');
     expectFail(await failure(request('desk', { shiftAssignmentId: other.shiftAssignmentId, type: 'QUIT', reason: 'x' })), 400, 'MALFORMED_REQUEST');
@@ -575,17 +636,27 @@ describe('yêu cầu của chi nhánh, duyệt, từ chối (#12–#14, BR-NS-06
     const res = await send('manager', 'post', '/api/shift-requests/1/approve');
     expect(res.status).toBe(200);
     expect(res.data.data).toMatchObject({ shiftRequestId: 1, status: 'APPROVED', decidedBy: 3, closedAt: expect.any(String) });
-    expect((await mine('doctor')).find((a) => a.workDate === day(3))).toMatchObject({ status: 'ON_LEAVE', pendingRequestId: null });
+    // Đo BE: duyệt LEAVE ghi lý do của yêu cầu vào phân ca.
+    expect((await mine('doctor')).find((a) => a.workDate === day(3))).toMatchObject({ status: 'ON_LEAVE', pendingRequestId: null, reason: 'Đưa mẹ đi khám bệnh, xin nghỉ ca chiều.' });
     const got = (await notices('doctor')).filter((n) => n.type === 'SHIFT_REQUEST_APPROVED');
     expect(got).toHaveLength(1);
     expect(got[0].body).toBe(`Yêu cầu nghỉ ca Ca chiều ngày ${day(3).split('-').reverse().join('/')} tại PetCare Cầu Giấy của bạn đã được quản lý duyệt.`);
     expect(await pendingList()).toHaveLength(1);
   });
 
-  it('duyệt SWAP: phân ca đổi sang ca đích và vẫn SCHEDULED (tên ca hiện tại của yêu cầu theo phân ca mới, W9)', async () => {
+  it('duyệt SWAP: phân ca đổi sang ca đích và vẫn SCHEDULED; yêu cầu GIỮ tên ca lúc gửi (đo BE: V60 current_shift)', async () => {
     const res = await send('manager', 'post', '/api/shift-requests/2/approve');
-    expect(res.data.data).toMatchObject({ status: 'APPROVED', decidedBy: 3, currentShiftName: 'Ca chiều', targetShiftName: 'Ca chiều' });
+    expect(res.data.data).toMatchObject({ status: 'APPROVED', decidedBy: 3, currentShiftName: 'Ca sáng', targetShiftName: 'Ca chiều' });
     expect((await mine('caretaker')).find((a) => a.workDate === day(4))).toMatchObject({ status: 'SCHEDULED', shiftDefinitionId: 2, shiftName: 'Ca chiều', startTime: '13:00', pendingRequestId: null });
+  });
+
+  it('yêu cầu SWAP vừa gửi chụp tên ca lúc gửi: duyệt xong vẫn hiện ca cũ ở currentShiftName (đo BE: V60)', async () => {
+    const a = await assign(22, 1, day(5)); // Ca sáng
+    const sent = await post<ShiftRequest>('doctor3', '/api/me/shift-requests', { shiftAssignmentId: a.shiftAssignmentId, type: 'SWAP', targetShiftDefinitionId: 2, reason: 'Đổi ca' });
+    expect(sent.currentShiftName).toBe('Ca sáng');
+    const res = await send('manager', 'post', `/api/shift-requests/${sent.shiftRequestId}/approve`);
+    expect(res.data.data).toMatchObject({ currentShiftName: 'Ca sáng', targetShiftName: 'Ca chiều' });
+    expect((await mine('doctor3', day(5), day(5)))[0].shiftName).toBe('Ca chiều');
   });
 
   it('phân ca đã bắt đầu → 400 BR-NS-06; ca đích ngừng dùng hoặc chồng giờ lúc duyệt → 400 BR-NS-06', async () => {
@@ -604,13 +675,22 @@ describe('yêu cầu của chi nhánh, duyệt, từ chối (#12–#14, BR-NS-06
     const sang = await assign(22, 1, day(5));
     const r1 = await post<ShiftRequest>('doctor3', '/api/me/shift-requests', { shiftAssignmentId: sang.shiftAssignmentId, type: 'SWAP', targetShiftDefinitionId: target.shiftDefinitionId, reason: 'Muốn ngủ nướng' });
     await assign(22, 2, day(5)); // 13:00–17:30, chồng ca trưa 11:00–14:00
-    ruleFailure(await rejected('manager', 'post', `/api/shift-requests/${r1.shiftRequestId}/approve`), 'BR-NS-06', /chồng giờ với ca "Ca chiều"/);
+    ruleFailure(await rejected('manager', 'post', `/api/shift-requests/${r1.shiftRequestId}/approve`), 'BR-NS-06', /Ca đích chồng giờ với phân ca khác trong ngày: Ca chiều/);
 
     const tiny = await newShift('Ca nhỏ', '20:00', '21:00');
     const toi = await assign(23, 4, day(5));
     const r2 = await post<ShiftRequest>('doctor4', '/api/me/shift-requests', { shiftAssignmentId: toi.shiftAssignmentId, type: 'SWAP', targetShiftDefinitionId: tiny.shiftDefinitionId, reason: 'Đổi' });
     await send('manager', 'patch', `/api/shift-definitions/${tiny.shiftDefinitionId}`, { active: false });
     ruleFailure(await rejected('manager', 'post', `/api/shift-requests/${r2.shiftRequestId}/approve`), 'BR-NS-06', /ngừng dùng/);
+  });
+
+  it('đã xử lý mà phân ca đã bắt đầu → 409 TRƯỚC guard 400 BR-NS-06 (A11, đo BE)', async () => {
+    const early = await newShift('Ca sớm hai', '09:00', '10:00');
+    const a = await assign(22, early.shiftDefinitionId, day(1));
+    const req = await post<ShiftRequest>('doctor3', '/api/me/shift-requests', { shiftAssignmentId: a.shiftAssignmentId, type: 'LEAVE', reason: 'Việc nhà' });
+    expect((await send('manager', 'post', `/api/shift-requests/${req.shiftRequestId}/approve`)).status).toBe(200);
+    vi.setSystemTime(new Date(`${day(1)}T09:30:00+07:00`));
+    expectFail(await rejected('manager', 'post', `/api/shift-requests/${req.shiftRequestId}/approve`), 409, 'INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái yêu cầu nghỉ / đổi ca từ APPROVED sang APPROVED');
   });
 
   it('đã xử lý → 409 INVALID_STATE_TRANSITION (duyệt lại, duyệt sau khi từ chối, từ chối sau khi duyệt); 404; 403 phạm vi; id sai kiểu', async () => {
@@ -626,9 +706,10 @@ describe('yêu cầu của chi nhánh, duyệt, từ chối (#12–#14, BR-NS-06
   });
 
   it('từ chối: REJECTED kèm decisionNote, phân ca giữ nguyên, nhân viên được thông báo; thiếu lý do → VALIDATION_FAILED', async () => {
-    expectFail(await rejected('manager', 'post', '/api/shift-requests/2/reject', {}), 400, 'VALIDATION_FAILED', /^decisionNote: /);
+    expectFail(await rejected('manager', 'post', '/api/shift-requests/2/reject', {}), 400, 'VALIDATION_FAILED', 'decisionNote: Vui lòng nhập lý do từ chối');
+    expectFail(await rejected('desk', 'post', '/api/shift-requests/2/reject', {}), 400, 'VALIDATION_FAILED'); // trước vai trò
     expectFail(await rejected('manager', 'post', '/api/shift-requests/2/reject', { decisionNote: '  ' }), 400, 'VALIDATION_FAILED');
-    expectFail(await rejected('manager', 'post', '/api/shift-requests/2/reject', { decisionNote: 'z'.repeat(301) }), 400, 'VALIDATION_FAILED');
+    expectFail(await rejected('manager', 'post', '/api/shift-requests/2/reject', { decisionNote: 'z'.repeat(301) }), 400, 'VALIDATION_FAILED', 'decisionNote: Lý do từ chối tối đa 300 ký tự');
     expectFail(await rejected('manager', 'post', '/api/shift-requests/2/reject'), 400, 'MALFORMED_REQUEST');
     expectFail(await rejected('manager2', 'post', '/api/shift-requests/2/reject', {}), 400, 'VALIDATION_FAILED');
     const res = await send('manager', 'post', '/api/shift-requests/2/reject', { decisionNote: ' Ca chiều đủ người ' });
@@ -640,7 +721,327 @@ describe('yêu cầu của chi nhánh, duyệt, từ chối (#12–#14, BR-NS-06
   });
 });
 
-// ─── Phân quyền 7 vai trò × 14 endpoint, 401, tài khoản phải đổi mật khẩu ───
+// ─── Đăng ký ca theo tuần (#15–17, BR-NS-11, BR-NS-12) ───
+// Tuần thứ Hai 09/11/2026 (T+17) trống với mọi nhân viên (dữ liệu mẫu chỉ tới T+10 = 02/11); tuần thứ Hai 26/10 (T+3) đã có phân ca QUẢN LÝ (MANAGER) của nhân viên 4, 5, 6, 21;
+// tuần thứ Hai 19/10 (chứa hôm nay) đã quá hạn. Định mức 10 ca ([CFG] `workforce.weekly_required_shifts`) mock cố định.
+
+const WEEK = '2026-11-09';
+const WEEK_END = '2026-11-15';
+const OVERDUE_WEEK = '2026-10-19';
+const MALFORMED_BODY = 'Nội dung request không đúng định dạng JSON hoặc sai kiểu dữ liệu';
+const INVALID = 'Đăng ký tuần không hợp lệ: ';
+const OUTSIDE = 'nằm ngoài tuần 09/11/2026 – 15/11/2026';
+const regUrl = (week: string) => `/api/me/shift-registrations/${week}`;
+const item = (offset: number, shiftDefinitionId: number, week = WEEK) => ({ workDate: addDays(week, offset), shiftDefinitionId });
+/** 10 mục: Ca sáng (#1) + Ca chiều (#2), thứ Hai đến thứ Sáu. */
+const fullWeek = (week = WEEK) => [0, 1, 2, 3, 4].flatMap((n) => [item(n, 1, week), item(n, 2, week)]);
+const registration = (who: Who, week = WEEK) => get<ShiftRegistration>(who, regUrl(week));
+const register = (who: Who, items: unknown, week = WEEK) => send(who, 'put', regUrl(week), { items });
+const saved = async (who: Who, items: unknown, week = WEEK) => (await register(who, items, week)).data.data as ShiftRegistration;
+const refused = (who: Who, items: unknown, week = WEEK) => rejected(who, 'put', regUrl(week), { items });
+const summaries = (week = WEEK, who: Who = 'manager') => get<ShiftWeeklySummary[]>(who, '/api/shift-weekly-summaries', { weekStart: week });
+const idsOf = (list: ShiftAssignment[]) => list.map((a) => a.shiftAssignmentId);
+
+describe('đăng ký của tôi trong tuần (#17)', () => {
+  it('tuần chưa có ca: định mức 10, 0 ca, hạn là 00:00 thứ Hai giờ Việt Nam dạng UTC không phần nghìn giây', async () => {
+    const res = await send('desk', 'get', regUrl(WEEK));
+    expect(res.data).toMatchObject({ message: 'Đăng ký ca của tôi trong tuần', code: 200 });
+    expect(res.data.data).toEqual({ weekStart: WEEK, requiredShifts: 10, shiftCount: 0, editableUntil: '2026-11-08T17:00:00Z', assignments: [] });
+  });
+
+  it('tuần đã có phân ca do quản lý xếp: chỉ phân ca SCHEDULED của chính mình (nghỉ / hủy không hiện), khớp lịch của tôi (#8), source MANAGER', async () => {
+    const week = '2026-10-26';
+    for (const who of ['desk', 'vet', 'caretaker', 'doctor2'] as const) {
+      const reg = await registration(who, week);
+      const all = await mine(who, week, addDays(week, 6));
+      const scheduled = all.filter((a) => a.status === 'SCHEDULED');
+      expect(scheduled.length, who).toBeGreaterThan(0);
+      expect(idsOf(reg.assignments), who).toEqual(idsOf(scheduled));
+      expect(reg.shiftCount, who).toBe(scheduled.length);
+      expect(reg.assignments.every((a) => a.source === 'MANAGER' && a.status === 'SCHEDULED'), who).toBe(true);
+    }
+    // Nhân viên 4 có ca ON_LEAVE (T+5) và CANCELLED (T+8) trong tuần này: có ở #8, không có ở #17.
+    expect((await mine('desk', week, addDays(week, 6))).filter((a) => a.status !== 'SCHEDULED').length).toBeGreaterThanOrEqual(2);
+    expect((await registration('desk', week)).assignments.every((a) => a.staffId === 4)).toBe(true);
+  });
+
+  it('không kiểm hạn: xem được tuần đã quá hạn; năm 2000 và 2100 là biên hợp lệ', async () => {
+    expect(await registration('desk', OVERDUE_WEEK)).toMatchObject({ requiredShifts: 10, editableUntil: '2026-10-18T17:00:00Z' });
+    expect(await registration('desk', '2000-01-03')).toMatchObject({ shiftCount: 0, editableUntil: '2000-01-02T17:00:00Z' });
+    expect(await registration('desk', '2100-12-27')).toMatchObject({ shiftCount: 0, editableUntil: '2100-12-26T17:00:00Z' });
+  });
+
+  it('BR-NS-11: không phải thứ Hai và năm ngoài 2000–2100 (thứ Hai được kiểm trước năm)', async () => {
+    ruleFailure(await rejected('desk', 'get', regUrl('2026-11-10')), 'BR-NS-11', 'Ngày bắt đầu tuần phải là thứ Hai (BR-NS-11)');
+    ruleFailure(await rejected('desk', 'get', regUrl('1999-12-27')), 'BR-NS-11', 'Chỉ hỗ trợ tuần từ năm 2000 đến năm 2100 (BR-NS-11)');
+    ruleFailure(await rejected('desk', 'get', regUrl('2101-01-03')), 'BR-NS-11', 'Chỉ hỗ trợ tuần từ năm 2000 đến năm 2100 (BR-NS-11)');
+    ruleFailure(await rejected('desk', 'get', regUrl('2101-01-04')), 'BR-NS-11', 'Ngày bắt đầu tuần phải là thứ Hai (BR-NS-11)');
+  });
+
+  it('weekStart sai kiểu → 400 MALFORMED_REQUEST, đến TRƯỚC vai trò; quản lý và vai khác → 403', async () => {
+    for (const bad of ['abc', '2026-02-30', '2026-11-09T00:00', '2026-W46']) {
+      expectFail(await rejected('desk', 'get', regUrl(bad)), 400, 'MALFORMED_REQUEST', "Tham số 'weekStart' sai kiểu dữ liệu");
+    }
+    expectFail(await rejected('manager', 'get', regUrl('abc')), 400, 'MALFORMED_REQUEST');
+    for (const who of ['manager', 'chain', 'admin', 'customer'] as const) expectFail(await rejected(who, 'get', regUrl(WEEK)), 403, 'ACCESS_DENIED');
+  });
+});
+
+describe('đăng ký ca theo tuần (#15, BR-NS-11, BR-NS-12)', () => {
+  it('lưu 10 mục: 200, phân ca SELF SCHEDULED của chính mình, sắp theo ngày rồi giờ; hiện ở #17, lịch của tôi và lịch chi nhánh; vượt định mức vẫn được', async () => {
+    const res = await register('desk', fullWeek());
+    expect(res.status).toBe(200);
+    expect(res.data).toMatchObject({ message: 'Đã lưu đăng ký ca của tuần', code: 200 });
+    const reg = res.data.data as ShiftRegistration;
+    expect(Object.keys(reg).sort()).toEqual(['assignments', 'editableUntil', 'requiredShifts', 'shiftCount', 'weekStart']);
+    expect(reg).toMatchObject({ weekStart: WEEK, requiredShifts: 10, shiftCount: 10, editableUntil: '2026-11-08T17:00:00Z' });
+    expect(reg.assignments.map((a) => [a.workDate, a.shiftName])).toEqual([0, 1, 2, 3, 4].flatMap((n) => [[addDays(WEEK, n), 'Ca sáng'], [addDays(WEEK, n), 'Ca chiều']]));
+    for (const a of reg.assignments) expect(a).toMatchObject({ source: 'SELF', status: 'SCHEDULED', staffId: 4, branchId: 1, reason: null, pendingRequestId: null });
+    expect(await registration('desk')).toEqual(reg);
+    expect(idsOf(await mine('desk', WEEK, WEEK_END))).toEqual(idsOf(reg.assignments));
+    expect((await assignments({ staffId: 4, from: WEEK, to: WEEK_END })).every((a) => a.source === 'SELF')).toBe(true);
+    expect((await saved('vet', [...fullWeek(), item(5, 1)])).shiftCount).toBe(11);
+  });
+
+  it('idempotent: gửi lại cùng nội dung hoặc đổi thứ tự mục không đổi gì (id giữ nguyên), kể cả trường thừa trong body', async () => {
+    const first = await saved('desk', fullWeek());
+    expect(await saved('desk', fullWeek())).toEqual(first);
+    expect((await saved('desk', [...fullWeek()].reverse())).assignments).toEqual(first.assignments);
+    expect((await send('desk', 'put', regUrl(WEEK), { items: fullWeek(), ghiChu: 'bỏ qua' })).data.data).toEqual(first);
+    expect(await mine('desk', WEEK, WEEK_END)).toHaveLength(10);
+  });
+
+  it('sửa đăng ký: mục thiếu → CANCELLED (lý do hệ thống), mục mới → phân ca mới, mục giữ nguyên không đổi; yêu cầu PENDING của ca bị bỏ → REJECTED do hệ thống', async () => {
+    const first = await saved('desk', fullWeek());
+    const dropped = first.assignments[0]; // thứ Hai, Ca sáng
+    const leave = await post<ShiftRequest>('desk', '/api/me/shift-requests', { shiftAssignmentId: dropped.shiftAssignmentId, type: 'LEAVE', reason: 'Xin nghỉ thử' });
+    const after = await saved('desk', [...fullWeek().slice(1), item(5, 1)]); // bỏ thứ Hai Ca sáng, thêm thứ Bảy Ca sáng
+    expect(after.shiftCount).toBe(10);
+    const kept = idsOf(first.assignments.slice(1));
+    expect(idsOf(after.assignments).filter((id) => kept.includes(id))).toEqual(kept);
+    const added = after.assignments.find((a) => a.workDate === addDays(WEEK, 5))!;
+    expect(added).toMatchObject({ source: 'SELF', status: 'SCHEDULED' });
+    expect(added.shiftAssignmentId).toBeGreaterThan(Math.max(...idsOf(first.assignments)));
+    const old = (await mine('desk', WEEK, WEEK_END)).find((a) => a.shiftAssignmentId === dropped.shiftAssignmentId)!;
+    expect(old).toMatchObject({ status: 'CANCELLED', source: 'SELF', reason: 'Nhân viên sửa đăng ký tuần', pendingRequestId: null });
+    expect((await requestsOf('desk')).find((r) => r.shiftRequestId === leave.shiftRequestId)).toMatchObject({
+      status: 'REJECTED', decidedBy: null, decisionNote: 'Phân ca đã bị bỏ khi nhân viên sửa đăng ký tuần', closedAt: expect.any(String),
+    });
+  });
+
+  it('thêm lại mục đã bỏ → phân ca mới (id mới), bản cũ vẫn CANCELLED', async () => {
+    const first = await saved('desk', fullWeek());
+    const dropped = first.assignments[9]; // thứ Sáu, Ca chiều
+    await saved('desk', [...fullWeek().slice(0, 9), item(5, 1)]);
+    const back = await saved('desk', fullWeek());
+    const again = back.assignments.find((a) => a.workDate === dropped.workDate && a.shiftDefinitionId === dropped.shiftDefinitionId)!;
+    expect(again.shiftAssignmentId).not.toBe(dropped.shiftAssignmentId);
+    const cancelled = (await mine('desk', WEEK, WEEK_END)).filter((a) => a.status === 'CANCELLED');
+    expect(idsOf(cancelled)).toContain(dropped.shiftAssignmentId);
+    expect(cancelled).toHaveLength(2); // cũ thứ Sáu Ca chiều + thứ Bảy Ca sáng
+  });
+
+  it('không thông báo cho ai (BR-NS-08)', async () => {
+    const counts = async () => [(await notices('desk')).length, (await notices('manager')).length];
+    const before = await counts();
+    await saved('desk', fullWeek());
+    await saved('desk', [...fullWeek().slice(1), item(5, 1)]);
+    expect(await counts()).toEqual(before);
+  });
+
+  it('phân ca do quản lý xếp không bị đụng nhưng được tính vào định mức và vào kiểm tra chồng giờ', async () => {
+    const manager = await assign(4, 4, addDays(WEEK, 2)); // Ca tối thứ Tư, chạm Ca chiều ở 17:30 nên không chồng
+    const nine = fullWeek().filter((x) => !(x.workDate === addDays(WEEK, 4) && x.shiftDefinitionId === 2));
+    const reg = await saved('desk', nine);
+    expect(reg.shiftCount).toBe(10);
+    expect(reg.assignments.filter((a) => a.source === 'MANAGER').map((a) => a.shiftAssignmentId)).toEqual([manager.shiftAssignmentId]);
+    expect(reg.assignments.filter((a) => a.source === 'SELF')).toHaveLength(9);
+    // Thiếu: 8 mục tự đăng ký + 1 ca quản lý = 9; mọi thứ giữ nguyên sau lỗi.
+    ruleFailure(await refused('desk', nine.slice(0, 8)), 'BR-NS-12', 'Tuần này có 9 ca (gồm 1 ca do quản lý xếp), cần tối thiểu 10 ca, còn thiếu 1 (BR-NS-12)');
+    expect(await registration('desk')).toEqual(reg);
+  });
+
+  it('chồng giờ với phân ca do quản lý xếp → BR-NS-11 nêu ca của quản lý, mỗi mục chồng một dòng (thứ tự giữa nhiều ca của quản lý: CHƯA ĐO)', async () => {
+    await assign(4, 3, addDays(WEEK, 2)); // Ca hành chính 08:00–17:00 thứ Tư: chồng Ca sáng và Ca chiều
+    const clash = 'chồng giờ với phân ca do quản lý xếp ngày 11/11/2026: Ca hành chính (08:00–17:00)';
+    ruleFailure(await refused('desk', fullWeek()), 'BR-NS-11', `${INVALID}Mục 5: ${clash}; Mục 6: ${clash} (BR-NS-11)`);
+    expect((await registration('desk')).shiftCount).toBe(1);
+  });
+
+  it('BR-NS-12: chưa đủ định mức (kể cả items rỗng) → 400, không lưu gì; items rỗng không xóa đăng ký cũ', async () => {
+    ruleFailure(await refused('desk', []), 'BR-NS-12', 'Tuần này có 0 ca (gồm 0 ca do quản lý xếp), cần tối thiểu 10 ca, còn thiếu 10 (BR-NS-12)');
+    ruleFailure(await refused('desk', fullWeek().slice(0, 9)), 'BR-NS-12', 'Tuần này có 9 ca (gồm 0 ca do quản lý xếp), cần tối thiểu 10 ca, còn thiếu 1 (BR-NS-12)');
+    expect((await registration('desk')).shiftCount).toBe(0);
+    const first = await saved('desk', fullWeek());
+    ruleFailure(await refused('desk', []), 'BR-NS-12', 'Tuần này có 0 ca (gồm 0 ca do quản lý xếp), cần tối thiểu 10 ca, còn thiếu 10 (BR-NS-12)');
+    expect(await registration('desk')).toEqual(first);
+  });
+
+  it('quá hạn: tuần chứa hôm nay hoặc đã qua → 400 BR-NS-11 (ngày dd/MM/yyyy); đến SAU thứ Hai / năm và TRƯỚC lỗi theo mục / định mức', async () => {
+    const overdue = (date: string) => `Đã quá hạn đăng ký tuần ${date} (hạn là 00:00 thứ Hai); chỉ còn xin nghỉ hoặc đổi ca (BR-NS-11)`;
+    ruleFailure(await refused('desk', fullWeek(OVERDUE_WEEK), OVERDUE_WEEK), 'BR-NS-11', overdue('19/10/2026'));
+    ruleFailure(await refused('desk', [], OVERDUE_WEEK), 'BR-NS-11', overdue('19/10/2026'));
+    ruleFailure(await refused('desk', [item(0, 99999999, OVERDUE_WEEK)], OVERDUE_WEEK), 'BR-NS-11', overdue('19/10/2026'));
+    ruleFailure(await refused('desk', [], '2026-10-12'), 'BR-NS-11', overdue('12/10/2026'));
+    ruleFailure(await refused('desk', [], '2026-10-20'), 'BR-NS-11', 'Ngày bắt đầu tuần phải là thứ Hai (BR-NS-11)');
+    ruleFailure(await refused('desk', [], '1999-12-27'), 'BR-NS-11', 'Chỉ hỗ trợ tuần từ năm 2000 đến năm 2100 (BR-NS-11)');
+    ruleFailure(await refused('desk', [], '2101-01-03'), 'BR-NS-11', 'Chỉ hỗ trợ tuần từ năm 2000 đến năm 2100 (BR-NS-11)');
+    // Tuần kế tiếp (26/10) còn mở tới 00:00 thứ Hai.
+    expect((await register('doctor3', fullWeek('2026-10-26'), '2026-10-26')).status).toBe(200);
+  });
+
+  it('biên hạn: đúng 00:00 thứ Hai giờ Việt Nam đã quá hạn, trước đó 1 mili giây còn được', async () => {
+    pinClock('2026-11-08T23:59:59.999+07:00');
+    expect((await register('doctor3', fullWeek())).status).toBe(200);
+    pinClock('2026-11-09T00:00:00+07:00');
+    ruleFailure(await refused('doctor3', fullWeek()), 'BR-NS-11', 'Đã quá hạn đăng ký tuần 09/11/2026 (hạn là 00:00 thứ Hai); chỉ còn xin nghỉ hoặc đổi ca (BR-NS-11)');
+  });
+
+  it('lỗi theo mục gộp trong MỘT câu BR-NS-11, theo thứ tự mục; chồng giờ giữa các mục đến sau cùng; không lưu gì', async () => {
+    const items = [item(0, 1), item(0, 1), item(7, 1), item(1, 5), item(2, 99999999), item(3, 1), item(3, 3)];
+    ruleFailure(
+      await refused('desk', items),
+      'BR-NS-11',
+      `${INVALID}Mục 2: trùng với mục 1 (cùng ngày, cùng ca); Mục 3: ngày 16/11/2026 ${OUTSIDE}; Mục 4: ca 'Ca đêm cũ' đã ngừng dùng; ` +
+        `Mục 5: ca #99999999 không tồn tại hoặc không thuộc chi nhánh của bạn; Mục 6 và mục 7 chồng giờ ngày 12/11/2026: Ca sáng (07:30–12:00) / Ca hành chính (08:00–17:00) (BR-NS-11)`,
+    );
+    expect((await registration('desk')).shiftCount).toBe(0);
+  });
+
+  it('mục lệch tuần vừa ngoài tuần vừa lỗi ca thì báo cả hai; ca của chi nhánh khác coi như không tồn tại; mục lỗi không bị tính trùng hay chồng giờ', async () => {
+    const outside = `ngày 16/11/2026 ${OUTSIDE}`;
+    ruleFailure(
+      await refused('desk', [item(7, 5), item(7, 5)]),
+      'BR-NS-11',
+      `${INVALID}Mục 1: ${outside}; Mục 1: ca 'Ca đêm cũ' đã ngừng dùng; Mục 2: ${outside}; Mục 2: ca 'Ca đêm cũ' đã ngừng dùng (BR-NS-11)`,
+    );
+    ruleFailure(await refused('desk', [item(0, 6)]), 'BR-NS-11', `${INVALID}Mục 1: ca #6 không tồn tại hoặc không thuộc chi nhánh của bạn (BR-NS-11)`);
+    ruleFailure(await refused('desk', [item(-1, 1)]), 'BR-NS-11', `${INVALID}Mục 1: ngày 08/11/2026 ${OUTSIDE} (BR-NS-11)`);
+    // Ca đêm cũ (21:00–23:00, ngừng dùng) chồng Ca khuya (20:00–23:30) nhưng mục ngừng dùng không dự phần vào chồng giờ.
+    const late = await newShift('Ca khuya', '20:00', '23:30');
+    ruleFailure(await refused('desk', [item(0, 5), item(0, late.shiftDefinitionId)]), 'BR-NS-11', `${INVALID}Mục 1: ca 'Ca đêm cũ' đã ngừng dùng (BR-NS-11)`);
+  });
+
+  it('chồng giờ nhiều cặp theo thứ tự (i, j) với ca của mục đứng trước nêu trước; chạm đầu mút và mục trùng không tính', async () => {
+    const day0 = 'ngày 09/11/2026';
+    ruleFailure(
+      await refused('desk', [item(0, 3), item(0, 1), item(0, 2), item(0, 4)]),
+      'BR-NS-11',
+      `${INVALID}Mục 1 và mục 2 chồng giờ ${day0}: Ca hành chính (08:00–17:00) / Ca sáng (07:30–12:00); Mục 1 và mục 3 chồng giờ ${day0}: Ca hành chính (08:00–17:00) / Ca chiều (13:00–17:30) (BR-NS-11)`,
+    );
+    ruleFailure(
+      await refused('desk', [item(0, 1), item(0, 3), item(0, 3)]),
+      'BR-NS-11',
+      `${INVALID}Mục 3: trùng với mục 2 (cùng ngày, cùng ca); Mục 1 và mục 2 chồng giờ ${day0}: Ca sáng (07:30–12:00) / Ca hành chính (08:00–17:00) (BR-NS-11)`,
+    );
+  });
+
+  it('VALIDATION_FAILED: thiếu items, phần tử null, thiếu trường, quá 100 phần tử; đến TRƯỚC vai trò và TRƯỚC mọi kiểm BR-NS-11 (đo BE)', async () => {
+    const send400 = (payload: unknown, week = WEEK, who: Who = 'desk') => rejected(who, 'put', regUrl(week), payload);
+    expectFail(await send400({}), 400, 'VALIDATION_FAILED', 'items: Vui lòng gửi danh sách ca đăng ký');
+    expectFail(await send400({ items: null }), 400, 'VALIDATION_FAILED', 'items: Vui lòng gửi danh sách ca đăng ký');
+    expectFail(await send400({ items: [null] }), 400, 'VALIDATION_FAILED', 'items[0]: Mục đăng ký không được để trống');
+    expectFail(await send400({ items: [{ workDate: WEEK }] }), 400, 'VALIDATION_FAILED', 'items[0].shiftDefinitionId: Vui lòng chọn ca làm việc');
+    expectFail(await send400({ items: [{ shiftDefinitionId: 1 }] }), 400, 'VALIDATION_FAILED', 'items[0].workDate: Vui lòng chọn ngày làm');
+    expectFail(await send400({ items: [{}] }), 400, 'VALIDATION_FAILED', 'items[0].shiftDefinitionId: Vui lòng chọn ca làm việc; items[0].workDate: Vui lòng chọn ngày làm');
+    expectFail(await send400({ items: Array.from({ length: 101 }, () => item(0, 1)) }), 400, 'VALIDATION_FAILED', 'items: Tối đa 100 mục mỗi lần đăng ký');
+    // Đúng 100 phần tử qua được kiểm định dạng rồi mới bị BR-NS-11 (trùng).
+    expect((await send400({ items: Array.from({ length: 100 }, () => item(0, 1)) })).data.errorCode).toBe('BUSINESS_RULE_VIOLATION');
+    expectFail(await send400({}, WEEK, 'manager'), 400, 'VALIDATION_FAILED');
+    expectFail(await send400({}, '2026-11-10'), 400, 'VALIDATION_FAILED');
+    expectFail(await send400({}, OVERDUE_WEEK), 400, 'VALIDATION_FAILED');
+  });
+
+  it('MALFORMED_REQUEST: body vắng / không phải object, items sai kiểu, workDate không phải ngày thật, shiftDefinitionId không nguyên, weekStart sai kiểu; đến TRƯỚC kiểm định dạng và vai trò', async () => {
+    const bodies: unknown[] = [
+      undefined, [], 5, '"abc"', { items: 'x' }, { items: 5 }, { items: {} }, { items: ['x'] }, { items: [[]] },
+      { items: [{ workDate: 'xx', shiftDefinitionId: 1 }] }, { items: [{ workDate: '2026-02-30', shiftDefinitionId: 1 }] },
+      { items: [{ workDate: WEEK, shiftDefinitionId: 'a' }] }, { items: [{ workDate: WEEK, shiftDefinitionId: 1.5 }] }, { items: [null, { workDate: 5, shiftDefinitionId: 1 }] },
+    ];
+    for (const body of bodies) expectFail(await rejected('desk', 'put', regUrl(WEEK), body), 400, 'MALFORMED_REQUEST', MALFORMED_BODY);
+    expectFail(await rejected('manager', 'put', regUrl(WEEK), { items: [{ workDate: 'xx', shiftDefinitionId: 1 }] }), 400, 'MALFORMED_REQUEST', MALFORMED_BODY);
+    expectFail(await rejected('desk', 'put', regUrl('abc'), { items: fullWeek() }), 400, 'MALFORMED_REQUEST', "Tham số 'weekStart' sai kiểu dữ liệu");
+    for (const who of ['manager', 'chain', 'admin', 'customer'] as const) expectFail(await refused(who, fullWeek()), 403, 'ACCESS_DENIED');
+  });
+
+  it('state cũ: phân ca chưa có `source` coi là MANAGER (không bị hủy khi sửa đăng ký, vẫn tính định mức)', async () => {
+    const KEY = 'petcare-mock-workforce';
+    const manager = await assign(4, 4, addDays(WEEK, 2));
+    const state = JSON.parse(localStorage.getItem(KEY)!) as { assignments: { shiftAssignmentId: number; source?: string }[] };
+    for (const a of state.assignments) delete a.source;
+    localStorage.setItem(KEY, JSON.stringify(state));
+    expect((await registration('desk')).assignments).toMatchObject([{ shiftAssignmentId: manager.shiftAssignmentId, source: 'MANAGER' }]);
+    const reg = await saved('desk', fullWeek().slice(0, 9));
+    expect(reg).toMatchObject({ shiftCount: 10 });
+    expect(reg.assignments.filter((a) => a.source === 'MANAGER').map((a) => a.shiftAssignmentId)).toEqual([manager.shiftAssignmentId]);
+  });
+});
+
+describe('thống kê số ca trong tuần (#16, BR-NS-12)', () => {
+  it('mọi nhân viên A06–A08 ACTIVE của chi nhánh kể cả chưa có ca, sắp theo tên, đủ trường; quản lý và chi nhánh khác không có mặt', async () => {
+    const rows = await summaries();
+    expect(rows.map((r) => r.staffId)).toEqual(expect.arrayContaining([4, 5, 6, 21, 22, 23]));
+    expect(rows.map((r) => r.staffId)).not.toContain(3);
+    for (const r of rows) {
+      expect(Object.keys(r).sort()).toEqual(['meetsRequirement', 'requiredShifts', 'role', 'shiftCount', 'staffId', 'staffName']);
+      expect(['RECEPTIONIST', 'VET', 'CARETAKER']).toContain(r.role);
+      expect(r).toMatchObject({ shiftCount: 0, requiredShifts: 10, meetsRequirement: false });
+    }
+    const names = rows.map((r) => r.staffName);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    expect(await summaries(WEEK, 'manager2')).toEqual([]);
+    expect((await send('manager', 'get', '/api/shift-weekly-summaries', undefined, { weekStart: WEEK })).data).toMatchObject({ message: 'Thống kê số ca trong tuần', code: 200 });
+  });
+
+  it('đếm phân ca SCHEDULED của tuần gồm cả SELF và MANAGER (nghỉ / hủy không tính); đạt khi số ca ≥ định mức', async () => {
+    const week = '2026-10-26';
+    const rows = await summaries(week);
+    for (const [who, id] of [['desk', 4], ['vet', 5], ['caretaker', 6], ['doctor2', 21]] as const) {
+      const expected = (await mine(who, week, addDays(week, 6))).filter((a) => a.status === 'SCHEDULED').length;
+      expect(expected, who).toBeGreaterThan(0);
+      expect(rows.find((r) => r.staffId === id)!.shiftCount, who).toBe(expected);
+    }
+    await saved('doctor3', fullWeek());
+    expect((await summaries()).find((r) => r.staffId === 22)).toMatchObject({ shiftCount: 10, requiredShifts: 10, meetsRequirement: true });
+    // Biên: 9 ca (toàn do quản lý xếp) chưa đạt, ca thứ 10 thì đạt.
+    for (const n of [0, 1, 2, 3, 4, 5, 6]) await assign(23, 1, addDays(WEEK, n));
+    await assign(23, 2, addDays(WEEK, 0));
+    await assign(23, 2, addDays(WEEK, 1));
+    expect((await summaries()).find((r) => r.staffId === 23)).toMatchObject({ shiftCount: 9, meetsRequirement: false });
+    await assign(23, 2, addDays(WEEK, 2));
+    expect((await summaries()).find((r) => r.staffId === 23)).toMatchObject({ shiftCount: 10, meetsRequirement: true });
+  });
+
+  it('nhân viên mới chưa có ca vẫn có mặt; bị khóa hoặc vô hiệu hóa thì biến mất, mở khóa thì trở lại', async () => {
+    const created = await post<{ accountId: number }>('chain', '/api/staff', { email: 'vet.thongke@new.vn', phone: '0900000078', fullName: 'BS. Thống Kê', role: 'VET', branchId: 1 });
+    const find = async () => (await summaries()).find((r) => r.staffId === created.accountId);
+    expect(await find()).toMatchObject({ staffName: 'BS. Thống Kê', role: 'VET', shiftCount: 0, meetsRequirement: false });
+    expect((await send('admin', 'post', `/api/accounts/${created.accountId}/lock`, { reason: 'Thử khóa' })).status).toBe(200);
+    expect(await find()).toBeUndefined();
+    expect((await send('admin', 'post', `/api/accounts/${created.accountId}/unlock`, { reason: 'Mở khóa' })).status).toBe(200);
+    expect(await find()).toBeDefined();
+    expect((await send('chain', 'post', `/api/staff/${created.accountId}/disable`)).status).toBe(200);
+    expect(await find()).toBeUndefined();
+  });
+
+  it('không kiểm hạn: xem được tuần đã qua; biên năm 2000 / 2100', async () => {
+    expect(Array.isArray(await summaries('2026-10-12'))).toBe(true);
+    expect(Array.isArray(await summaries('2000-01-03'))).toBe(true);
+    expect(Array.isArray(await summaries('2100-12-27'))).toBe(true);
+  });
+
+  it('weekStart thiếu / sai kiểu → 400 MALFORMED_REQUEST (trước vai trò); không phải thứ Hai / năm ngoài 2000–2100 → 400 BR-NS-11; vai khác 403', async () => {
+    const url = '/api/shift-weekly-summaries';
+    expectFail(await rejected('manager', 'get', url), 400, 'MALFORMED_REQUEST', "Thiếu tham số 'weekStart'");
+    expectFail(await rejected('desk', 'get', url), 400, 'MALFORMED_REQUEST', "Thiếu tham số 'weekStart'");
+    for (const bad of ['abc', '2026-02-30']) expectFail(await rejected('manager', 'get', url, undefined, { weekStart: bad }), 400, 'MALFORMED_REQUEST', "Tham số 'weekStart' sai kiểu dữ liệu");
+    ruleFailure(await rejected('manager', 'get', url, undefined, { weekStart: '2026-11-10' }), 'BR-NS-11', 'Ngày bắt đầu tuần phải là thứ Hai (BR-NS-11)');
+    ruleFailure(await rejected('manager', 'get', url, undefined, { weekStart: '1999-12-27' }), 'BR-NS-11', 'Chỉ hỗ trợ tuần từ năm 2000 đến năm 2100 (BR-NS-11)');
+    for (const who of ['desk', 'vet', 'caretaker', 'chain', 'admin', 'customer'] as const) expectFail(await rejected(who, 'get', url, undefined, { weekStart: WEEK }), 403, 'ACCESS_DENIED');
+  });
+});
+
+// ─── Phân quyền 7 vai trò × 17 endpoint, 401, tài khoản phải đổi mật khẩu ───
 
 describe('phân quyền', () => {
   const ROLES = ['admin', 'chain', 'manager', 'desk', 'vet', 'caretaker', 'customer'] as const;
@@ -654,7 +1055,7 @@ describe('phân quyền', () => {
 
   /** Mỗi dòng: tên, vai được phép, hàm gọi hợp lệ cho vai đó (vai bị từ chối nhận cùng request nên vẫn phải ra 403, không phải lỗi khác). */
   const endpoints: { name: string; allowed: readonly Who[]; call: (who: Who) => Promise<AxiosResponse> }[] = [
-    { name: '#1 GET /shift-definitions', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'get', '/api/shift-definitions') },
+    { name: '#1 GET /shift-definitions', allowed: ['manager', ...STAFF_ONLY], call: (w) => send(w, 'get', '/api/shift-definitions') },
     { name: '#2 POST /shift-definitions', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'post', '/api/shift-definitions', { name: 'Ca ma trận', startTime: '05:00', endTime: '06:00' }) },
     { name: '#3 PATCH /shift-definitions/{id}', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'patch', '/api/shift-definitions/4', { name: 'Ca tối mới' }) },
     { name: '#4 GET /shift-assignments', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'get', '/api/shift-assignments', undefined, { from: day(0), to: day(3) }) },
@@ -680,10 +1081,13 @@ describe('phân quyền', () => {
     { name: '#12 GET /shift-requests', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'get', '/api/shift-requests') },
     { name: '#13 POST /shift-requests/{id}/approve', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'post', '/api/shift-requests/1/approve') },
     { name: '#14 POST /shift-requests/{id}/reject', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'post', '/api/shift-requests/2/reject', { decisionNote: 'Ma trận' }) },
+    { name: '#15 PUT /me/shift-registrations/{weekStart}', allowed: STAFF_ONLY, call: (w) => send(w, 'put', regUrl(WEEK), { items: fullWeek() }) },
+    { name: '#16 GET /shift-weekly-summaries', allowed: BRANCH_MANAGER_ONLY, call: (w) => send(w, 'get', '/api/shift-weekly-summaries', undefined, { weekStart: WEEK }) },
+    { name: '#17 GET /me/shift-registrations/{weekStart}', allowed: STAFF_ONLY, call: (w) => send(w, 'get', regUrl(WEEK)) },
   ];
 
-  it('đủ 14 endpoint của hợp đồng', () => {
-    expect(endpoints).toHaveLength(14);
+  it('đủ 17 endpoint của hợp đồng', () => {
+    expect(endpoints).toHaveLength(17);
   });
 
   for (const endpoint of endpoints) {
@@ -708,8 +1112,9 @@ describe('phân quyền', () => {
       ['get', '/api/shift-assignments'], ['post', '/api/shift-assignments', {}], ['post', '/api/shift-assignments/1/cancel', {}], ['post', '/api/shift-assignments/1/absent', {}],
       ['get', '/api/me/shift-assignments'], ['post', '/api/me/shift-requests', {}], ['get', '/api/me/shift-requests'], ['post', '/api/me/shift-requests/1/withdraw'],
       ['get', '/api/shift-requests'], ['post', '/api/shift-requests/1/approve'], ['post', '/api/shift-requests/1/reject', {}],
+      ['put', regUrl(WEEK), { items: [] }], ['get', '/api/shift-weekly-summaries'], ['get', regUrl(WEEK)],
     ];
-    expect(calls).toHaveLength(14);
+    expect(calls).toHaveLength(17);
     for (const [method, url, body] of calls) {
       expectFail(await failure(client.request({ method, url, data: body })), 401, 'UNAUTHENTICATED');
     }
@@ -773,13 +1178,13 @@ describe('BR-NS-09: nhân viên rời chi nhánh (staffLeftBranch)', () => {
     const after = await assignments({ staffId: 5 });
     for (const a of after) {
       const was = before.find((b) => b.shiftAssignmentId === a.shiftAssignmentId)!;
-      if (was.status === 'SCHEDULED' && a.workDate >= day(0)) expect(a).toMatchObject({ status: 'CANCELLED', reason: 'Nhân viên không còn làm việc tại chi nhánh (BR-NS-09).', pendingRequestId: null });
+      if (was.status === 'SCHEDULED' && a.workDate >= day(0)) expect(a).toMatchObject({ status: 'CANCELLED', reason: 'Nhân viên không còn làm việc tại chi nhánh', pendingRequestId: null });
       else expect(a.status).toBe(was.status);
     }
     expect(after.find((a) => a.shiftAssignmentId === startedToday.shiftAssignmentId)?.status).toBe('CANCELLED');
     expect(after.find((a) => a.workDate === day(-1))?.status).toBe('SCHEDULED'); // đã qua: giữ nguyên
     const [r1] = (await requestsOf('doctor')).filter((r) => r.shiftRequestId === 1);
-    expect(r1).toMatchObject({ status: 'REJECTED', decidedBy: null, decisionNote: 'Nhân viên không còn làm việc tại chi nhánh.' });
+    expect(r1).toMatchObject({ status: 'REJECTED', decidedBy: null, decisionNote: 'Nhân viên không còn làm việc tại chi nhánh' });
     expect((await notices('doctor')).filter((n) => n.type === 'SHIFT_ASSIGNMENT_CANCELLED').length).toBeGreaterThan(5);
   });
 
@@ -799,7 +1204,7 @@ describe('BR-NS-09: nhân viên rời chi nhánh (staffLeftBranch)', () => {
 // Dùng nhân viên TẠO LÚC CHẠY (state localStorage, reset mỗi test): nhân viên seed của identity-admin.mock giữ status / chi nhánh ở biến module nên vô hiệu hóa hay điều chuyển chúng làm lệch các test sau.
 
 describe('BR-NS-09: identity-admin gọi staffLeftBranch khi vô hiệu hóa / điều chuyển', () => {
-  const REASON = 'Nhân viên không còn làm việc tại chi nhánh (BR-NS-09).';
+  const REASON = 'Nhân viên không còn làm việc tại chi nhánh';
   const future = (list: ShiftAssignment[]) => list.filter((a) => a.workDate >= day(0)); // hôm nay có ca chiều 13:00 chưa bắt đầu (đồng hồ ghim 09:00)
 
   /** VET mới ở chi nhánh 1 có 3 phân ca: hôm nay ca chiều (#2), ngày mai và ngày kia ca sáng (#1). */

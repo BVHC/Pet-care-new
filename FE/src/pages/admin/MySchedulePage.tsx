@@ -1,6 +1,6 @@
 /**
- * Lịch làm việc của tôi (UC35, UC36) — workforce-v1 #8–11. Lễ tân, bác sĩ, nhân viên chăm sóc: xem phân ca theo khoảng ngày, gửi yêu cầu
- * nghỉ / đổi ca, theo dõi và rút yêu cầu chờ duyệt. Vai khác (kể cả quản lý chi nhánh) không có chức năng này: không gọi API nào.
+ * Lịch làm việc của tôi (UC35, UC36) — workforce-v1 #8–11, #15, #17. Lễ tân, bác sĩ, nhân viên chăm sóc: xem phân ca theo khoảng ngày, đăng ký ca theo tuần,
+ * gửi yêu cầu nghỉ / đổi ca, theo dõi và rút yêu cầu chờ duyệt. Vai khác (kể cả quản lý chi nhánh) không có chức năng này: không gọi API nào.
  */
 import { useState } from 'react';
 import { Lock } from 'lucide-react';
@@ -8,6 +8,7 @@ import { NoticeBar, type Notice } from '@/components/admin/form-ui';
 import { StatePanel } from '@/components/staff/ui';
 import { useAccount } from '@/shared/stores/session.store';
 import { MyAssignments } from './workforce/MyAssignments';
+import { MyRegistration } from './workforce/MyRegistration';
 import { MyRequests } from './workforce/MyRequests';
 
 const STAFF_ROLES = ['RECEPTIONIST', 'VET', 'CARETAKER'];
@@ -22,10 +23,11 @@ export function MySchedulePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-(--text-primary)">Lịch làm việc</h1>
-        <p className="text-(--text-secondary)">Ca được phân cho bạn và các yêu cầu nghỉ / đổi ca. Yêu cầu gửi quá sát giờ vào ca sẽ bị từ chối.</p>
+        <p className="text-(--text-secondary)">Ca được phân cho bạn, đăng ký ca theo tuần và các yêu cầu nghỉ / đổi ca. Yêu cầu gửi quá sát giờ vào ca sẽ bị từ chối.</p>
       </div>
       <NoticeBar notice={notice} />
       <MyAssignments onNotice={setNotice} />
+      <MyRegistration />
       <MyRequests onNotice={setNotice} />
     </div>
   );

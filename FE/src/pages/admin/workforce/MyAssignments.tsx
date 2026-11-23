@@ -6,20 +6,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/modal-templates';
 import { toApiError } from '@/shared/api/api-error';
-import { useMyShiftAssignments } from '@/shared/hooks/useWorkforce';
-import type { ShiftAssignment } from '@/shared/types/workforce';
+import { useMyShiftAssignments, useShiftDefinitions } from '@/shared/hooks/useWorkforce';
+import type { ShiftAssignment, ShiftDefinition } from '@/shared/types/workforce';
 import { addDays } from '@/shared/utils/branch-schedule';
 import { vnDate } from '@/shared/utils/vn-time';
-import { ASSIGNMENT_STATUS_LABELS, ASSIGNMENT_STATUS_TONE, dayLabel, shiftTime } from './labels';
+import { ASSIGNMENT_SOURCE_LABELS, ASSIGNMENT_STATUS_LABELS, ASSIGNMENT_STATUS_TONE, dayLabel, shiftTime } from './labels';
 import { ShiftRequestDialog, type ShiftOption } from './ShiftRequestDialog';
 
 const dateInput = 'h-10 rounded-lg border border-(--color-border-default) bg-white px-3 text-sm';
 
-/** Ca đích của đổi ca: các ca khác xuất hiện trong lịch đang xem (nhân viên không có API liệt kê ca của chi nhánh, #1 chỉ dành cho quản lý). */
-function otherShifts(rows: ShiftAssignment[], current: ShiftAssignment): ShiftOption[] {
-  const seen = new Map<number, ShiftOption>();
-  for (const r of rows) if (r.shiftDefinitionId !== current.shiftDefinitionId) seen.set(r.shiftDefinitionId, r);
-  return [...seen.values()];
+/** Ca đích của đổi ca: ca đang dùng của chi nhánh (#1: BE cho A06–A08 gọi, chỉ trả ca đang dùng) trừ ca hiện tại. */
+function otherShifts(definitions: ShiftDefinition[], current: ShiftAssignment): ShiftOption[] {
+  return definitions
+    .filter((d) => d.active && d.shiftDefinitionId !== current.shiftDefinitionId)
+    .map((d) => ({ shiftDefinitionId: d.shiftDefinitionId, shiftName: d.name, startTime: d.startTime, endTime: d.endTime }));
 }
 
 /** Lịch phân ca của tôi (UC35, workforce-v1 #8) + nút gửi yêu cầu nghỉ / đổi ca (#9) cho ca còn SCHEDULED, chưa có yêu cầu chờ, từ hôm nay. */
@@ -29,6 +29,7 @@ export function MyAssignments({ onNotice }: { onNotice: (n: Notice) => void }) {
   const [to, setTo] = useState(() => addDays(today, 13));
   const [requesting, setRequesting] = useState<ShiftAssignment | null>(null);
   const list = useMyShiftAssignments({ from, to }, Boolean(from && to));
+  const definitions = useShiftDefinitions({ activeOnly: true });
   const rows = list.data ?? [];
 
   let body;
@@ -55,7 +56,9 @@ export function MyAssignments({ onNotice }: { onNotice: (n: Notice) => void }) {
               </td>
               <td className="align-top">
                 <span className="block font-medium text-(--text-primary)">{a.shiftName}</span>
-                <span className="text-xs tabular-nums text-(--text-secondary)">{shiftTime(a)}</span>
+                <span className="text-xs tabular-nums text-(--text-secondary)">
+                  {shiftTime(a)} · {ASSIGNMENT_SOURCE_LABELS[a.source]}
+                </span>
               </td>
               <td className="align-top">
                 <span className="flex flex-wrap items-center gap-1.5">
@@ -103,7 +106,7 @@ export function MyAssignments({ onNotice }: { onNotice: (n: Notice) => void }) {
       {requesting && (
         <ShiftRequestDialog
           assignment={requesting}
-          options={otherShifts(rows, requesting)}
+          options={otherShifts(definitions.data ?? [], requesting)}
           onClose={() => setRequesting(null)}
           onDone={(text) => {
             setRequesting(null);

@@ -177,6 +177,27 @@ describe('FE/.env.example: giá trị VITE_API_MOCK_ONLY đã commit (T67)', () 
     expect(real('POST', '/api/online-orders/5/cancel-failed')).toBe(false);
   });
 
+  it('nhân sự (T66, workforce-v1 #1 đến #17) đi tới BE thật: không còn luật shift-* nào', () => {
+    expect(real('GET', '/api/shift-definitions')).toBe(true);
+    expect(real('POST', '/api/shift-definitions')).toBe(true);
+    expect(real('PATCH', '/api/shift-definitions/5')).toBe(true);
+    expect(real('GET', '/api/shift-assignments')).toBe(true);
+    expect(real('POST', '/api/shift-assignments')).toBe(true);
+    expect(real('POST', '/api/shift-assignments/5/cancel')).toBe(true);
+    expect(real('POST', '/api/shift-assignments/5/absent')).toBe(true);
+    expect(real('GET', '/api/me/shift-assignments')).toBe(true);
+    expect(real('POST', '/api/me/shift-requests')).toBe(true);
+    expect(real('GET', '/api/me/shift-requests')).toBe(true);
+    expect(real('POST', '/api/me/shift-requests/5/withdraw')).toBe(true);
+    expect(real('GET', '/api/shift-requests')).toBe(true);
+    expect(real('POST', '/api/shift-requests/5/approve')).toBe(true);
+    expect(real('POST', '/api/shift-requests/5/reject')).toBe(true);
+    expect(real('PUT', '/api/me/shift-registrations/2026-11-30')).toBe(true);
+    expect(real('GET', '/api/me/shift-registrations/2026-11-30')).toBe(true);
+    expect(real('GET', '/api/shift-weekly-summaries')).toBe(true);
+    expect(line).not.toMatch(/shift-/);
+  });
+
   it('chế độ hỗn hợp của file này đóng cổng thanh toán cho đơn thật, và không đóng khi toàn mock', () => {
     expect(paymentClosedForRealOrders(false, rules)).toBe(true);
     expect(paymentClosedForRealOrders(true, rules)).toBe(false);

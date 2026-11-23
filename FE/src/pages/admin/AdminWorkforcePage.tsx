@@ -1,6 +1,6 @@
 /**
- * Nhân sự (UC34, UC37, UC38) — workforce-v1 #1–7, #12–14. Chỉ BRANCH_MANAGER (chi nhánh lấy từ người gọi): ca làm việc, phân ca + hủy +
- * ghi vắng đột xuất, duyệt / từ chối yêu cầu nghỉ hoặc đổi ca. Vai khác không có chức năng này (SUPER_MANAGER cũng không): không gọi API nào.
+ * Nhân sự (UC34, UC37, UC38) — workforce-v1 #1–7, #12–14, #16. Chỉ BRANCH_MANAGER (chi nhánh lấy từ người gọi): ca làm việc, phân ca + hủy +
+ * ghi vắng đột xuất, duyệt / từ chối yêu cầu nghỉ hoặc đổi ca, thống kê số ca trong tuần. Vai khác không có chức năng này (SUPER_MANAGER cũng không): không gọi API nào.
  */
 import { Lock } from 'lucide-react';
 import { StatePanel } from '@/components/staff/ui';
@@ -9,6 +9,7 @@ import { useAccount } from '@/shared/stores/session.store';
 import { AssignmentsTab } from './workforce/AssignmentsTab';
 import { RequestsTab } from './workforce/RequestsTab';
 import { ShiftDefinitionsTab } from './workforce/ShiftDefinitionsTab';
+import { WeeklySummaryTab } from './workforce/WeeklySummaryTab';
 
 export function AdminWorkforcePage() {
   const role = useAccount()?.role;
@@ -26,6 +27,7 @@ export function AdminWorkforcePage() {
           <TabsTrigger value="shifts">Ca làm việc</TabsTrigger>
           <TabsTrigger value="assignments">Phân ca</TabsTrigger>
           <TabsTrigger value="requests">Yêu cầu nghỉ / đổi ca</TabsTrigger>
+          <TabsTrigger value="weekly">Thống kê tuần</TabsTrigger>
         </TabsList>
         <TabsContent value="shifts" className="mt-4">
           <ShiftDefinitionsTab />
@@ -35,6 +37,9 @@ export function AdminWorkforcePage() {
         </TabsContent>
         <TabsContent value="requests" className="mt-4">
           <RequestsTab />
+        </TabsContent>
+        <TabsContent value="weekly" className="mt-4">
+          <WeeklySummaryTab />
         </TabsContent>
       </Tabs>
     </div>

@@ -77,13 +77,13 @@ describe('tab Ca làm việc (#1–3)', () => {
     fireEvent.change(within(dialog).getByLabelText('Giờ bắt đầu'), { target: { value: '05:00' } });
     fireEvent.change(within(dialog).getByLabelText('Giờ kết thúc'), { target: { value: '06:00' } });
     await user.click(within(dialog).getByRole('button', { name: 'Lưu' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Tên ca "Ca sáng" đã tồn tại trong chi nhánh');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Tên ca đã tồn tại trong chi nhánh');
   });
 
   it('ngừng dùng ca còn phân ca chưa làm: lỗi BR-NS-01 trên bảng; dùng lại ca cũ được', async () => {
     const user = await renderPage();
     await user.click(await screen.findByRole('button', { name: 'Ngừng dùng Ca sáng' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Ca còn phân ca chưa làm từ hôm nay nên chưa ngừng dùng được');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ca còn phân ca từ hôm nay trở đi, không ngừng dùng được');
     await user.click(screen.getByRole('button', { name: 'Dùng lại Ca đêm cũ' }));
     expect(await screen.findByText('Ca đêm cũ dùng lại được.')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('row', { name: /Ca đêm cũ/ })).toHaveTextContent('Đang dùng'));
@@ -151,7 +151,7 @@ describe('tab Phân ca (#4–7)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Ghi nhận vắng đột xuất' });
     await user.type(within(dialog).getByLabelText('Lý do vắng'), 'Quên báo');
     await user.click(within(dialog).getByRole('button', { name: 'Ghi vắng' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chỉ ghi nhận vắng trong 7 ngày kể từ ngày làm việc');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chỉ ghi nhận vắng cho ca trong vòng 7 ngày gần đây');
   });
 
   it('khoảng ngày quá 62 ngày: hiện lỗi BR-NS-03 của máy chủ', async () => {
@@ -160,7 +160,7 @@ describe('tab Phân ca (#4–7)', () => {
     await bodyRows('Lịch phân ca');
     fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-08-01' } });
     expect(await screen.findByText('Không tải được lịch phân ca')).toBeInTheDocument();
-    expect(screen.getByText(/Khoảng ngày xem lịch tối đa 62 ngày/)).toBeInTheDocument();
+    expect(screen.getByText(/Khoảng ngày tối đa 62 ngày/)).toBeInTheDocument();
   });
 
   it('phân ca mới cho nhân viên đang nghỉ hôm nay: thêm một dòng', async () => {
@@ -188,7 +188,7 @@ describe('tab Phân ca (#4–7)', () => {
     await user.selectOptions(within(dialog).getByLabelText('Nhân viên'), '5');
     await user.selectOptions(within(dialog).getByLabelText('Ca làm việc'), '3');
     await user.click(within(dialog).getByRole('button', { name: 'Phân ca' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chồng giờ với ca "Ca chiều"');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Nhân viên đã có phân ca trùng hoặc chồng giờ: Ca chiều');
   });
 
   it('chi nhánh chưa có nhân viên: báo rỗng và khóa nút Phân ca', async () => {
@@ -245,5 +245,79 @@ describe('tab Yêu cầu nghỉ / đổi ca (#12–14)', () => {
     await user.click(button);
     expect(await screen.findByRole('alert')).toHaveTextContent('Không thể chuyển trạng thái');
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Duyệt: BS. Minh Anh, 2026-11-09' })).not.toBeInTheDocument());
+  });
+});
+
+// ─── Tab Thống kê tuần (#16) ───
+// Tuần kế tiếp mặc định là 09/11–15/11/2026. Nhân viên đang hoạt động của chi nhánh 1: Lan Chi (lễ tân), BS. Minh Anh, BS. Ngọc Lan, BS. Quốc Bảo, BS. Thanh Thảo (bác sĩ), Thu Hà (chăm sóc).
+// BS. Minh Anh đã có 6 ca do quản lý xếp trong tuần này; BS. Ngọc Lan chưa có ca nào.
+
+const summaryRows = () => bodyRows('Thống kê số ca theo tuần');
+const rowOf = async (name: string) => (await summaryRows()).find((r) => within(r).getAllByRole('cell')[0].textContent === name)!;
+const cellsOf = (row: HTMLElement) => within(row).getAllByRole('cell').map((c) => c.textContent);
+/** Phân ca của quản lý cho một nhân viên: Ca sáng (#1) và Ca chiều (#2) trong `days` ngày liền từ 09/11. */
+async function assignShifts(staffId: number, count: number) {
+  const slots = ['2026-11-09', '2026-11-10', '2026-11-11', '2026-11-12', '2026-11-13'].flatMap((workDate) => [1, 2].map((shiftDefinitionId) => ({ workDate, shiftDefinitionId })));
+  for (const slot of slots.slice(0, count)) await workforceApi.createShiftAssignment({ staffId, ...slot });
+}
+
+describe('tab Thống kê tuần (#16)', () => {
+  it('mặc định là tuần kế tiếp: mỗi nhân viên một dòng (kể cả chưa có ca), sắp theo tên, kèm vai trò, số ca, định mức và kết quả bằng chữ', async () => {
+    const user = await renderPage();
+    await openTab(user, 'Thống kê tuần');
+    const rows = await summaryRows();
+    expect(screen.getByText('Tuần 09/11/2026 – 15/11/2026')).toBeInTheDocument();
+    const names = rows.map((r) => within(r).getAllByRole('cell')[0].textContent);
+    expect(names).toEqual(expect.arrayContaining(['Lan Chi', 'BS. Minh Anh', 'BS. Ngọc Lan', 'BS. Quốc Bảo', 'BS. Thanh Thảo', 'Thu Hà']));
+    expect(names).toEqual([...names].sort((a, b) => (a ?? '').localeCompare(b ?? '')));
+    expect(cellsOf(await rowOf('BS. Minh Anh'))).toEqual(['BS. Minh Anh', 'Bác sĩ thú y', '6', '10', 'Chưa đạt']);
+    expect(cellsOf(await rowOf('BS. Ngọc Lan'))).toEqual(['BS. Ngọc Lan', 'Bác sĩ thú y', '0', '10', 'Chưa đạt']);
+    expect(cellsOf(await rowOf('Lan Chi'))[1]).toBe('Lễ tân');
+    expect(cellsOf(await rowOf('Thu Hà'))[1]).toBe('Nhân viên chăm sóc');
+    expect(screen.getByText(new RegExp(`^0 / ${rows.length} nhân viên đạt định mức`))).toBeInTheDocument();
+  });
+
+  it('đủ định mức thì hiện Đạt, thiếu một ca vẫn Chưa đạt (biên 9 / 10)', async () => {
+    const user = await renderPage();
+    await assignShifts(22, 10); // BS. Ngọc Lan: 10 ca
+    await assignShifts(23, 9); // BS. Thanh Thảo: 9 ca
+    await openTab(user, 'Thống kê tuần');
+    expect(cellsOf(await rowOf('BS. Ngọc Lan'))).toEqual(['BS. Ngọc Lan', 'Bác sĩ thú y', '10', '10', 'Đạt']);
+    expect(cellsOf(await rowOf('BS. Thanh Thảo'))).toEqual(['BS. Thanh Thảo', 'Bác sĩ thú y', '9', '10', 'Chưa đạt']);
+    expect(screen.getByText(/^1 \/ \d+ nhân viên đạt định mức/)).toBeInTheDocument();
+  });
+
+  it('chọn tuần: Tuần này đếm lại theo lịch của chi nhánh; một ngày bất kỳ quy về thứ Hai', async () => {
+    const user = await renderPage();
+    await openTab(user, 'Thống kê tuần');
+    await summaryRows();
+    await user.click(screen.getByRole('button', { name: 'Tuần này' }));
+    expect(await screen.findByText('Tuần 02/11/2026 – 08/11/2026')).toBeInTheDocument();
+    const expected = (await workforceApi.listShiftAssignments({ from: '2026-11-02', to: '2026-11-08', staffId: 5, status: 'SCHEDULED', size: 100 })).totalElements;
+    expect(expected).toBeGreaterThan(0);
+    await waitFor(async () => expect(cellsOf(await rowOf('BS. Minh Anh'))[2]).toBe(String(expected)));
+    fireEvent.change(screen.getByLabelText('Chọn ngày trong tuần'), { target: { value: '2026-11-26' } });
+    expect(await screen.findByText('Tuần 23/11/2026 – 29/11/2026')).toBeInTheDocument();
+    expect(screen.getByLabelText('Chọn ngày trong tuần')).toHaveValue('2026-11-23');
+    await user.click(screen.getByRole('button', { name: 'Tuần trước' }));
+    expect(await screen.findByText('Tuần 16/11/2026 – 22/11/2026')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Tuần sau' }));
+    expect(await screen.findByText('Tuần 23/11/2026 – 29/11/2026')).toBeInTheDocument();
+  });
+
+  it('tuần ngoài năm 2000–2100: lỗi BR-NS-11 của máy chủ hiện nguyên văn', async () => {
+    const user = await renderPage();
+    await openTab(user, 'Thống kê tuần');
+    await summaryRows();
+    fireEvent.change(screen.getByLabelText('Chọn ngày trong tuần'), { target: { value: '1999-12-29' } });
+    expect(await screen.findByText('Không tải được thống kê số ca')).toBeInTheDocument();
+    expect(screen.getByText(/Chỉ hỗ trợ tuần từ năm 2000 đến năm 2100/)).toBeInTheDocument();
+  });
+
+  it('chi nhánh chưa có nhân viên: báo rỗng, không lỗi', async () => {
+    const user = await renderPage('manager2@store2.vn');
+    await openTab(user, 'Thống kê tuần');
+    expect(await screen.findByText('Chưa có nhân viên để thống kê')).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Thống kê số ca theo tuần' })).not.toBeInTheDocument();
   });
 });
