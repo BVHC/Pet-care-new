@@ -20,7 +20,7 @@ import com.petcare.module.workforce.entity.ShiftRequestStatus;
 
 import jakarta.persistence.LockModeType;
 
-/** Bảng {@code shift_requests} (docs/adr/0138). Hàm khóa là {@code MANDATORY}, xem {@code ShiftDefinitionRepository}. */
+/** Bảng {@code shift_requests} (docs/adr/0149). Hàm khóa là {@code MANDATORY}, xem {@code ShiftDefinitionRepository}. */
 public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Long> {
 
     /** Yêu cầu {@code PENDING} của một phân ca (mỗi phân ca tối đa một, BR-NS-04). */
@@ -60,7 +60,7 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Long
      * {@code REJECTED}, hệ thống ghi chú, {@code decided_by} giữ NULL. Ghi đủ cột như {@code ShiftRequest.rejectBySystem}
      * (CHECK V36 {@code ck_shift_requests_closed_at} / {@code _rejected_note}); {@code status = 'PENDING'} nằm trong câu
      * nên yêu cầu vừa được xử lý trong lúc chờ khóa không bị ghi đè (READ COMMITTED kiểm lại điều kiện). Literal để dùng
-     * partial {@code ux_shift_requests_pending}. Khuôn {@code CareTaskRepository.cancelOpenVaccineTasks}, ADR-0138 mục 7.
+     * partial {@code ux_shift_requests_pending}. Khuôn {@code CareTaskRepository.cancelOpenVaccineTasks}, ADR-0149 mục 7.
      * Bên gọi không truyền tập rỗng.
      */
     @Transactional(propagation = Propagation.MANDATORY)
@@ -80,7 +80,7 @@ public interface ShiftRequestRepository extends JpaRepository<ShiftRequest, Long
 
     /**
      * Người gửi, phân ca và ca đích của một yêu cầu, đọc <b>không khóa</b> để phân quyền dữ liệu trước khi khóa (rút #11,
-     * từ chối #14, duyệt #13). Duyệt {@code SWAP} dùng ca đích để khóa ca đó {@code FOR SHARE} trước phân ca (ADR-0139
+     * từ chối #14, duyệt #13). Duyệt {@code SWAP} dùng ca đích để khóa ca đó {@code FOR SHARE} trước phân ca (ADR-0150
      * mục 18); {@code null} với {@code LEAVE}.
      */
     interface RequestOwner {

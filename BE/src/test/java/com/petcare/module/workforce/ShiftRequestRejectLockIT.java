@@ -27,7 +27,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Khóa của từ chối yêu cầu (workforce-v1 #14; docs/adr/0139, ADR-0123 mục 8) trên Postgres thật. Một transaction khác
+ * Khóa của từ chối yêu cầu (workforce-v1 #14; docs/adr/0150, ADR-0123 mục 8) trên Postgres thật. Một transaction khác
  * giữ {@code FOR NO KEY UPDATE} trên dòng tài khoản của nhân viên (như điều chuyển / vô hiệu hóa / hủy phân ca); các
  * request xếp hàng chờ khóa đó <b>theo thứ tự khởi động</b> (hàng đợi khóa của PostgreSQL), nên kết quả của từng cặp
  * xung đột là xác định: (1) hai lần từ chối song song → một 200, một 409, đúng một audit và một cặp thông báo; (2) từ

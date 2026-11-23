@@ -31,7 +31,7 @@ import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>sau khi đã flush</b> trong workforce-v1 #2 / #3 (docs/adr/0138, plan mục 8 T2): INSERT / UPDATE ca đã chạy, rồi
+ * Lỗi <b>sau khi đã flush</b> trong workforce-v1 #2 / #3 (docs/adr/0149, plan mục 8 T2): INSERT / UPDATE ca đã chạy, rồi
  * bước audit hoặc bước dựng response ném lỗi. Toàn bộ use case phải rollback (ca về giá trị cũ, không có dòng mới) và
  * lời gọi sau đó, khi lỗi đã hết, thành công đúng một lần. Tách riêng vì {@code @MockitoBean} thay bean của cả context
  * (khuôn {@code CareTaskDeskRollbackIT}). Era <b>năm 2048</b>.

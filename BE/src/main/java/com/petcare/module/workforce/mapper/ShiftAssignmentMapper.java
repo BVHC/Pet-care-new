@@ -10,7 +10,7 @@ import com.petcare.module.workforce.entity.ShiftAssignment;
 import com.petcare.module.workforce.entity.ShiftDefinition;
 
 /**
- * Phân ca (workforce-v1 #4–5; docs/adr/0138): chỉ chiều Entity → DTO và <b>không chạm DB</b>. Tên nhân viên, ca và yêu cầu
+ * Phân ca (workforce-v1 #4–5; docs/adr/0149): chỉ chiều Entity → DTO và <b>không chạm DB</b>. Tên nhân viên, ca và yêu cầu
  * {@code PENDING} do service ghép theo lô rồi truyền vào (khuôn {@code CatalogMapper}, nhiều nguồn). Mọi trường đích khai
  * báo tường minh và {@code unmappedTargetPolicy = ERROR}; không trả {@code createdAt} / {@code updatedAt} /
  * {@code statusChanged*}.

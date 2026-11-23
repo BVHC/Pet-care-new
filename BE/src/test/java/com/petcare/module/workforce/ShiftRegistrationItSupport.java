@@ -10,7 +10,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 
 /**
- * Nền chung của các IT đăng ký ca theo tuần (workforce-v1 #17, docs/adr/0138 mục "Đăng ký tuần — đọc #17"): đường
+ * Nền chung của các IT đăng ký ca theo tuần (workforce-v1 #17, docs/adr/0149 mục "Đăng ký tuần — đọc #17"): đường
  * dẫn, ngày thứ Hai, khóa JSON của hợp đồng và "dấu vết" để chứng minh một lần đọc không ghi gì. Mỗi lớp con có era
  * riêng (xem docs/architecture/testing-notes.md) và gọi {@link #begin} / {@link #finish}.
  */
@@ -33,7 +33,7 @@ abstract class ShiftRegistrationItSupport extends ShiftAssignmentItSupport {
         return LocalDate.of(year, 12, 31).with(TemporalAdjusters.lastInMonth(DayOfWeek.MONDAY));
     }
 
-    // ---------------------------------------------------------------- ghi #15 (docs/adr/0138, N3-S7)
+    // ---------------------------------------------------------------- ghi #15 (docs/adr/0149, N3-S7)
 
     /** Lý do hệ thống của Phân ca#7 và ghi chú của Yêu cầu#5 khi phân ca bị bỏ khỏi đăng ký tuần. */
     protected static final String SELF_EDIT_REASON = "Nhân viên sửa đăng ký tuần";

@@ -41,7 +41,7 @@ import com.petcare.support.MutableClock;
 import com.zaxxer.hikari.HikariDataSource;
 
 /**
- * Transaction của {@code GET /shift-weekly-summaries} (workforce-v1 #16; docs/adr/0138 mục "Thống kê tuần"): một
+ * Transaction của {@code GET /shift-weekly-summaries} (workforce-v1 #16; docs/adr/0149 mục "Thống kê tuần"): một
  * transaction chỉ đọc REPEATABLE_READ bao cả ba lần lấy nhân viên, câu đếm và định mức; ảnh chụp nhất quán dù có commit
  * xen giữa (đổi tên, thêm phân ca) nhưng lần gọi sau thấy; kết nối trả về pool đúng trạng thái; lỗi DB và lỗi nghiệp vụ
  * không ghi gì và không giữ kết nối. Spy repository của identity (không spy bean {@code @Transactional}, bẫy Mockito)

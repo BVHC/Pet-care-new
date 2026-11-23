@@ -23,7 +23,7 @@ import com.petcare.support.MutableClock;
 
 /**
  * Xác thực, phân quyền theo vai trò, phạm vi chi nhánh và độ mới của principal cho ca làm việc (workforce-v1 #1–3;
- * docs/adr/0138, plan D9). Era <b>năm 2046</b>.
+ * docs/adr/0149, plan D9). Era <b>năm 2046</b>.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")

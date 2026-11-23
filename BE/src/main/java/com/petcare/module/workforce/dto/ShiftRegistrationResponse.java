@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Đăng ký ca theo tuần (workforce-v1 {@code ShiftRegistration}, #17 và về sau #15). Đúng 5 trường theo thứ tự hợp đồng;
  * {@code assignments} không bao giờ {@code null} (tuần chưa có phân ca là mảng rỗng). Phần tử dùng lại
- * {@link ShiftAssignmentResponse} (docs/adr/0138, mục "Đăng ký tuần — đọc #17").
+ * {@link ShiftAssignmentResponse} (docs/adr/0149, mục "Đăng ký tuần — đọc #17").
  */
 public record ShiftRegistrationResponse(
         @Schema(description = "Thứ Hai đầu tuần, yyyy-MM-dd", example = "2026-11-23", type = "string", format = "date")

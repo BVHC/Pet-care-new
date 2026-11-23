@@ -11,11 +11,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Yêu cầu nghỉ / đổi ca (workforce-v1 {@code ShiftRequest}). Đúng 15 trường theo thứ tự hợp đồng; sáu trường nullable
  * luôn có mặt trong JSON (Jackson không bỏ null). Không trả {@code updatedAt}, chi nhánh hay trạng thái phân ca. Tên
- * người gửi và tên ca được ghép ở service (docs/adr/0138 bước 6).
+ * người gửi và tên ca được ghép ở service (docs/adr/0149 bước 6).
  * <p>
  * {@code currentShiftName} là ca của phân ca <b>lúc gửi</b> ({@code shift_requests.current_shift_definition_id}, V60):
  * sau khi duyệt {@code SWAP} phân ca đã ở ca đích nhưng yêu cầu vẫn nêu ca gốc. Tên ca (cả ca gốc lẫn ca đích) là
- * tên <i>hiện tại</i> của ca đó, không phải ảnh chụp tên (ADR-0139 mục 5).
+ * tên <i>hiện tại</i> của ca đó, không phải ảnh chụp tên (ADR-0150 mục 5).
  */
 public record ShiftRequestResponse(
         @Schema(description = "Mã yêu cầu", example = "15")

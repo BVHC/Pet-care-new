@@ -23,7 +23,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Lịch làm việc của tôi (workforce-v1 #8; docs/adr/0138 bước 4) trên Postgres thật, gồm cả xác thực / phân quyền:
+ * Lịch làm việc của tôi (workforce-v1 #8; docs/adr/0149 bước 4) trên Postgres thật, gồm cả xác thực / phân quyền:
  * chỉ lịch của chính người gọi (tham số {@code staffId} / {@code branchId} gửi thêm bị bỏ qua), mọi trạng thái và mọi
  * chi nhánh (nhân viên đã điều chuyển vẫn thấy ca cũ), thứ tự, {@code pendingRequestId}, trần 62 ngày hai đầu, đầu vào
  * sai, 401, BR-TK-17, ma trận vai trò (chỉ A06–A08) và vai trò đọc lại từ DB. Era <b>năm 2057</b>.

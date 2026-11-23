@@ -29,7 +29,7 @@ import com.petcare.support.MutableClock;
 
 /**
  * Xác thực, phân quyền theo vai trò, phạm vi chi nhánh, độ mới của principal và audit actor cho phân ca (workforce-v1
- * #4–5; docs/adr/0138 bước 3). Khuôn {@code ShiftDefinitionSecurityIT}. Khác biệt có chủ đích: ở đây A06–A08 cũng bị
+ * #4–5; docs/adr/0149 bước 3). Khuôn {@code ShiftDefinitionSecurityIT}. Khác biệt có chủ đích: ở đây A06–A08 cũng bị
  * 403 trên cả hai endpoint (chỉ BRANCH_MANAGER), và id <b>trong body</b> của chi nhánh khác trả 404 (không phải 403) để
  * không lộ sự tồn tại. Era <b>năm 2049</b>.
  */

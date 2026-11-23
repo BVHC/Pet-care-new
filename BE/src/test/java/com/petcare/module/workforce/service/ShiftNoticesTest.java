@@ -15,7 +15,7 @@ import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.workforce.entity.ShiftRequestType;
 
 /**
- * {@link ShiftNotices} (docs/adr/0138 bước 4): khóa payload khớp {@code required_vars} / {@code allowed_vars} của mẫu
+ * {@link ShiftNotices} (docs/adr/0149 bước 4): khóa payload khớp {@code required_vars} / {@code allowed_vars} của mẫu
  * V40 (so với bảng mẫu thật ở {@code ShiftAssignmentCancelIT}), định dạng ngày giờ, và chỉ dựng chứ không gửi.
  */
 class ShiftNoticesTest {

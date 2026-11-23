@@ -81,7 +81,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link ShiftRequestService} (workforce-v1 #9–11, docs/adr/0138 bước 6): thứ tự đọc không khóa → khóa → đọc lại → guard
+ * {@link ShiftRequestService} (workforce-v1 #9–11, docs/adr/0149 bước 6): thứ tự đọc không khóa → khóa → đọc lại → guard
  * → ghi → thông báo → map; mọi nhánh lỗi không ghi và không thông báo; danh tính luôn từ principal; ghép danh sách theo
  * lô; cấu hình transaction của ba use case.
  */
@@ -594,7 +594,7 @@ class ShiftRequestServiceTest {
         assertThat(tx.isolation()).isEqualTo(Isolation.REPEATABLE_READ);
     }
 
-    // ---------------------------------------------------------------- #14: từ chối (docs/adr/0139)
+    // ---------------------------------------------------------------- #14: từ chối (docs/adr/0150)
 
     private static final long MANAGER = 5L;
     private static final String NOTE = "Ca này đã đủ người nghỉ";
@@ -819,7 +819,7 @@ class ShiftRequestServiceTest {
         verifyNoInteractions(notifications);
     }
 
-    // ---------------------------------------------------------------- #13: duyệt LEAVE (docs/adr/0139, N3-S5a)
+    // ---------------------------------------------------------------- #13: duyệt LEAVE (docs/adr/0150, N3-S5a)
 
     private ShiftRequestService serviceAt(Instant instant) {
         return new ShiftRequestService(branchScope, staffDirectory, definitions, assignments, requests, mapper,
@@ -1099,7 +1099,7 @@ class ShiftRequestServiceTest {
         assertNothingWrittenAtAll();
     }
 
-    // ---------------------------------------------------------------- #13: duyệt SWAP (docs/adr/0139, N3-S5b)
+    // ---------------------------------------------------------------- #13: duyệt SWAP (docs/adr/0150, N3-S5b)
 
     @Test
     void approveOfASwapLocksTheTargetShiftForShareAfterAccountsAndBeforeTheAssignmentThenWritesAuditsNotifiesAndMaps() {

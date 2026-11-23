@@ -16,7 +16,7 @@ import com.petcare.module.workforce.entity.ShiftRequestStatus;
 import com.petcare.module.workforce.entity.ShiftRequestType;
 
 /**
- * {@link ShiftRequestMapper} (workforce-v1 #9–11, docs/adr/0138 bước 6): đủ 15 trường của hợp đồng cho từng trạng thái,
+ * {@link ShiftRequestMapper} (workforce-v1 #9–11, docs/adr/0149 bước 6): đủ 15 trường của hợp đồng cho từng trạng thái,
  * đổi tên {@code requestType → type}, và khóa nullable luôn có mặt. Khớp tên / cấu trúc với yaml do
  * {@code OpenApiContractParityIT} ghim.
  */

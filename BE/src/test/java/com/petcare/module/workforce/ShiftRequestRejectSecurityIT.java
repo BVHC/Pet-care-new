@@ -26,7 +26,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực và phân quyền của {@code POST /shift-requests/{id}/reject} (workforce-v1 #14; docs/adr/0139): 401 mọi dạng,
+ * Xác thực và phân quyền của {@code POST /shift-requests/{id}/reject} (workforce-v1 #14; docs/adr/0150): 401 mọi dạng,
  * BR-TK-17 trước body, 400 body sai trước 403 vai trò, chỉ BRANCH_MANAGER (ma trận bảy vai trò, kể cả chính người gửi),
  * quản lý chi nhánh khác 403 và <b>không khóa</b> tài khoản của chi nhánh đó, vai trò và chi nhánh đọc lại từ DB ở mỗi
  * request, khóa tạm không chặn phiên đang có, chi nhánh {@code DRAFT} vẫn từ chối được, người gửi đã điều chuyển thì

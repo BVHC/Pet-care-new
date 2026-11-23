@@ -27,7 +27,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Khóa của hủy phân ca (workforce-v1 #6; docs/adr/0138 bước 4, ADR-0123 mục 8) trên Postgres thật. Giữ request "giữa
+ * Khóa của hủy phân ca (workforce-v1 #6; docs/adr/0149 bước 4, ADR-0123 mục 8) trên Postgres thật. Giữ request "giữa
  * chừng" bằng trigger tạm gọi {@code pg_advisory_xact_lock} còn test giữ advisory lock đó ở transaction khác (khuôn
  * {@code ShiftAssignmentLockIT}). Chứng minh: (1) hai lần hủy song song cùng một phân ca chỉ một cái thành công, cái
  * kia đọc lại dưới khóa và nhận 409, chỉ một audit và một bộ thông báo; (2) hủy khóa {@code accounts} <b>trước</b> phân ca

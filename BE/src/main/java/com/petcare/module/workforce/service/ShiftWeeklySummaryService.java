@@ -25,7 +25,7 @@ import com.petcare.module.workforce.repository.ShiftAssignmentRepository.StaffSh
 import com.petcare.platform.security.BranchScope;
 
 /**
- * Thống kê số ca mỗi nhân viên trong tuần cho BRANCH_MANAGER (UC34, workforce-v1 #16; BR-NS-03, BR-NS-12; docs/adr/0138
+ * Thống kê số ca mỗi nhân viên trong tuần cho BRANCH_MANAGER (UC34, workforce-v1 #16; BR-NS-03, BR-NS-12; docs/adr/0149
  * mục "Thống kê tuần").
  * <p>
  * Chỉ đọc: {@code readOnly} + REPEATABLE_READ để danh sách nhân viên, số đếm và định mức [CFG] cùng một ảnh chụp; không

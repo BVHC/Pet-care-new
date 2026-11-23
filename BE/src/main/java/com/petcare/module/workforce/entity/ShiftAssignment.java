@@ -33,7 +33,7 @@ import lombok.NoArgsConstructor;
  * Cả bốn cạnh ra khỏi {@code SCHEDULED} nên mỗi method gọi {@code requireScheduled()}: lớp chặn cuối nếu bên gọi quên
  * {@code ShiftAssignmentTransitionHandler}, <b>không</b> thay handler (nguồn duy nhất của bảng cạnh, chạy trước để ra
  * 409). Guard nghiệp vụ cần Clock / [CFG] / dòng khác (ca chưa bắt đầu, hạn ghi vắng, chồng giờ, phạm vi chi nhánh)
- * do service ở T59 làm (docs/adr/0138).
+ * do service ở T59 làm (docs/adr/0149).
  */
 @Getter
 @Entity
@@ -103,7 +103,7 @@ public class ShiftAssignment extends TimestampedEntity {
 
     /**
      * Phân ca#3: {@code SCHEDULED → ON_LEAVE} khi BRANCH_MANAGER duyệt yêu cầu {@code LEAVE} (BR-NS-06). {@code by} là
-     * người duyệt, {@code reason} chép từ lý do của yêu cầu (ADR-0138).
+     * người duyệt, {@code reason} chép từ lý do của yêu cầu (ADR-0149).
      */
     public void markOnLeave(String reason, Long by, Instant at) {
         requireScheduled();

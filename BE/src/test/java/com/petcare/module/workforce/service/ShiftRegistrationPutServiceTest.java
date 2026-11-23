@@ -67,7 +67,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link ShiftRegistrationService#putMyShiftRegistration} (workforce-v1 #15, docs/adr/0138 mục "Đăng ký tuần — ghi #15"):
+ * {@link ShiftRegistrationService#putMyShiftRegistration} (workforce-v1 #15, docs/adr/0149 mục "Đăng ký tuần — ghi #15"):
  * thứ tự {@code accounts} → hạn → ca {@code FOR SHARE} → phân ca → kiểm cả lô → định mức → ghi (hủy → Yêu cầu#5 → tạo)
  * → đọc response; mọi nhánh lỗi không ghi gì; phân ca {@code MANAGER} không bao giờ bị hủy nhưng được đếm và kiểm chồng
  * giờ; gửi lại cùng nội dung không ghi gì; lỗi ghi lan ra nguyên vẹn.

@@ -219,7 +219,7 @@ class SchemaMigrationIT {
         // V57 ai_chat_logs.intent + công tắc [CFG] ai.chat.open_domain_enabled (docs/adr/0136 "Đã cài ở T92 (phần 2)"),
         // V58 online_orders.delivery_failure_reason (docs/adr/0137 D2, task 126),
         // V59 ai_documents.risk_level, topic thêm SAFETY / LIFESTYLE + khóa [CFG] ai.ingest.max_file_kb (docs/adr/0147, T89),
-        // V60 shift_requests.current_shift_definition_id (ca lúc gửi, docs/adr/0139 N3-S5b; V57–V59 đã có trên dev, D069),
+        // V60 shift_requests.current_shift_definition_id (ca lúc gửi, docs/adr/0150 N3-S5b; V57–V59 đã có trên dev, D069),
         // V61 Nhân sự: shift_assignments.source + khóa [CFG] workforce.weekly_required_shifts (docs/adr/0123, T58; đánh số lại từ V55 ngày 23/11/2026 vì V55 đã dùng cho feedbacks),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))

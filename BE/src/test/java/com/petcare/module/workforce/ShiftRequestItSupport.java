@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Nền chung của các IT yêu cầu nghỉ / đổi ca (workforce-v1 #9–11, docs/adr/0138 bước 6): dùng lại hạ tầng của
+ * Nền chung của các IT yêu cầu nghỉ / đổi ca (workforce-v1 #9–11, docs/adr/0149 bước 6): dùng lại hạ tầng của
  * {@link ShiftAssignmentItSupport} và thêm đường dẫn, body, khóa hợp đồng, dòng outbox thông báo "có yêu cầu mới" và
  * ảnh chụp dấu vết. Mọi lý do thử nghiệm bắt đầu bằng {@link #REASON_PREFIX} để dọn outbox của quản lý đúng phần của
  * mình (không có FK tới yêu cầu; người nhận SUPER_MANAGER dự phòng có thể là tài khoản không thuộc test). Mỗi lớp con có
@@ -126,7 +126,7 @@ abstract class ShiftRequestItSupport extends ShiftAssignmentItSupport {
                 Integer.class, TEMPLATE, recipientId)).as("có giá trị rỗng").isZero();
     }
 
-    // ---------------------------------------------------------------- từ chối (#14, docs/adr/0139)
+    // ---------------------------------------------------------------- từ chối (#14, docs/adr/0150)
 
     protected static final String NOTE_PREFIX = "ITR";
     /** Lý do từ chối của test; bắt đầu bằng {@link #NOTE_PREFIX} để nhận ra trong audit. */
@@ -187,7 +187,7 @@ abstract class ShiftRequestItSupport extends ShiftAssignmentItSupport {
                 + rejectedOutbox(staffId).size();
     }
 
-    // ---------------------------------------------------------------- duyệt LEAVE (#13, docs/adr/0139, N3-S5a)
+    // ---------------------------------------------------------------- duyệt LEAVE (#13, docs/adr/0150, N3-S5a)
 
     protected static final String APPROVED_APP = "SHIFT_REQUEST_APPROVED_APP";
     protected static final String APPROVED_MAIL = "SHIFT_REQUEST_APPROVED";
@@ -210,7 +210,7 @@ abstract class ShiftRequestItSupport extends ShiftAssignmentItSupport {
                 Integer.class, assignmentId);
     }
 
-    /** Audit đổi ca của phân ca (duyệt {@code SWAP}, Phân ca#5; ADR-0139 mục 20). */
+    /** Audit đổi ca của phân ca (duyệt {@code SWAP}, Phân ca#5; ADR-0150 mục 20). */
     protected int swapAuditCount(long assignmentId) {
         return jdbc.queryForObject("""
                 SELECT COUNT(*) FROM audit_logs

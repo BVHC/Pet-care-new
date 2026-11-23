@@ -18,7 +18,7 @@ import com.petcare.module.identity.api.StaffLeftBranchEvent;
 import com.petcare.module.workforce.service.StaffLeftBranchService;
 
 /**
- * {@link StaffLeftBranchListener} (BR-NS-09, docs/adr/0138 bước 5): chỉ ủy quyền cho service, đồng bộ trong transaction
+ * {@link StaffLeftBranchListener} (BR-NS-09, docs/adr/0149 bước 5): chỉ ủy quyền cho service, đồng bộ trong transaction
  * của identity (convention 07 §7.2) — không {@code @Async}, không {@code @TransactionalEventListener} (AFTER_COMMIT) và
  * không nuốt lỗi.
  */

@@ -26,10 +26,10 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Yêu cầu nghỉ / đổi ca (UC36 workforce-v1 #9–11 của nhân viên, docs/adr/0138 bước 6; UC37 #12 danh sách của
+ * Yêu cầu nghỉ / đổi ca (UC36 workforce-v1 #9–11 của nhân viên, docs/adr/0149 bước 6; UC37 #12 danh sách của
  * BRANCH_MANAGER, bước 8). Không chứa logic và không biết mã rule: BR-NS-04 / BR-NS-05 do {@link ShiftRequestService}
  * kiểm. {@code /me/*} chỉ cho nhân viên A06–A08 và chỉ dữ liệu của chính họ; {@code /shift-requests} chỉ cho
- * BRANCH_MANAGER (từ chối #14 ở bước 9, duyệt #13 chỉ {@code LEAVE} ở N3-S5a, docs/adr/0139). Dùng chung hằng quyền {@code STAFF} / {@code BRANCH_MANAGER} của
+ * BRANCH_MANAGER (từ chối #14 ở bước 9, duyệt #13 chỉ {@code LEAVE} ở N3-S5a, docs/adr/0150). Dùng chung hằng quyền {@code STAFF} / {@code BRANCH_MANAGER} của
  * {@link ShiftAssignmentController} để hai nơi không lệch nhau.
  */
 @RestController

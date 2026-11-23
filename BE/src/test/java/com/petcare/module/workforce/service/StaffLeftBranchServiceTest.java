@@ -43,7 +43,7 @@ import com.petcare.module.workforce.repository.ShiftRequestRepository;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * {@link StaffLeftBranchService} (BR-NS-09, docs/adr/0138 bước 5): thứ tự chọn+khóa → UPDATE phân ca → UPDATE yêu cầu →
+ * {@link StaffLeftBranchService} (BR-NS-09, docs/adr/0149 bước 5): thứ tự chọn+khóa → UPDATE phân ca → UPDATE yêu cầu →
  * thông báo; rỗng thì không ghi; chi nhánh trong thông báo là chi nhánh <b>cũ</b> của sự kiện; mọi lỗi dữ liệu hỏng là
  * {@code IllegalStateException} (rút cả thao tác gốc); cấu hình transaction {@code MANDATORY}.
  */

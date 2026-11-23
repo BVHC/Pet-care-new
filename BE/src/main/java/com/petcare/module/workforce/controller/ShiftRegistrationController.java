@@ -23,7 +23,7 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Đăng ký ca theo tuần (UC35, workforce-v1 #15–17; docs/adr/0138). Không chứa logic và không biết mã rule: BR-NS-11 do
+ * Đăng ký ca theo tuần (UC35, workforce-v1 #15–17; docs/adr/0149). Không chứa logic và không biết mã rule: BR-NS-11 do
  * {@link ShiftRegistrationService} kiểm. Chỉ nhân viên A06–A08 và chỉ dữ liệu của chính họ; dùng chung hằng quyền
  * {@code STAFF} của {@link ShiftAssignmentController} để hai nơi không lệch nhau. Hiện có #15 (PUT) và #17; #16 (thống
  * kê tuần của quản lý) ở {@link ShiftWeeklySummaryController}.
@@ -50,7 +50,7 @@ public class ShiftRegistrationController {
                 + "transaction. Response chỉ gồm phân ca `SCHEDULED` của tuần (A12). Đọc đăng ký hiện có và định mức "
                 + "trước khi sửa: `GET /me/shift-registrations/{weekStart}`; xem lịch đầy đủ (cả nghỉ / vắng / hủy): "
                 + "`GET /me/shift-assignments`. `items` tối đa 100 phần tử, vượt thì 400 `VALIDATION_FAILED` (Q4, "
-                + "ADR-0137 mục 12).",
+                + "ADR-0148 mục 12).",
             parameters = {@Parameter(name = "weekStart", in = ParameterIn.PATH, example = "2026-11-23",
                     description = "Thứ Hai đầu tuần, yyyy-MM-dd, năm 2000–2100")})
     @ApiErrorDoc(status = 400, description = "`BR-NS-11` `weekStart` không phải thứ Hai · quá hạn (sau 00:00 thứ Hai của "

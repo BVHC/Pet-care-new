@@ -26,7 +26,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * Ca làm việc của chi nhánh (UC34, workforce-v1 #1–3; BR-NS-01, BR-NS-10; docs/adr/0138). Mỗi use case một
+ * Ca làm việc của chi nhánh (UC34, workforce-v1 #1–3; BR-NS-01, BR-NS-10; docs/adr/0149). Mỗi use case một
  * transaction. {@code PATCH}: đọc {@code branch_id} không khóa (truy vấn scalar, không nạp entity) → phân quyền chi
  * nhánh → khóa dòng ca ({@code FOR NO KEY UPDATE}) → guard dưới khóa → {@code saveAndFlush} → audit. Tạo ca chỉ dựa vào
  * kiểm tên trước và unique index {@code lower(name)} khi đua (409). Không thông báo (BR-NS-08 không áp cho ca).
@@ -138,7 +138,7 @@ public class ShiftDefinitionService {
         return mapper.toResponse(saved);
     }
 
-    /** Lớp phòng thủ thứ hai sau {@code @PreAuthorize}: không có đường "toàn chuỗi" cho ca (docs/adr/0138). */
+    /** Lớp phòng thủ thứ hai sau {@code @PreAuthorize}: không có đường "toàn chuỗi" cho ca (docs/adr/0149). */
     private static Long requireBranch(Long branchId) {
         if (branchId == null) {
             throw new AccessDeniedScopeException("chi nhánh của người gọi", "toàn chuỗi");

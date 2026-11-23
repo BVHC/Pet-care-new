@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Sửa / ngừng dùng / bật lại ca (workforce-v1 {@code UpdateShiftDefinitionRequest}, #3). Chỉ các trường có trong body
- * được đổi ({@code null} = không gửi); body không có trường nào là 400 (docs/adr/0138).
+ * được đổi ({@code null} = không gửi); body không có trường nào là 400 (docs/adr/0149).
  */
 public record UpdateShiftDefinitionRequest(
         @Schema(description = "Tên ca mới, duy nhất trong chi nhánh (BR-NS-01)", example = "Ca sáng")

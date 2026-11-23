@@ -25,7 +25,7 @@ import com.petcare.module.identity.service.SystemConfigService;
 import com.petcare.support.MutableClock;
 
 /**
- * Ghi nhận vắng đột xuất (workforce-v1 #7; docs/adr/0138 bước 7) trên Postgres thật: hình dạng response và giá trị từng
+ * Ghi nhận vắng đột xuất (workforce-v1 #7; docs/adr/0149 bước 7) trên Postgres thật: hình dạng response và giá trị từng
  * trường, bốn hiệu ứng cùng một transaction (phân ca, Yêu cầu#5, audit, outbox), lý do được strip và dùng thống nhất,
  * payload thông báo khớp mẫu V40, guard ngày BR-NS-07 (hôm nay chưa bắt đầu vẫn ghi được; biên inclusive; [CFG] đọc
  * lúc gọi; ngày theo giờ Việt Nam), 409 trước 400 (A11), ma trận validation và mỗi nhánh lỗi không để lại dấu vết. Era

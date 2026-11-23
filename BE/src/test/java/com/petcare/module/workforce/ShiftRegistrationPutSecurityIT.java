@@ -28,7 +28,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực và phân quyền của đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0138 mục "Đăng ký tuần — ghi #15") trên
+ * Xác thực và phân quyền của đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0149 mục "Đăng ký tuần — ghi #15") trên
  * Postgres thật: 401 theo từng nguyên nhân (và cùng một body), {@code BR-TK-17}, ma trận bảy vai trò, thứ tự lỗi (hình
  * thức → vai trò → {@code BR-NS-11}), vai trò đọc lại từ DB ở mỗi request, không ghi được dữ liệu của người khác (body
  * có {@code staffId}, {@code branchId}, {@code source} lạ bị bỏ qua) và ca của chi nhánh khác không dùng được. Không lệnh

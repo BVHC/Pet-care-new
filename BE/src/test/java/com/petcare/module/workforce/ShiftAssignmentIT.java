@@ -23,7 +23,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Phân ca của chi nhánh (workforce-v1 #4–5; docs/adr/0138 bước 3) trên Postgres thật: hình dạng response theo hợp đồng,
+ * Phân ca của chi nhánh (workforce-v1 #4–5; docs/adr/0149 bước 3) trên Postgres thật: hình dạng response theo hợp đồng,
  * từng nhánh 400 / 404 / validation, định nghĩa chồng giờ (chạm biên hợp lệ), giao với guard của {@code PATCH} ca, và
  * danh sách (sắp, lọc, phân trang, trần 62 ngày, tên nhân viên đã nghỉ, yêu cầu chờ). Era <b>năm 2050</b>.
  */

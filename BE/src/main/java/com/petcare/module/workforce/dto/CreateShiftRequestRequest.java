@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
 /**
  * Gửi yêu cầu nghỉ / đổi ca (workforce-v1 {@code CreateShiftRequestRequest}, #9; BR-NS-04). Cố ý chỉ có bốn trường của
  * hợp đồng: không có {@code requesterId} (luôn là người gọi), {@code status}, {@code decidedBy}, {@code closedAt} nên
- * client không đặt được chúng qua body (trường lạ trong JSON bị bỏ qua, docs/adr/0138 bước 6).
+ * client không đặt được chúng qua body (trường lạ trong JSON bị bỏ qua, docs/adr/0149 bước 6).
  * <p>
  * {@code targetShiftDefinitionId} bắt buộc với {@code SWAP} và không được có với {@code LEAVE}: hợp đồng đặt hai điều
  * kiện đó ở {@code BR-NS-04} (400), không phải {@code VALIDATION_FAILED}, nên service kiểm chứ không dùng Bean Validation.

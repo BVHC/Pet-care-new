@@ -28,7 +28,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.support.MutableClock;
 
 /**
- * Đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0138 mục "Đăng ký tuần — ghi #15") trên Postgres thật: hiệu ứng đủ
+ * Đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0149 mục "Đăng ký tuần — ghi #15") trên Postgres thật: hiệu ứng đủ
  * cột (Phân ca#1 và #7, Yêu cầu#5), response bằng đúng {@code GET} #17, phần khác biệt (mục giữ nguyên không đổi
  * {@code xmin}), gửi lại cùng nội dung không ghi gì, phân ca {@code MANAGER} được đếm và kiểm chồng giờ nhưng không bao
  * giờ bị hủy, mọi lỗi mục gom vào một message {@code BR-NS-11} và không để lại dấu vết, hạn 00:00 thứ Hai, định mức

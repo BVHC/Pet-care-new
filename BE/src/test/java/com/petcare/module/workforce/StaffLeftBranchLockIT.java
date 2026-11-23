@@ -26,7 +26,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Khóa của chuỗi "nhân viên rời chi nhánh" (BR-NS-09; docs/adr/0138 bước 5, ADR-0123 mục 8) trên Postgres thật. Giữ
+ * Khóa của chuỗi "nhân viên rời chi nhánh" (BR-NS-09; docs/adr/0149 bước 5, ADR-0123 mục 8) trên Postgres thật. Giữ
  * request của identity "giữa chừng" — <b>sau khi đã khóa {@code accounts} và đã UPDATE phân ca</b> — bằng trigger tạm gọi
  * {@code pg_advisory_xact_lock} còn test giữ advisory lock đó ở transaction khác (khuôn
  * {@code ShiftAssignmentCancelLockIT}). Chứng minh thứ tự khóa {@code accounts → phân ca → yêu cầu} không bị đảo: (1) hủy

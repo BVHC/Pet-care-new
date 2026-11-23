@@ -29,7 +29,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Đồng thời trên ca làm việc (workforce-v1 #2–3; docs/adr/0138 mục khóa, 0123 mục 8; plan mục 8). Cách giữ một request
+ * Đồng thời trên ca làm việc (workforce-v1 #2–3; docs/adr/0149 mục khóa, 0123 mục 8; plan mục 8). Cách giữ một request
  * "đứng giữa chừng" khi đang giữ khóa dòng: trigger tạm {@code AFTER INSERT / UPDATE} gọi
  * {@code pg_advisory_xact_lock}, còn test giữ advisory lock đó ở một transaction khác — request dừng đúng lúc đã ghi
  * dòng (khóa dòng, chỉ mục unique đã có mục chưa commit) và chưa commit. Chứng minh: (1) {@code PATCH} giữ khóa xung đột

@@ -29,7 +29,7 @@ import com.petcare.module.workforce.mapper.ShiftAssignmentMapper;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>sau khi đã ghi</b> trong ghi vắng đột xuất (workforce-v1 #7; docs/adr/0138 bước 7): bốn hiệu ứng (phân ca,
+ * Lỗi <b>sau khi đã ghi</b> trong ghi vắng đột xuất (workforce-v1 #7; docs/adr/0149 bước 7): bốn hiệu ứng (phân ca,
  * Yêu cầu#5, audit, outbox) cùng một transaction nên một lỗi ở bất kỳ bước nào rút cả bốn. Năm điểm lỗi: UPDATE phân ca
  * (bước ghi đầu tiên), UPDATE yêu cầu (sau khi phân ca đã flush), INSERT audit, INSERT outbox dòng EMAIL (dòng IN_APP
  * chèn trước đó cũng phải mất) và dựng response sau cùng. Lỗi được gây bằng trigger tạm của Postgres (INSERT / UPDATE

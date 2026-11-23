@@ -13,7 +13,7 @@ import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.module.workforce.dto.ShiftWeeklySummaryResponse;
 
 /**
- * {@link ShiftWeeklySummaryMapper} (workforce-v1 {@code ShiftWeeklySummary}, #16, docs/adr/0138): mỗi trường lấy đúng
+ * {@link ShiftWeeklySummaryMapper} (workforce-v1 {@code ShiftWeeklySummary}, #16, docs/adr/0149): mỗi trường lấy đúng
  * nguồn (giá trị khác nhau ở mọi trường, nên hoán đổi {@code shiftCount} / {@code requiredShifts} là đỏ);
  * {@code meetsRequirement} là {@code shiftCount >= requiredShifts} (biên 9 / 10 / 11); đúng 6 trường theo thứ tự hợp đồng.
  */

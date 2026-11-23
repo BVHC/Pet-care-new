@@ -23,7 +23,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Từ chối yêu cầu nghỉ / đổi ca (workforce-v1 #14; docs/adr/0139) trên Postgres thật: chỉ yêu cầu → {@code REJECTED}
+ * Từ chối yêu cầu nghỉ / đổi ca (workforce-v1 #14; docs/adr/0150) trên Postgres thật: chỉ yêu cầu → {@code REJECTED}
  * (Yêu cầu#4) với {@code decided_by} là quản lý, lý do đã {@code strip()} và {@code closed_at} từ đồng hồ; phân ca giữ
  * nguyên (kể cả {@code xmin}); một dòng audit; thông báo IN_APP rồi EMAIL khớp mẫu V40; POST = GET; mọi trạng thái đã
  * đóng là 409; từ chối được cả yêu cầu treo trên ca đã qua; gửi lại sau từ chối được; mọi đầu vào sai ra đúng

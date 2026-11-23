@@ -27,7 +27,7 @@ import com.petcare.module.identity.service.SystemConfigService;
 import com.petcare.support.MutableClock;
 
 /**
- * Đăng ký ca của tôi trong tuần (workforce-v1 #17; docs/adr/0138 mục "Đăng ký tuần — đọc #17") trên Postgres thật:
+ * Đăng ký ca của tôi trong tuần (workforce-v1 #17; docs/adr/0149 mục "Đăng ký tuần — đọc #17") trên Postgres thật:
  * nội dung (chỉ phân ca {@code SCHEDULED} của chính người gọi, cả SELF và MANAGER, mọi chi nhánh), biên tuần, định
  * mức [CFG], {@code editableUntil}, tuần trống / quá khứ / xa, ma trận đầu vào của {@code weekStart} (không bao giờ
  * 500), không ghi gì. Xác thực / phân quyền ở {@code ShiftRegistrationReadSecurityIT}, transaction ở

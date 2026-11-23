@@ -212,7 +212,7 @@ public class StaffAccountService {
      * trả nguyên trạng → chi nhánh vừa đổi trong lúc chờ khóa → 409 → BR-QT-03 → BR-QT-04 trên chi nhánh nguồn →
      * BR-QT-08 (cuối cùng: hai interface còn là placeholder, nợ D016). Không hủy phiên (chi nhánh đọc lại mỗi request).
      * Sau {@code flush} phát {@link StaffLeftBranchEvent} (chi nhánh <b>cũ</b>, lấy từ hồ sơ đã khóa, không từ body):
-     * workforce hủy phân ca chưa bắt đầu trong cùng transaction (BR-NS-09, docs/adr/0138 bước 5).
+     * workforce hủy phân ca chưa bắt đầu trong cùng transaction (BR-NS-09, docs/adr/0149 bước 5).
      */
     @Transactional
     public StaffResponse transferStaff(Long accountId, TransferStaffRequest request) {
@@ -254,7 +254,7 @@ public class StaffAccountService {
      * nhánh, trả nợ D014) → BR-QT-08 (cuối cùng, bỏ qua với SUPER_MANAGER) →
      * {@code validateTransition} (409 nếu đã {@code DISABLED}). Hủy mọi phiên, chuyển offline; không gửi email. Sau
      * {@code flush}, nếu nhân viên có chi nhánh (SUPER_MANAGER thì không), phát {@link StaffLeftBranchEvent} để workforce
-     * hủy phân ca chưa bắt đầu trong cùng transaction (BR-NS-09, docs/adr/0138 bước 5).
+     * hủy phân ca chưa bắt đầu trong cùng transaction (BR-NS-09, docs/adr/0149 bước 5).
      */
     @Transactional
     public StaffResponse disableStaff(Long accountId) {

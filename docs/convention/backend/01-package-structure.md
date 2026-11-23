@@ -27,7 +27,7 @@ com.petcare
 
 ## Module
 
-Một module = một mã module trong Bảng 2 của `docs/INDEX.md` (TK, QT, CN, KH…). Module tầng 3 đã được duyệt ở T54 (5/11/2026) và đã có rule / model / API riêng (`docs/07`–`09`), nên được tạo package khi tới task của nó (ví dụ `workforce` ở T58, ADR-0138).
+Một module = một mã module trong Bảng 2 của `docs/INDEX.md` (TK, QT, CN, KH…). Module tầng 3 đã được duyệt ở T54 (5/11/2026) và đã có rule / model / API riêng (`docs/07`–`09`), nên được tạo package khi tới task của nó (ví dụ `workforce` ở T58, ADR-0149).
 
 - Tên package: một danh từ tiếng Anh số ít, chữ thường, theo bảng `docs/06-module-contracts.md` §2 (`identity` = TK+QT, `branch`, `customer`, `catalog`, `appointment`, `visit` = TN+KB, `boarding`, `sales` = BH+TG, `inventory`, `content`, `care`, `report`, `workforce` = NS). Module mới ghi vào `system-overview.md` §3.
 - Phần công khai của module là package `api/` (interface, record, enum, sự kiện); module khác chỉ được import `module.<x>.api.*` (06 §1).

@@ -29,7 +29,7 @@ import com.petcare.module.identity.service.SystemConfigService;
 import com.petcare.support.MutableClock;
 
 /**
- * Khóa của ghi vắng đột xuất (workforce-v1 #7; docs/adr/0138 bước 7, ADR-0123 mục 8) trên Postgres thật. Giữ request
+ * Khóa của ghi vắng đột xuất (workforce-v1 #7; docs/adr/0149 bước 7, ADR-0123 mục 8) trên Postgres thật. Giữ request
  * "giữa chừng" bằng trigger tạm gọi {@code pg_advisory_xact_lock} còn test giữ advisory lock đó ở transaction khác
  * (khuôn {@code ShiftAssignmentCancelLockIT}). Chứng minh: (1) hai lần ghi vắng song song và ghi vắng ∥ hủy (cả hai
  * chiều) chỉ một cái thắng, cái kia đọc lại dưới khóa và nhận 409, chỉ một bộ audit / thông báo; (2) ghi vắng khóa

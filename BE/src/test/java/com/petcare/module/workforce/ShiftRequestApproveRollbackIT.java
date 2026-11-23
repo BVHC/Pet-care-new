@@ -31,7 +31,7 @@ import com.petcare.module.workforce.mapper.ShiftRequestMapper;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>sau khi đã ghi</b> trong duyệt yêu cầu nghỉ và đổi ca (workforce-v1 #13; docs/adr/0139; ca {@code swap…} cho
+ * Lỗi <b>sau khi đã ghi</b> trong duyệt yêu cầu nghỉ và đổi ca (workforce-v1 #13; docs/adr/0150; ca {@code swap…} cho
  * {@code SWAP}, N3-S5b: phân ca phải quay về ca gốc và khóa ca đích phải nhả): duyệt ghi UPDATE phân ca rồi UPDATE
  * yêu cầu rồi hai dòng audit (phân ca, yêu cầu) rồi hai dòng outbox (IN_APP, EMAIL), tất cả cùng một transaction nên lỗi ở
  * bất kỳ bước nào rút hết, kể cả UPDATE phân ca đã chạy trước đó. Lỗi được gây bằng trigger tạm của Postgres (chạy ngay

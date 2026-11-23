@@ -18,7 +18,7 @@ import com.petcare.module.workforce.entity.ShiftAssignmentSource;
 import com.petcare.module.workforce.entity.ShiftAssignmentStatus;
 
 /**
- * {@link ShiftRegistrationMapper} (workforce-v1 {@code ShiftRegistration}, docs/adr/0138): mỗi trường lấy đúng nguồn
+ * {@link ShiftRegistrationMapper} (workforce-v1 {@code ShiftRegistration}, docs/adr/0149): mỗi trường lấy đúng nguồn
  * (giá trị khác nhau ở mọi trường, nên hoán đổi {@code requiredShifts} / {@code shiftCount} là đỏ); {@code shiftCount}
  * luôn bằng số phần tử; danh sách rỗng là {@code []} chứ không {@code null}; đúng 5 trường theo thứ tự hợp đồng.
  */

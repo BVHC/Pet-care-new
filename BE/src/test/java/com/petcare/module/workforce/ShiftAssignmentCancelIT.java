@@ -23,7 +23,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Hủy phân ca (workforce-v1 #6; docs/adr/0138 bước 4) trên Postgres thật: hình dạng response, bốn hiệu ứng cùng một
+ * Hủy phân ca (workforce-v1 #6; docs/adr/0149 bước 4) trên Postgres thật: hình dạng response, bốn hiệu ứng cùng một
  * transaction (phân ca, Yêu cầu#5, audit, outbox), lý do được strip và dùng thống nhất, payload thông báo khớp mẫu V40,
  * từng nhánh 400 / 404 / 409 (<b>trạng thái trước guard thời gian</b>, A11) và ma trận validation — mỗi nhánh lỗi không
  * để lại dấu vết nào. Era <b>năm 2053</b>; đồng hồ đứng ở 08:00 giờ Việt Nam để chạm đúng biên "đã bắt đầu".

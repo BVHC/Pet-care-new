@@ -12,7 +12,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Phân ca (workforce-v1 {@code ShiftAssignment}). Đúng 13 trường theo thứ tự hợp đồng; {@code reason} và
  * {@code pendingRequestId} có thể {@code null} (Jackson không bỏ null). Không trả {@code createdAt} / {@code updatedAt} /
- * {@code statusChanged*}. Tên nhân viên, tên và giờ ca được ghép ở service (docs/adr/0138).
+ * {@code statusChanged*}. Tên nhân viên, tên và giờ ca được ghép ở service (docs/adr/0149).
  */
 public record ShiftAssignmentResponse(
         @Schema(description = "Mã phân ca", example = "31")

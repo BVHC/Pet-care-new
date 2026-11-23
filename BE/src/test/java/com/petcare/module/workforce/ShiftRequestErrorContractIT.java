@@ -24,7 +24,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Hợp đồng lỗi của yêu cầu nghỉ / đổi ca (workforce-v1 #9–11; docs/adr/0138 bước 6) qua {@code GlobalExceptionHandler}:
+ * Hợp đồng lỗi của yêu cầu nghỉ / đổi ca (workforce-v1 #9–11; docs/adr/0149 bước 6) qua {@code GlobalExceptionHandler}:
  * mỗi đầu vào sai ra đúng {@code errorCode} / HTTP của nó, envelope luôn đủ sáu trường, <b>không bao giờ 500</b>, và
  * không để lại dấu vết. {@code VALIDATION_FAILED} chỉ cho Bean Validation (thiếu / quá dài {@code reason}, thiếu
  * {@code type} hay {@code shiftAssignmentId}); enum sai, JSON hỏng và sai kiểu là {@code MALFORMED_REQUEST}; vi phạm

@@ -58,7 +58,7 @@ import com.petcare.platform.security.BranchScope;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Yêu cầu nghỉ / đổi ca của <b>chính nhân viên</b> (UC36, workforce-v1 #9–11; BR-NS-04, BR-NS-05, BR-NS-08; docs/adr/0138
+ * Yêu cầu nghỉ / đổi ca của <b>chính nhân viên</b> (UC36, workforce-v1 #9–11; BR-NS-04, BR-NS-05, BR-NS-08; docs/adr/0149
  * bước 6). Danh tính luôn là {@code branchScope.current().accountId()}: không có tham số người gửi nên không gửi, xem hay
  * rút thay người khác được; phân ca / yêu cầu / ca đích không phải của mình trả 404 cùng dạng với "không tồn tại".
  * <p>
@@ -74,16 +74,16 @@ import lombok.extern.slf4j.Slf4j;
  * <b>#10 danh sách</b> — {@code readOnly} + REPEATABLE_READ để trang, tổng và dữ liệu ghép cùng một ảnh chụp.
  * <p>
  * <b>#12 danh sách của chi nhánh (BRANCH_MANAGER)</b> — cùng khuôn #10: không khóa, không ghi, không audit; chi nhánh
- * của <b>phân ca</b> nằm trong SQL; {@code status} vắng = {@code PENDING}, cũ nhất trước (docs/adr/0138 bước 8).
+ * của <b>phân ca</b> nằm trong SQL; {@code status} vắng = {@code PENDING}, cũ nhất trước (docs/adr/0149 bước 8).
  * <p>
  * <b>#14 từ chối (BRANCH_MANAGER)</b> — cùng khuôn khóa #6 / #7: phạm vi không khóa → {@code accounts} → phân ca → yêu
- * cầu → đọc lại → 409 → ghi yêu cầu + audit + outbox; phân ca không đổi (docs/adr/0139).
+ * cầu → đọc lại → 409 → ghi yêu cầu + audit + outbox; phân ca không đổi (docs/adr/0150).
  * <p>
  * <b>#13 duyệt (BRANCH_MANAGER)</b> — cùng khuôn khóa #14 (dùng chung {@code lockForDecision}); {@code SWAP} khóa thêm
- * ca đích {@code FOR SHARE} ngay sau {@code accounts} (thứ tự {@code accounts} → ca → phân ca → yêu cầu, ADR-0139 mục
+ * ca đích {@code FOR SHARE} ngay sau {@code accounts} (thứ tự {@code accounts} → ca → phân ca → yêu cầu, ADR-0150 mục
  * 18); thêm 409 của phân ca và guard ca chưa bắt đầu (400). {@code LEAVE}: yêu cầu → {@code APPROVED} + phân ca →
  * {@code ON_LEAVE}; {@code SWAP}: kiểm lại ca đích (chưa bắt đầu, còn dùng, không chồng giờ; 400 {@code BR-NS-06}) rồi
- * phân ca đổi sang ca đích (Phân ca#5); mỗi loại hai audit, hai thông báo (docs/adr/0139).
+ * phân ca đổi sang ca đích (Phân ca#5); mỗi loại hai audit, hai thông báo (docs/adr/0150).
  * <p>
  * {@code currentShiftName} của mọi response là ca <b>lúc gửi</b> ({@code shift_requests.current_shift_definition_id},
  * V60), không phải ca đang gắn với phân ca: sau khi duyệt {@code SWAP} hai ca này khác nhau.
@@ -251,12 +251,12 @@ public class ShiftRequestService {
      * (404 / 403) trước khóa; sau khóa thì chuyển trạng thái (409). Không có guard 400 nghiệp vụ nào sau 409: đặc tả
      * không đặt điều kiện giờ hay trạng thái phân ca cho từ chối (yêu cầu còn treo trên ca đã qua vẫn từ chối được, đó
      * là cách dọn hàng chờ). Hệ quả (yêu cầu, audit, outbox) cùng một transaction READ COMMITTED; lỗi ở bất kỳ bước nào
-     * rút cả ba (docs/adr/0139).
+     * rút cả ba (docs/adr/0150).
      */
     @Transactional
     public ShiftRequestResponse rejectShiftRequest(Long shiftRequestId, RejectShiftRequestRequest body) {
         // 0–8. Phạm vi (không khóa) → khóa accounts → phân ca → yêu cầu → đọc lại, chuyển trạng thái (409) → nạp ca.
-        //      Từ chối không khóa ca đích: không ghi gì vào phân ca nên không cần (ADR-0139 mục 18).
+        //      Từ chối không khóa ca đích: không ghi gì vào phân ca nên không cần (ADR-0150 mục 18).
         LockedRequest locked = lockForDecision(shiftRequestId, ShiftRequestStatus.REJECTED, false);
         ShiftRequest request = locked.request();
         ShiftAssignment assignment = locked.assignment();
@@ -289,11 +289,11 @@ public class ShiftRequestService {
      * workforce-v1 #13 — BRANCH_MANAGER duyệt yêu cầu {@code PENDING} của chi nhánh (Yêu cầu#3, BR-NS-06, BR-NS-08,
      * BR-NS-10; UC37). Không có body. Cùng khuôn khóa với từ chối (dùng chung {@link #lockForDecision}): phạm vi (404 /
      * 403) trước khóa; sau khóa thì chuyển trạng thái của yêu cầu (409) rồi của phân ca (409, lớp phòng thủ: phân ca của
-     * yêu cầu {@code PENDING} luôn còn {@code SCHEDULED}, docs/adr/0139 mục 3) và mới đến guard "ca chưa bắt đầu" (400
+     * yêu cầu {@code PENDING} luôn còn {@code SCHEDULED}, docs/adr/0150 mục 3) và mới đến guard "ca chưa bắt đầu" (400
      * {@code BR-NS-06}). Không kiểm lại hạn 24 giờ (D074a) và không kiểm định mức tuần (BR-NS-12).
      * <p>
      * {@code LEAVE}: yêu cầu → {@code APPROVED} và phân ca → {@code ON_LEAVE} (Phân ca#3). {@code SWAP} (N3-S5b,
-     * ADR-0139 mục 17–22): ca đích đã khóa {@code FOR SHARE} trong {@code lockForDecision}; thêm ba guard 400 {@code
+     * ADR-0150 mục 17–22): ca đích đã khóa {@code FOR SHARE} trong {@code lockForDecision}; thêm ba guard 400 {@code
      * BR-NS-06} theo thứ tự ca đích đã bắt đầu → ngừng dùng → chồng giờ phân ca khác, rồi phân ca đổi sang ca đích
      * (Phân ca#5, vẫn {@code SCHEDULED}). Mỗi loại: một transaction READ COMMITTED, hai dòng audit, hai thông báo; lỗi ở
      * bất kỳ bước nào rút tất cả.
@@ -333,7 +333,7 @@ public class ShiftRequestService {
         StaffSummary requester = locked.requester();
         Long managerId = branchScope.current().accountId();
 
-        // 11. Ghi. before chụp trước khi đổi vì entity là đối tượng sống; lý do của phân ca chép từ yêu cầu (ADR-0138).
+        // 11. Ghi. before chụp trước khi đổi vì entity là đối tượng sống; lý do của phân ca chép từ yêu cầu (ADR-0149).
         ShiftAssignmentAuditSnapshot assignmentBefore = assignmentMapper.toSnapshot(assignment);
         ShiftRequestAuditSnapshot requestBefore = mapper.toSnapshot(request);
         assignment.markOnLeave(request.getReason(), managerId, now);
@@ -361,7 +361,7 @@ public class ShiftRequestService {
     }
 
     /**
-     * Duyệt {@code SWAP} (Phân ca#5, BR-NS-06, ADR-0139 mục 17–22): guard ca đích trên dữ liệu đọc dưới khóa (ca đích đã
+     * Duyệt {@code SWAP} (Phân ca#5, BR-NS-06, ADR-0150 mục 17–22): guard ca đích trên dữ liệu đọc dưới khóa (ca đích đã
      * khóa {@code FOR SHARE}, nhân viên đã khóa {@code accounts}), rồi phân ca đổi sang ca đích và yêu cầu →
      * {@code APPROVED}, hai audit, hai thông báo — khuôn {@link #approveLeave}.
      */
@@ -373,7 +373,7 @@ public class ShiftRequestService {
         StaffSummary requester = locked.requester();
         Long managerId = branchScope.current().accountId();
 
-        // 11. Guard BR-NS-06 cho ca đích. Ca đích sớm hơn ca hiện tại có thể đã bắt đầu dù ca hiện tại chưa (ADR-0139
+        // 11. Guard BR-NS-06 cho ca đích. Ca đích sớm hơn ca hiện tại có thể đã bắt đầu dù ca hiện tại chưa (ADR-0150
         //     mục 19): duyệt khi đó là xếp nhân viên vào ca đang chạy. Rồi còn dùng / không chồng giờ (BR-NS-02).
         if (ShiftAssignmentService.hasStarted(now, assignment.getWorkDate(), target.getStartTime())) {
             throw new BusinessRuleViolationException("BR-NS-06", "Ca đích đã bắt đầu, không duyệt được");
@@ -423,7 +423,7 @@ public class ShiftRequestService {
      * mọi đọc là đọc dưới khóa → chuyển trạng thái hợp lệ (409) <b>trước</b> mọi guard nghiệp vụ (400) của hàm gọi → nạp
      * ca hiện tại và ca đích.
      * <p>
-     * {@code lockTarget} (duyệt; ADR-0139 mục 18): khóa ca đích {@code FOR SHARE} để sửa / ngừng dùng ca đó ({@code PATCH}
+     * {@code lockTarget} (duyệt; ADR-0150 mục 18): khóa ca đích {@code FOR SHARE} để sửa / ngừng dùng ca đó ({@code PATCH}
      * #3, {@code FOR NO KEY UPDATE}) xếp hàng với việc đổi ca, đúng thứ tự {@code accounts} → {@code shift_definitions}
      * → phân ca → yêu cầu của phân hộ #5. Mã ca đích đọc không khóa từ {@link RequestOwner} vì cột bất biến; ca chưa từng
      * nạp vào persistence context trước khóa nên {@code is_active} và giờ đọc được là mới. Từ chối truyền {@code false}.

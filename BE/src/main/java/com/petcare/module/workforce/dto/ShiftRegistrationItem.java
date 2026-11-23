@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 /**
  * Một mục (ngày, ca) của đăng ký tuần (workforce-v1 {@code ShiftRegistrationItem}, #15). Chỉ kiểm hình thức (không null);
  * ngày trong tuần, ca thuộc chi nhánh / đang dùng, trùng cặp và chồng giờ là BR-NS-11 do service kiểm cả lô
- * (docs/adr/0138, mục "Đăng ký tuần — ghi #15").
+ * (docs/adr/0149, mục "Đăng ký tuần — ghi #15").
  */
 public record ShiftRegistrationItem(
         @Schema(description = "Phải nằm trong tuần của đường dẫn", example = "2026-11-24", type = "string",

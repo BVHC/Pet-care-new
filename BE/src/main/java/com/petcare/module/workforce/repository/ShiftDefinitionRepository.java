@@ -16,7 +16,7 @@ import com.petcare.module.workforce.entity.ShiftDefinition;
 import jakarta.persistence.LockModeType;
 
 /**
- * Bảng {@code shift_definitions} (docs/adr/0138). Hàm khóa là {@code MANDATORY}: bên gọi mở transaction, nếu không khóa
+ * Bảng {@code shift_definitions} (docs/adr/0149). Hàm khóa là {@code MANDATORY}: bên gọi mở transaction, nếu không khóa
  * nhả ngay mà không báo lỗi (khuôn {@code CareTaskRepository.findByIdForUpdate}).
  */
 public interface ShiftDefinitionRepository extends JpaRepository<ShiftDefinition, Long> {
@@ -30,7 +30,7 @@ public interface ShiftDefinitionRepository extends JpaRepository<ShiftDefinition
     /**
      * {@code FOR SHARE} (Hibernate 6 + PostgreSQL): bên ghi phân ca đọc ca dưới khóa chia sẻ rồi mới chèn. Xung đột với
      * {@code FOR NO KEY UPDATE} của {@link #findByIdForUpdate} (sửa / ngừng dùng ca) nên hai bên xếp hàng: không có phân
-     * ca mới lọt vào ca vừa ngừng dùng (BR-NS-01, docs/adr/0123 mục 8, docs/adr/0138).
+     * ca mới lọt vào ca vừa ngừng dùng (BR-NS-01, docs/adr/0123 mục 8, docs/adr/0149).
      */
     @Transactional(propagation = Propagation.MANDATORY)
     @Lock(LockModeType.PESSIMISTIC_READ)
@@ -51,7 +51,7 @@ public interface ShiftDefinitionRepository extends JpaRepository<ShiftDefinition
 
     /**
      * Chi nhánh của ca, đọc không khóa và không nạp entity để phân quyền trước khi khóa (khuôn
-     * {@code KennelRepository.findBranchIdById}); entity chỉ được nạp một lần, dưới khóa (docs/adr/0138).
+     * {@code KennelRepository.findBranchIdById}); entity chỉ được nạp một lần, dưới khóa (docs/adr/0149).
      */
     @Query(value = "SELECT branch_id FROM shift_definitions WHERE id = :id", nativeQuery = true)
     Optional<Long> findBranchIdById(@Param("id") Long id);

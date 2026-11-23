@@ -24,7 +24,7 @@ import com.petcare.module.identity.service.SystemConfigService;
 import com.petcare.support.MutableClock;
 
 /**
- * Thống kê số ca mỗi nhân viên trong tuần (workforce-v1 #16; docs/adr/0138 mục "Thống kê tuần") trên Postgres thật:
+ * Thống kê số ca mỗi nhân viên trong tuần (workforce-v1 #16; docs/adr/0149 mục "Thống kê tuần") trên Postgres thật:
  * ai có mặt (A06–A08 {@code ACTIVE} không khóa của chi nhánh người gọi, kể cả người 0 ca), cách đếm (chỉ
  * {@code SCHEDULED}, cả SELF và MANAGER, mọi chi nhánh, biên tuần Chủ nhật / thứ Hai), định mức [CFG], thứ tự tên tiếng
  * Việt, chi nhánh trống, ma trận đầu vào của {@code weekStart} (không bao giờ 500) và không ghi gì. Xác thực / phân

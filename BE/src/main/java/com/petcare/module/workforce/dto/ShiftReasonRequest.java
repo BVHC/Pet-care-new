@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Size;
  * BR-NS-02, BR-NS-07). Chỉ toàn khoảng trắng (kể cả khoảng trắng Unicode như U+3000) = thiếu: dùng
  * {@link StrippedNotBlank} thay {@code @NotBlank} để cùng định nghĩa "trống" với {@code strip()} của entity. {@code @Size} đếm theo đơn vị UTF-16 nên ký tự ngoài BMP tính 2: chặt
  * hơn cột một chút, không bao giờ lỏng hơn. Service lưu bản đã {@code strip()}. Không dùng tên {@code ReasonRequest}:
- * {@code identity.dto.ReasonRequest} đã có (tối đa 500) và springdoc gộp schema theo tên đơn giản (docs/adr/0138 bước 4).
+ * {@code identity.dto.ReasonRequest} đã có (tối đa 500) và springdoc gộp schema theo tên đơn giản (docs/adr/0149 bước 4).
  * Trường lạ trong JSON bị bỏ qua nên client không đặt được trạng thái, chi nhánh hay người xử lý qua body.
  */
 public record ShiftReasonRequest(

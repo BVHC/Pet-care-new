@@ -11,7 +11,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Tạo ca làm việc (workforce-v1 {@code CreateShiftDefinitionRequest}, #2). Cố ý không có {@code branchId}: chi nhánh
- * luôn là chi nhánh của người gọi, nên client không đặt được ca vào chi nhánh khác (docs/adr/0138).
+ * luôn là chi nhánh của người gọi, nên client không đặt được ca vào chi nhánh khác (docs/adr/0149).
  */
 public record CreateShiftDefinitionRequest(
         @Schema(description = "Tên ca, duy nhất trong chi nhánh, không phân biệt hoa thường (BR-NS-01)",

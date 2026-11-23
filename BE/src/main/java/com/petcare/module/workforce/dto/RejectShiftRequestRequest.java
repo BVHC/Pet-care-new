@@ -8,7 +8,7 @@ import jakarta.validation.constraints.Size;
  * {@code RejectShiftRequestRequest}, #14). Lý do từ chối bắt buộc, ≤ 300 ký tự (khớp
  * {@code shift_requests.decision_note VARCHAR(300)}; BR-NS-06). Chỉ toàn khoảng trắng (kể cả khoảng trắng Unicode như
  * U+3000) = thiếu: dùng {@link StrippedNotBlank} thay {@code @NotBlank} để cùng định nghĩa "trống" với {@code strip()}
- * của entity (docs/adr/0138 mục 53). Service lưu bản đã {@code strip()}. Trường lạ trong JSON bị bỏ qua nên client
+ * của entity (docs/adr/0149 mục 53). Service lưu bản đã {@code strip()}. Trường lạ trong JSON bị bỏ qua nên client
  * không đặt được trạng thái, người quyết định hay chi nhánh qua body.
  */
 public record RejectShiftRequestRequest(

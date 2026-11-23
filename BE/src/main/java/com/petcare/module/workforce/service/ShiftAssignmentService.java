@@ -57,7 +57,7 @@ import com.petcare.platform.model.PageResponse;
 import com.petcare.platform.security.BranchScope;
 
 /**
- * Phân ca của chi nhánh (UC34, workforce-v1 #4–5; BR-NS-02, BR-NS-03, BR-NS-10; docs/adr/0138 bước 3).
+ * Phân ca của chi nhánh (UC34, workforce-v1 #4–5; BR-NS-02, BR-NS-03, BR-NS-10; docs/adr/0149 bước 3).
  * <p>
  * <b>#5 tạo (một transaction, READ COMMITTED)</b> — thứ tự cố định: kiểm không khóa nhân viên và ca có thuộc chi nhánh
  * người gọi không (không thì 404, đồng dạng với "không tồn tại" để không lộ id của chi nhánh khác) → ngày ≥ hôm nay →
@@ -76,7 +76,7 @@ import com.petcare.platform.security.BranchScope;
  * transaction nên lỗi ở bất kỳ bước nào rút cả bốn hiệu ứng.
  * <p>
  * <b>#7 ghi vắng đột xuất</b> — cùng khuôn #6 (dùng chung {@link #lockForTransition}), thêm guard ngày BR-NS-07 sau
- * chuyển trạng thái (docs/adr/0138 bước 7).
+ * chuyển trạng thái (docs/adr/0149 bước 7).
  * <p>
  * <b>#8 lịch của tôi</b> — {@code readOnly} + REPEATABLE_READ; {@code staffId} luôn là người gọi.
  */
@@ -91,7 +91,7 @@ public class ShiftAssignmentService {
      * Trang yêu cầu cho mọi danh sách của module (#4, #10, #12): {@code size} kẹp 1–{@link #MAX_PAGE_SIZE}, {@code page}
      * kẹp 0–{@code Integer.MAX_VALUE / size} để {@code page × size} không vượt {@code int}. Spring Data JPA ném
      * {@code InvalidDataAccessApiUsageException} (500) khi offset vượt {@code Integer.MAX_VALUE}; kẹp thì trang đó chỉ là
-     * trang rỗng (200), cùng chính sách "kẹp, không 400" của {@code page} < 0 (docs/adr/0138 bước 8, nợ D075 cho module khác).
+     * trang rỗng (200), cùng chính sách "kẹp, không 400" của {@code page} < 0 (docs/adr/0149 bước 8, nợ D075 cho module khác).
      */
     static PageRequest pageOf(int page, int size) {
         int clampedSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
@@ -369,7 +369,7 @@ public class ShiftAssignmentService {
     /**
      * Ghép theo lô: đúng một lần cho mỗi nguồn (nhân viên, ca, yêu cầu chờ), bất kể số dòng. {@code public} (không
      * package-private) vì {@code ShiftRegistrationService} gọi qua proxy CGLIB của bean này; không có
-     * {@code @Transactional} nên tham gia transaction của bên gọi (docs/adr/0138, N3-S6).
+     * {@code @Transactional} nên tham gia transaction của bên gọi (docs/adr/0149, N3-S6).
      */
     public List<ShiftAssignmentResponse> toResponses(List<ShiftAssignment> rows) {
         if (rows.isEmpty()) {
@@ -418,7 +418,7 @@ public class ShiftAssignmentService {
         return !LocalDateTime.ofInstant(now, TimeConfig.BUSINESS_ZONE).isBefore(workDate.atTime(startTime));
     }
 
-    /** Lớp phòng thủ thứ hai sau {@code @PreAuthorize}: không có đường "toàn chuỗi" cho phân ca (docs/adr/0138). */
+    /** Lớp phòng thủ thứ hai sau {@code @PreAuthorize}: không có đường "toàn chuỗi" cho phân ca (docs/adr/0149). */
     static Long requireBranch(Long branchId) {
         if (branchId == null) {
             throw new AccessDeniedScopeException("chi nhánh của người gọi", "toàn chuỗi");

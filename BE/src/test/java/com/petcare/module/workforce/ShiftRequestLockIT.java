@@ -27,7 +27,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Khóa của gửi / rút yêu cầu nghỉ / đổi ca (workforce-v1 #9, #11; docs/adr/0138 bước 6, ADR-0123 mục 8) trên Postgres
+ * Khóa của gửi / rút yêu cầu nghỉ / đổi ca (workforce-v1 #9, #11; docs/adr/0149 bước 6, ADR-0123 mục 8) trên Postgres
  * thật. Một transaction khác giữ {@code FOR NO KEY UPDATE} trên dòng tài khoản của nhân viên (như điều chuyển / vô hiệu
  * hóa / hủy phân ca); các request xếp hàng chờ khóa đó <b>theo thứ tự khởi động</b> (hàng đợi khóa của PostgreSQL), nên
  * kết quả của từng cặp xung đột là xác định: (1) hai lần gửi song song cùng một phân ca → một 201, một 400

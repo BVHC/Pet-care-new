@@ -28,7 +28,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Duyệt yêu cầu nghỉ / đổi ca (workforce-v1 #13; docs/adr/0139, N3-S5a / S5b) trên Postgres thật. {@code LEAVE}: yêu cầu →
+ * Duyệt yêu cầu nghỉ / đổi ca (workforce-v1 #13; docs/adr/0150, N3-S5a / S5b) trên Postgres thật. {@code LEAVE}: yêu cầu →
  * {@code APPROVED} (Yêu cầu#3) và phân ca → {@code ON_LEAVE} (Phân ca#3) cùng một mốc giờ, hai dòng audit, một cặp thông
  * báo khớp mẫu V40, POST = GET; hệ quả của {@code ON_LEAVE} (không còn chặn chồng giờ / ngừng dùng ca, listener BR-NS-09
  * không đụng). {@code SWAP}: phân ca đổi sang ca đích và vẫn {@code SCHEDULED} (Phân ca#5), yêu cầu vẫn nêu ca gốc
@@ -416,7 +416,7 @@ class ShiftRequestApproveIT extends ShiftRequestItSupport {
         assertThat(fullRequestRow(request)).containsEntry("status", "APPROVED").containsEntry("decided_by", manager);
     }
 
-    // ---------------------------------------------------------------- SWAP (N3-S5b, ADR-0139 mục 17–22)
+    // ---------------------------------------------------------------- SWAP (N3-S5b, ADR-0150 mục 17–22)
 
     /** Một yêu cầu SWAP {@code PENDING} của {@code staffId} từ {@code from} sang {@code to} ngày {@code day}. */
     private long[] pendingSwap(long staffId, long from, long to, LocalDate day) {

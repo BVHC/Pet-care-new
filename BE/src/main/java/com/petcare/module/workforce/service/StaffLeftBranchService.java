@@ -22,7 +22,7 @@ import com.petcare.module.workforce.repository.ShiftRequestRepository;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Nhân viên rời chi nhánh (BR-NS-09; 03 Phân ca#6 và Yêu cầu#5; docs/adr/0138 bước 5, trả D071). Gọi từ
+ * Nhân viên rời chi nhánh (BR-NS-09; 03 Phân ca#6 và Yêu cầu#5; docs/adr/0149 bước 5, trả D071). Gọi từ
  * {@code StaffLeftBranchListener} <b>trong transaction của identity</b> (vô hiệu hóa / điều chuyển), nên {@code MANDATORY}
  * và không đặt {@code isolation} (READ COMMITTED: câu chọn khóa phải thấy dòng đã commit sau khi chờ khóa).
  * <p>

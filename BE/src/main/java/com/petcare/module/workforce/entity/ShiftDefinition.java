@@ -21,7 +21,7 @@ import lombok.NoArgsConstructor;
  * (BR-NS-01). {@code branch_id} bất biến. Entity giữ hai bất biến tự thân: tên không rỗng, ≤ 60 ký tự (lưu bản đã
  * {@code strip}) và giờ bắt đầu nhỏ hơn giờ kết thúc ({@code ck_shift_definitions_time_order}). Tên không trùng trong
  * chi nhánh (unique {@code lower(name)}), "ngừng dùng khi còn phân ca" và "sửa giờ khi ca đã có phân ca" cần dữ liệu
- * dòng khác nên do service kiểm dưới khóa dòng ca (docs/adr/0138). Các method ghi <b>không</b> tự khóa hay kiểm quyền.
+ * dòng khác nên do service kiểm dưới khóa dòng ca (docs/adr/0149). Các method ghi <b>không</b> tự khóa hay kiểm quyền.
  */
 @Getter
 @Entity

@@ -21,7 +21,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 import jakarta.validation.ConstraintViolation;
 
 /**
- * Ràng buộc hình thức của {@link PutShiftRegistrationRequest} / {@link ShiftRegistrationItem} (workforce-v1 #15, ADR-0137
+ * Ràng buộc hình thức của {@link PutShiftRegistrationRequest} / {@link ShiftRegistrationItem} (workforce-v1 #15, ADR-0148
  * mục 12). Hai tầng: Hibernate Validator thật, và <b>đúng đường của Spring MVC</b> cho {@code @Valid @RequestBody}
  * ({@link DataBinder#validate()} trên một record, rồi {@code BindingResult} của {@code MethodArgumentNotValidException}).
  * Tầng thứ hai là bằng chứng của bước 0 trong kế hoạch N3-S7: lỗi ở đường dẫn có chỉ số ({@code items[0].workDate}) phải

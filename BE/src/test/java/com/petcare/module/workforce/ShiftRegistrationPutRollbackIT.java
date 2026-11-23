@@ -33,7 +33,7 @@ import com.petcare.support.MutableClock;
 import com.zaxxer.hikari.HikariDataSource;
 
 /**
- * Lỗi <b>sau khi đã ghi</b> trong đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0138 mục "Đăng ký tuần — ghi #15"):
+ * Lỗi <b>sau khi đã ghi</b> trong đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0149 mục "Đăng ký tuần — ghi #15"):
  * {@code PUT} hủy phân ca bị bỏ (UPDATE), đóng yêu cầu chờ của chúng (UPDATE hàng loạt), chèn phân ca mới (INSERT) rồi
  * đọc lại và dựng response, tất cả cùng một transaction nên lỗi ở bất kỳ bước nào rút hết, kể cả các lệnh đã chạy trước
  * đó. Bốn điểm lỗi: (i) UPDATE phân ca (lần ghi đầu), (ii) UPDATE yêu cầu (sau khi phân ca đã bị hủy), (iii) INSERT phân

@@ -16,7 +16,7 @@ import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.workforce.entity.ShiftRequestType;
 
 /**
- * Dựng yêu cầu thông báo của module workforce (BR-NS-08, docs/adr/0138 bước 4): chỉ <b>dựng</b>, không gọi
+ * Dựng yêu cầu thông báo của module workforce (BR-NS-08, docs/adr/0149 bước 4): chỉ <b>dựng</b>, không gọi
  * {@code NotificationApi}; service tự {@code enqueue} trong transaction nghiệp vụ. Khuôn
  * {@code AppointmentNoticeTargets.requests}. Khóa payload khớp đúng {@code required_vars} của mẫu ở V40: thiếu một khóa
  * thì worker ST20 coi là lỗi và thử lại mãi ({@code NotificationTemplateRenderer.missingRequired}), nên

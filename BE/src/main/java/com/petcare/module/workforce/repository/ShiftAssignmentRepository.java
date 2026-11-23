@@ -23,7 +23,7 @@ import com.petcare.module.workforce.entity.ShiftAssignmentStatus;
 
 import jakarta.persistence.LockModeType;
 
-/** Bảng {@code shift_assignments} (docs/adr/0138). Hàm khóa là {@code MANDATORY}, xem {@code ShiftDefinitionRepository}. */
+/** Bảng {@code shift_assignments} (docs/adr/0149). Hàm khóa là {@code MANDATORY}, xem {@code ShiftDefinitionRepository}. */
 public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment, Long> {
 
     /** {@code FOR NO KEY UPDATE}: hủy, ghi vắng, duyệt đổi / nghỉ (thứ tự khóa ở ADR-0123 mục 8, workforce-v1 §D.5). */
@@ -32,7 +32,7 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
     @Query("SELECT a FROM ShiftAssignment a WHERE a.id = :id")
     Optional<ShiftAssignment> findByIdForUpdate(@Param("id") Long id);
 
-    /** Chủ và chi nhánh của một phân ca, đọc <b>không khóa</b> để phân quyền dữ liệu trước khi khóa (docs/adr/0138 bước 4). */
+    /** Chủ và chi nhánh của một phân ca, đọc <b>không khóa</b> để phân quyền dữ liệu trước khi khóa (docs/adr/0149 bước 4). */
     interface AssignmentScope {
         Long getStaffId();
 
@@ -134,7 +134,7 @@ public interface ShiftAssignmentRepository extends JpaRepository<ShiftAssignment
 
     /**
      * Phân ca {@code SCHEDULED} của nhân viên trong ngày có khoảng giờ <b>giao thật sự</b> với {@code [start, end)}:
-     * {@code startA < endB và startB < endA}, ca liền kề (kết thúc = bắt đầu) không tính (BR-NS-02, docs/adr/0138). Cùng
+     * {@code startA < endB và startB < endA}, ca liền kề (kết thúc = bắt đầu) không tính (BR-NS-02, docs/adr/0149). Cùng
      * một ca trong cùng ngày cũng giao nhau nên trùng cặp bị bắt ở đây trước khi chạm unique index. Chạy dưới khóa
      * {@code accounts} của nhân viên; status là literal để dùng {@code ix_shift_assignments_staff_date}; {@code LocalTime}
      * bind qua {@code CAST(… AS time)} để PostgreSQL suy được kiểu.

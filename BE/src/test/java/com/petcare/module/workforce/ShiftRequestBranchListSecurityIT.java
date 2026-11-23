@@ -24,7 +24,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực và phân quyền của {@code GET /shift-requests} (workforce-v1 #12; docs/adr/0138 bước 8): 401 mọi dạng, BR-TK-17
+ * Xác thực và phân quyền của {@code GET /shift-requests} (workforce-v1 #12; docs/adr/0149 bước 8): 401 mọi dạng, BR-TK-17
  * trước tham số, 400 tham số sai trước 403 vai trò, chỉ BRANCH_MANAGER (ma trận bảy vai trò), vai trò và chi nhánh đọc
  * lại từ DB ở mỗi request (đổi vai trò / điều chuyển giữa phiên), khóa tạm không chặn phiên đang có, chi nhánh
  * {@code DRAFT} vẫn xem được, tham số chi nhánh lạ bị bỏ qua và từ chối không để lại dấu vết. Era <b>năm 2075</b>.

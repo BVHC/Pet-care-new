@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 /**
  * Phân ca hộ (workforce-v1 {@code CreateShiftAssignmentRequest}, #5). Cố ý chỉ có ba trường của hợp đồng: không có
  * {@code branchId} (luôn là chi nhánh của người gọi), {@code source} (luôn {@code MANAGER}), {@code status} (luôn
- * {@code SCHEDULED}) nên client không đặt được chúng qua body (docs/adr/0138).
+ * {@code SCHEDULED}) nên client không đặt được chúng qua body (docs/adr/0149).
  */
 public record CreateShiftAssignmentRequest(
         @Schema(description = "Nhân viên A06–A08 ACTIVE của chi nhánh người gọi", example = "12",

@@ -28,7 +28,7 @@ import com.petcare.module.workforce.mapper.ShiftAssignmentMapper;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>sau khi đã ghi</b> trong hủy phân ca (workforce-v1 #6; docs/adr/0138 bước 4): bốn hiệu ứng (phân ca, Yêu cầu#5,
+ * Lỗi <b>sau khi đã ghi</b> trong hủy phân ca (workforce-v1 #6; docs/adr/0149 bước 4): bốn hiệu ứng (phân ca, Yêu cầu#5,
  * audit, outbox) cùng một transaction nên một lỗi ở bất kỳ bước nào rút cả bốn. Lỗi được gây bằng trigger tạm của
  * Postgres (INSERT {@code IDENTITY} chạy ngay nên lỗi nổi trong service, không đợi commit) và bằng spy mapper cho lỗi
  * dựng response sau cùng. Mỗi ca: dấu vết y như trước, rồi khi hết lỗi thì gọi lại thành công đúng một lần (một audit,

@@ -14,7 +14,7 @@ import org.springframework.http.ResponseEntity;
 import com.petcare.platform.config.TimeConfig;
 
 /**
- * Nền chung của các IT "nhân viên rời chi nhánh" (BR-NS-09, docs/adr/0138 bước 5): HTTP thật qua {@code POST
+ * Nền chung của các IT "nhân viên rời chi nhánh" (BR-NS-09, docs/adr/0149 bước 5): HTTP thật qua {@code POST
  * /api/staff/{id}/disable} và {@code /transfer} của identity, dữ liệu qua {@link WorkforceItSupport}. {@link #seedWorld}
  * dựng một "thế giới" cố định quanh nhân viên {@link #staff} ở chi nhánh A với đủ loại phân ca để mỗi test chỉ cần nói
  * tập nào bị hủy ({@link #cancelledByLeaving}) và tập nào phải giữ nguyên ({@link #untouched}). Mỗi lớp con có era riêng

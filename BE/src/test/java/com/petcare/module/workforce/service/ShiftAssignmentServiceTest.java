@@ -78,7 +78,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link ShiftAssignmentService} (workforce-v1 #4–5, docs/adr/0138 bước 3): thứ tự kiểm không khóa → ngày → khóa nhân
+ * {@link ShiftAssignmentService} (workforce-v1 #4–5, docs/adr/0149 bước 3): thứ tự kiểm không khóa → ngày → khóa nhân
  * viên → khóa ca → kiểm → ghi → audit → map; mọi nhánh lỗi không ghi và không audit; ghép danh sách theo lô; cấu hình
  * transaction của hai use case.
  */
@@ -414,7 +414,7 @@ class ShiftAssignmentServiceTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
-    // ---------------------------------------------------------------- cấu hình transaction (docs/adr/0138)
+    // ---------------------------------------------------------------- cấu hình transaction (docs/adr/0149)
 
     @Test
     void createRunsInAWriteTransactionAtReadCommittedSoTheOverlapCheckSeesWhatCommittedWhileItWaited() throws Exception {
@@ -1027,7 +1027,7 @@ class ShiftAssignmentServiceTest {
         verifyNoInteractions(notifications);
     }
 
-    // ---------------------------------------------------------------- cấu hình transaction (docs/adr/0138)
+    // ---------------------------------------------------------------- cấu hình transaction (docs/adr/0149)
 
     @Test
     void cancelRunsInAWriteTransactionAtReadCommittedBecauseItRereadsAfterWaitingForTheLocks() throws Exception {

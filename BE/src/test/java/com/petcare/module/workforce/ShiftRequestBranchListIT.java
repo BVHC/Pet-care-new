@@ -30,7 +30,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Yêu cầu nghỉ / đổi ca của chi nhánh (workforce-v1 #12; docs/adr/0138 bước 8) trên Postgres thật: chỉ chi nhánh của
+ * Yêu cầu nghỉ / đổi ca của chi nhánh (workforce-v1 #12; docs/adr/0149 bước 8) trên Postgres thật: chỉ chi nhánh của
  * người gọi (theo chi nhánh của <b>phân ca</b>), {@code status} vắng = {@code PENDING}, cũ nhất trước (trùng thời điểm
  * thì id nhỏ trước), phân trang và kẹp {@code page} / {@code size} (kể cả {@code page} quá lớn, từng là 500), ghép tên
  * đúng từng dòng kể cả người đã nghỉ / điều chuyển và ca đã ngừng dùng, không để lại dấu vết và không bị chặn bởi luồng

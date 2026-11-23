@@ -33,7 +33,7 @@ import com.petcare.module.identity.repository.StaffProfileRepository;
 import com.petcare.support.MutableClock;
 
 /**
- * Ảnh nhất quán của {@code GET /shift-requests} (workforce-v1 #12; docs/adr/0138 bước 8): trang, tổng và dữ liệu ghép
+ * Ảnh nhất quán của {@code GET /shift-requests} (workforce-v1 #12; docs/adr/0149 bước 8): trang, tổng và dữ liệu ghép
  * phải cùng một ảnh chụp REPEATABLE_READ. Spy repository của identity (không spy bean {@code @Transactional}, bẫy
  * Mockito): đúng lúc service ghép tên người gửi, tức <b>sau</b> khi câu trang và câu {@code count} đã chạy, một luồng
  * khác commit việc đổi tên người gửi và thêm một yêu cầu {@code PENDING}. Phản hồi phải mang tên <b>cũ</b> và đúng hai

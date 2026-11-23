@@ -46,7 +46,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link ShiftDefinitionService} (workforce-v1 #1–3, docs/adr/0138): thứ tự phân quyền → khóa → guard → ghi → audit,
+ * {@link ShiftDefinitionService} (workforce-v1 #1–3, docs/adr/0149): thứ tự phân quyền → khóa → guard → ghi → audit,
  * mọi nhánh lỗi không ghi và không audit, không có gì đổi thì không ghi, {@code before} chụp trước khi đổi.
  */
 class ShiftDefinitionServiceTest {

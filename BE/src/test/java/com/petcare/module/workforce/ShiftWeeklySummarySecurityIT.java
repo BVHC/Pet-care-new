@@ -27,7 +27,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực / phân quyền của {@code GET /shift-weekly-summaries} (workforce-v1 #16; docs/adr/0138): 401 theo từng nguyên
+ * Xác thực / phân quyền của {@code GET /shift-weekly-summaries} (workforce-v1 #16; docs/adr/0149): 401 theo từng nguyên
  * nhân với body đồng nhất (không lộ lý do), 401 theo trạng thái phiên / tài khoản, BR-TK-17 đứng trước binder, bảy vai
  * trò (chỉ BRANCH_MANAGER, SUPER_MANAGER cũng 403), thứ tự binder → role → service, vai trò và chi nhánh đọc lại từ DB ở
  * mỗi request, quản lý không có chi nhánh, không xem được chi nhánh khác (kể cả khi gửi tham số thừa), lỗi 401 / 403

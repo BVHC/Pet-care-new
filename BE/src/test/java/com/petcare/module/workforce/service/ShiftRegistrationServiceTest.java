@@ -38,7 +38,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link ShiftRegistrationService} #17 (docs/adr/0138, mục "Đăng ký tuần — đọc #17"): thứ tự guard → truy vấn → ghép →
+ * {@link ShiftRegistrationService} #17 (docs/adr/0149, mục "Đăng ký tuần — đọc #17"): thứ tự guard → truy vấn → ghép →
  * định mức; guard 400 {@code BR-NS-11} (không phải thứ Hai, năm ngoài 2000–2100) không chạm repository; {@code staffId}
  * chỉ từ principal; {@code editableUntil} là 00:00 thứ Hai giờ Việt Nam; lỗi từ repository / ghép lan ra nguyên vẹn.
  */

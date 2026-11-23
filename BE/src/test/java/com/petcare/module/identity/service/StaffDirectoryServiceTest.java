@@ -182,7 +182,7 @@ class StaffDirectoryServiceTest {
         assertThat(lock.propagation()).isEqualTo(Propagation.MANDATORY);
     }
 
-    // ------------------------------------------------ findStaffForUpdate (docs/adr/0123 mục 8, docs/adr/0138)
+    // ------------------------------------------------ findStaffForUpdate (docs/adr/0123 mục 8, docs/adr/0149)
 
     @Test
     void findStaffForUpdateLocksExclusivelyBeforeReadingAndNeverTakesTheSharedLock() {

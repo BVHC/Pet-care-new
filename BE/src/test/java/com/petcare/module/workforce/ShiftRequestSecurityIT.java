@@ -28,7 +28,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực và phân quyền của yêu cầu nghỉ / đổi ca (workforce-v1 #9–11; docs/adr/0138 bước 6), khuôn
+ * Xác thực và phân quyền của yêu cầu nghỉ / đổi ca (workforce-v1 #9–11; docs/adr/0149 bước 6), khuôn
  * {@code ShiftAssignmentCancelSecurityIT}: 401 trước mọi xử lý, BR-TK-17 trước validation, validation trước vai trò,
  * chỉ A06–A08 (ma trận bảy vai trò × ba endpoint), danh tính luôn là người gọi nên phân ca / yêu cầu / ca đích của người
  * khác là 404 đồng dạng với "không tồn tại" và không khóa dòng tài khoản của họ, vai trò đọc lại từ DB ở request kế

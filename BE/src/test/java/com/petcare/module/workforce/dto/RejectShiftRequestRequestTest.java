@@ -14,7 +14,7 @@ import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 
 /**
- * Ràng buộc của {@link RejectShiftRequestRequest} (body của từ chối yêu cầu #14, docs/adr/0139). Chạy Hibernate
+ * Ràng buộc của {@link RejectShiftRequestRequest} (body của từ chối yêu cầu #14, docs/adr/0150). Chạy Hibernate
  * Validator thật, không cần Spring / Docker. Điểm cần chứng minh: lý do từ chối mà entity sẽ {@code strip()} thành rỗng
  * <b>phải</b> bị DTO chặn ở 400 {@code VALIDATION_FAILED}; nếu lọt qua, {@code EntityText.require} ném
  * {@code IllegalArgumentException} và {@code GlobalExceptionHandler} trả 500. Ký tự khoảng trắng viết bằng escape để

@@ -30,7 +30,7 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Phân ca (UC34, UC35, UC38, workforce-v1 #4–8; docs/adr/0138). Không chứa logic và không biết mã rule: BR-NS-02 /
+ * Phân ca (UC34, UC35, UC38, workforce-v1 #4–8; docs/adr/0149). Không chứa logic và không biết mã rule: BR-NS-02 /
  * BR-NS-03 / BR-NS-07 do {@link ShiftAssignmentService} kiểm. #4–7 chỉ BRANCH_MANAGER (A06–A08 không có quyền ở đây, khác với
  * {@code GET /shift-definitions}); #8 chỉ nhân viên A06–A08 và chỉ lịch của chính họ.
  */

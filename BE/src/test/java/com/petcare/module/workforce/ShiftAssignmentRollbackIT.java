@@ -39,7 +39,7 @@ import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>sau khi đã flush</b> trong workforce-v1 #5 (docs/adr/0138 bước 3): INSERT phân ca đã chạy, rồi bước audit hoặc
+ * Lỗi <b>sau khi đã flush</b> trong workforce-v1 #5 (docs/adr/0149 bước 3): INSERT phân ca đã chạy, rồi bước audit hoặc
  * bước dựng response ném lỗi — toàn bộ use case phải rollback (không còn dòng nào) và lời gọi sau đó, khi lỗi đã hết, tạo
  * đúng một dòng. Thêm nhánh vi phạm {@code ux_shift_assignments_scheduled} (lưới đỡ): phải nổi ra ngay tại
  * {@code saveAndFlush} và thành 409 {@code CONCURRENCY_CONFLICT}, không ghi gì, không audit. Tách riêng vì

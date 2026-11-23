@@ -20,7 +20,7 @@ import com.petcare.module.workforce.entity.ShiftAssignmentStatus;
 import com.petcare.module.workforce.entity.ShiftDefinition;
 
 /**
- * {@link ShiftAssignmentMapper} (docs/adr/0138, workforce-v1 {@code ShiftAssignment}): mỗi trường của hợp đồng lấy đúng
+ * {@link ShiftAssignmentMapper} (docs/adr/0149, workforce-v1 {@code ShiftAssignment}): mỗi trường của hợp đồng lấy đúng
  * nguồn — giá trị khác nhau ở mọi trường nên map nhầm nguồn là đỏ; đủ 13 trường theo thứ tự hợp đồng; {@code null} của
  * {@code reason} / {@code pendingRequestId} được giữ; không lọt {@code createdAt} / {@code updatedAt} /
  * {@code statusChanged*}; snapshot audit là bản sao giá trị với ngày và enum dạng chuỗi.

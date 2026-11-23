@@ -32,7 +32,7 @@ public interface StaffDirectoryApi {
     /**
      * Như {@link #findStaffForShare} nhưng khóa <b>độc quyền</b> dòng {@code accounts} ({@code SELECT … FOR NO KEY
      * UPDATE}) trước khi đọc — nghĩa vụ của luồng phải <b>tuần tự hóa các thao tác trên cùng một nhân viên</b> (workforce
-     * phân ca, docs/adr/0123 mục 8, docs/adr/0138): hai khóa chia sẻ không loại trừ nhau nên {@code FOR SHARE} không đủ để
+     * phân ca, docs/adr/0123 mục 8, docs/adr/0149): hai khóa chia sẻ không loại trừ nhau nên {@code FOR SHARE} không đủ để
      * chặn hai phân ca chồng giờ lọt cùng lúc. Điều chuyển / vô hiệu hóa / khóa tài khoản giữ cùng loại khóa trên dòng này
      * nên bên gọi chờ chúng commit rồi thấy chi nhánh / trạng thái mới. {@code MANDATORY}, từ chối transaction readOnly;
      * khóa giữ tới khi transaction của bên gọi kết thúc. Không phải nhân viên / không có → rỗng. Bên gọi tự phân quyền

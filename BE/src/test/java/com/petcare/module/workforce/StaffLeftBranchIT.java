@@ -22,7 +22,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Chuỗi "nhân viên rời chi nhánh" (BR-NS-09; 03 Phân ca#6, Yêu cầu#5; docs/adr/0138 bước 5, trả D071) trên Postgres thật,
+ * Chuỗi "nhân viên rời chi nhánh" (BR-NS-09; 03 Phân ca#6, Yêu cầu#5; docs/adr/0149 bước 5, trả D071) trên Postgres thật,
  * qua HTTP của identity: vô hiệu hóa và điều chuyển hủy đúng tập phân ca {@code SCHEDULED} chưa bắt đầu của đúng nhân
  * viên tại chi nhánh cũ, đóng yêu cầu {@code PENDING} của chúng, gửi mỗi ca một cặp thông báo (payload khớp mẫu V40, tên
  * chi nhánh là chi nhánh <b>cũ</b>), không đụng ca đã bắt đầu / đã qua / đã ở trạng thái cuối / của người khác / của chi

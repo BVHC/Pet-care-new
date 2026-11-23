@@ -23,7 +23,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Rút yêu cầu (workforce-v1 #11; docs/adr/0138 bước 6) trên Postgres thật: chỉ yêu cầu → {@code WITHDRAWN} (Yêu cầu#2)
+ * Rút yêu cầu (workforce-v1 #11; docs/adr/0149 bước 6) trên Postgres thật: chỉ yêu cầu → {@code WITHDRAWN} (Yêu cầu#2)
  * với {@code closed_at} từ đồng hồ và {@code decided_by} rỗng; phân ca giữ nguyên; không audit, không thông báo; mọi
  * trạng thái đã đóng (kể cả bị hệ thống đóng khi quản lý hủy phân ca) là 409; yêu cầu của đồng nghiệp hay không tồn tại
  * là 404 và không để lại dấu vết; rút xong gửi lại được. Era <b>năm 2063</b>.

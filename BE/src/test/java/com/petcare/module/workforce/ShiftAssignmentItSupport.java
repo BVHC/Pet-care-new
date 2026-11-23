@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Nền chung của các IT phân ca (workforce-v1 #4–5, docs/adr/0138 bước 3): dùng lại hạ tầng của
+ * Nền chung của các IT phân ca (workforce-v1 #4–5, docs/adr/0149 bước 3): dùng lại hạ tầng của
  * {@link ShiftDefinitionItSupport} (HTTP thật, token qua {@code SessionService}, dữ liệu qua {@link WorkforceItSupport})
  * và thêm các hàm đếm / đọc dòng phân ca. Mỗi lớp con có era riêng (xem docs/architecture/testing-notes.md).
  */
@@ -112,7 +112,7 @@ abstract class ShiftAssignmentItSupport extends ShiftDefinitionItSupport {
                 + "|audit=" + cancelAuditCount(assignmentId) + "|outbox=" + cancelOutbox(staffId).size();
     }
 
-    // ---------------------------------------------------------------- ghi vắng đột xuất (#7, docs/adr/0138 bước 7)
+    // ---------------------------------------------------------------- ghi vắng đột xuất (#7, docs/adr/0149 bước 7)
 
     protected static final String ABSENCE_ACTION = "SHIFT_ASSIGNMENT_ABSENCE_RECORDED";
     /** Ghi chú hệ thống của Yêu cầu#5 khi phân ca được ghi nhận vắng (khác ghi chú của hủy phân ca). */

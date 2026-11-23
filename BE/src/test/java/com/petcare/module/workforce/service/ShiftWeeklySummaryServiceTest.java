@@ -38,7 +38,7 @@ import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
 /**
- * {@link ShiftWeeklySummaryService} (workforce-v1 #16, docs/adr/0138, mục "Thống kê tuần"): thứ tự
+ * {@link ShiftWeeklySummaryService} (workforce-v1 #16, docs/adr/0149, mục "Thống kê tuần"): thứ tự
  * {@code requireBranch} → {@code requireWeekStart} → nhân viên → số đếm → định mức; guard 403 / 400 không chạm
  * repository hay identity; chi nhánh chỉ từ principal; không gọi câu đếm khi chi nhánh không có nhân viên; nhân viên
  * không có hàng đếm là 0; sắp tên tiếng Việt rồi id; lỗi từ nguồn lan ra nguyên vẹn.

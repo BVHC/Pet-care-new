@@ -20,7 +20,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
 
 /**
- * Thống kê số ca mỗi nhân viên trong tuần (UC34, workforce-v1 #16; docs/adr/0138). Không chứa logic và không biết mã
+ * Thống kê số ca mỗi nhân viên trong tuần (UC34, workforce-v1 #16; docs/adr/0149). Không chứa logic và không biết mã
  * rule: BR-NS-11 do {@link ShiftWeeklySummaryService} kiểm. Chỉ BRANCH_MANAGER, chỉ chi nhánh của người gọi; dùng chung
  * hằng quyền của {@link ShiftAssignmentController} để các nơi không lệch nhau.
  */

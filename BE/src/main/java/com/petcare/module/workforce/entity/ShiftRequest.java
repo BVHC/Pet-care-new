@@ -33,7 +33,7 @@ import lombok.NoArgsConstructor;
  * {@code WHERE status = 'PENDING'} ở repository, điều kiện đúng bằng cạnh {@code PENDING → REJECTED} của
  * {@link #rejectBySystem}, và tự ghi đủ cột như method này (khuôn {@code CareTaskRepository.cancelOpen*},
  * docs/adr/0079). Các luồng một-phân-ca (hủy, vắng, sửa đăng ký tuần) dùng {@link #rejectBySystem} vì đã khóa phân ca
- * rồi yêu cầu (docs/adr/0138).
+ * rồi yêu cầu (docs/adr/0149).
  */
 @Getter
 @Entity
@@ -56,7 +56,7 @@ public class ShiftRequest extends TimestampedEntity {
     private ShiftRequestType requestType;
 
     /**
-     * Ca của phân ca <b>lúc gửi</b> (V60, ADR-0139 mục 17): ảnh chụp, vì duyệt {@code SWAP} (Phân ca#5) đổi ca của phân
+     * Ca của phân ca <b>lúc gửi</b> (V60, ADR-0150 mục 17): ảnh chụp, vì duyệt {@code SWAP} (Phân ca#5) đổi ca của phân
      * ca sang ca đích. {@code currentShiftName} của yêu cầu đọc từ cột này.
      */
     @Column(name = "current_shift_definition_id", nullable = false, updatable = false)

@@ -25,7 +25,7 @@ import com.petcare.module.identity.service.SystemConfigService;
 import com.petcare.support.MutableClock;
 
 /**
- * Gửi yêu cầu nghỉ / đổi ca (workforce-v1 #9; docs/adr/0138 bước 6) trên Postgres thật: hình dạng response đủ 15 khóa,
+ * Gửi yêu cầu nghỉ / đổi ca (workforce-v1 #9; docs/adr/0149 bước 6) trên Postgres thật: hình dạng response đủ 15 khóa,
  * hai hiệu ứng cùng một transaction (yêu cầu {@code PENDING} + một dòng outbox cho mỗi quản lý), không audit (BR-NS-10),
  * lý do được strip và dùng thống nhất, payload thông báo khớp mẫu V40, dự phòng SUPER_MANAGER, từng nhánh 400 / 404 của
  * BR-NS-04 (mỗi nhánh không để lại dấu vết) và [CFG] {@code workforce.request_lead_hours} được đọc ở mỗi lần gửi. Era

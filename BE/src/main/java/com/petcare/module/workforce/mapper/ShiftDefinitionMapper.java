@@ -11,7 +11,7 @@ import com.petcare.module.workforce.dto.ShiftDefinitionResponse;
 import com.petcare.module.workforce.entity.ShiftDefinition;
 
 /**
- * Ca làm việc (workforce-v1 #1–3; docs/adr/0138): chỉ chiều Entity → DTO. Chiều ngược lại cố ý không có: entity không có
+ * Ca làm việc (workforce-v1 #1–3; docs/adr/0149): chỉ chiều Entity → DTO. Chiều ngược lại cố ý không có: entity không có
  * setter, bất biến nằm ở factory {@code create} / {@code rename} / {@code changeTimes}. Mọi trường đích khai báo
  * tường minh và {@code unmappedTargetPolicy = ERROR}; không trả {@code createdAt} / {@code updatedAt}.
  */

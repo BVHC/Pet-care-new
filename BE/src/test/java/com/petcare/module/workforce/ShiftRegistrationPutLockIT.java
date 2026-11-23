@@ -31,7 +31,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.support.MutableClock;
 
 /**
- * Khóa của đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0138 mục "Đăng ký tuần — ghi #15", ADR-0123 mục 8) trên
+ * Khóa của đăng ký ca theo tuần (workforce-v1 #15; docs/adr/0149 mục "Đăng ký tuần — ghi #15", ADR-0123 mục 8) trên
  * Postgres thật. Một transaction khác giữ {@code FOR NO KEY UPDATE} trên dòng {@code accounts} của nhân viên (hoặc một
  * advisory lock mà trigger tạm chờ), các request xếp hàng chờ <b>theo thứ tự khởi động</b> nên kết quả là xác định:
  * (a) hai {@code PUT} của cùng nhân viên chạy lần lượt và lần sau thắng; (b) lưới DB: một phân ca chèn lọt giữa lúc

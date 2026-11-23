@@ -11,7 +11,7 @@ import com.petcare.module.workforce.dto.ShiftRequestResponse;
 import com.petcare.module.workforce.entity.ShiftRequest;
 
 /**
- * Yêu cầu nghỉ / đổi ca (workforce-v1 #9–11; docs/adr/0138 bước 6): chỉ chiều Entity → DTO và <b>không chạm DB</b>. Tên
+ * Yêu cầu nghỉ / đổi ca (workforce-v1 #9–11; docs/adr/0149 bước 6): chỉ chiều Entity → DTO và <b>không chạm DB</b>. Tên
  * người gửi, ngày làm và tên ca do service ghép theo lô rồi truyền vào (khuôn {@code ShiftAssignmentMapper}). Mọi trường
  * đích khai báo tường minh, kể cả {@code id} / {@code createdAt} (nhiều tham số nên MapStruct không tự suy ra nguồn), và
  * {@code unmappedTargetPolicy = ERROR}. {@code toSnapshot} chỉ cho audit của từ chối (#14) và duyệt (#13); #9, #11 không audit (BR-NS-10).

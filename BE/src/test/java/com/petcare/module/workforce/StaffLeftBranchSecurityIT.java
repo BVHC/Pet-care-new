@@ -21,7 +21,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực và phân quyền của hai thao tác gốc phát {@code StaffLeftBranchEvent} (BR-NS-09; docs/adr/0138 bước 5):
+ * Xác thực và phân quyền của hai thao tác gốc phát {@code StaffLeftBranchEvent} (BR-NS-09; docs/adr/0149 bước 5):
  * 401 và BR-TK-17 trước mọi việc, vai trò, phân cấp (ADMIN không vô hiệu hóa được lễ tân; quản lý chi nhánh khác không
  * đụng được nhân viên chi nhánh này) — <b>mỗi lệnh bị từ chối không để lại dấu vết</b> ở workforce. Hai đường thành công
  * chứng minh listener <b>không dính {@code BranchScope}</b>: SUPER_MANAGER (không có chi nhánh) điều chuyển vẫn hủy được

@@ -1213,7 +1213,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | work_date | DATE | NN | Theo giờ Việt Nam |
 | status | VARCHAR(30) | NN, CHECK | `SCHEDULED`, `ON_LEAVE`, `ABSENT`, `CANCELLED` |
 | source | VARCHAR(30) | NN, CHECK | `SELF` (nhân viên tự đăng ký, BR-NS-11), `MANAGER` (quản lý phân hộ, BR-NS-02). *(ADR-0123; V36 chưa có cột, thêm ở V61 của T58, đánh số lại từ V55 ngày 23/11/2026)* |
-| reason | VARCHAR(300) | ? | Lý do vắng đột xuất, hủy, hoặc nghỉ được duyệt (`ON_LEAVE`: chép lý do của yêu cầu nghỉ, ADR-0138) |
+| reason | VARCHAR(300) | ? | Lý do vắng đột xuất, hủy, hoặc nghỉ được duyệt (`ON_LEAVE`: chép lý do của yêu cầu nghỉ, ADR-0149) |
 | status_changed_by | BIGINT | ?, FK→accounts | Người xử lý; NULL nếu hệ thống chuyển |
 | status_changed_at | TIMESTAMPTZ | ? | Lúc rời `SCHEDULED` |
 
@@ -1232,7 +1232,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | assignment_id | BIGINT | NN, FK→shift_assignments | |
 | requester_id | BIGINT | NN, FK→accounts | Người gửi = nhân viên của phân ca (BR-NS-04) |
 | request_type | VARCHAR(30) | NN, CHECK | `LEAVE`, `SWAP` |
-| current_shift_definition_id | BIGINT | NN, FK→shift_definitions | Ca của phân ca **lúc gửi** (ảnh chụp; V60, ADR-0139): duyệt `SWAP` đổi ca của phân ca nên yêu cầu tự giữ ca gốc |
+| current_shift_definition_id | BIGINT | NN, FK→shift_definitions | Ca của phân ca **lúc gửi** (ảnh chụp; V60, ADR-0150): duyệt `SWAP` đổi ca của phân ca nên yêu cầu tự giữ ca gốc |
 | target_shift_definition_id | BIGINT | ?, FK→shift_definitions | Ca đích của `SWAP` |
 | reason | VARCHAR(300) | NN | Lý do của nhân viên |
 | status | VARCHAR(30) | NN, CHECK | `PENDING`, `APPROVED`, `REJECTED`, `WITHDRAWN` |

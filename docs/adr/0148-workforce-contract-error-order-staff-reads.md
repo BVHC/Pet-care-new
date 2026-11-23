@@ -1,7 +1,8 @@
-# ADR-0137: Hợp đồng Nhân sự — thứ tự lỗi 409 trước 400, A06–A08 đọc danh sách ca, đọc đăng ký tuần
+# ADR-0148: Hợp đồng Nhân sự — thứ tự lỗi 409 trước 400, A06–A08 đọc danh sách ca, đọc đăng ký tuần
 
 - **Trạng thái:** Proposed (Mạnh quyết ngày 2026-11-14 trong phiên rà hợp đồng `workforce-v1`; chờ FE-1 xác nhận vì mock phải đổi)
 - **Ngày:** 2026-11-14
+- **Đánh số lại (23/11/2026):** từ 0137 thành **0148** vì trùng số với ADR của BE-2 (0137 `be2-commerce-spec-closure`, 0138 `be2-returns-spec-closure`, 0139 `be2-branch-article-spec-closure`). Mọi chỗ ghi ADR-0137 / 0138 / 0139 của workforce trong code, test và tài liệu đã đổi sang 0148 / 0149 / 0150; chú thích trong migration V60 (đã áp lên DB) giữ số cũ.
 - **Liên quan:** ADR-0123 (Nhân sự: đăng ký ca theo tuần), ADR-0049 (appointment: 409 trước 400), `docs/02` §7 (BR-NS-01…12), `docs/03` #11 #12, `docs/api/00-method.md` §3.3 và §3.5, `docs/api/workforce-v1` (A9–A12, Q1, Q4), nợ D062
 
 ## Bối cảnh
@@ -22,7 +23,7 @@ Rà `workforce-v1` (16 endpoint, ADR-0123) với `02`, `03`, ERD §14.1 và conv
 10. **Một transaction cho mọi hệ quả** của hủy phân ca, ghi vắng, rút, duyệt, từ chối và `PUT` đăng ký tuần: `approve` đổi yêu cầu sang `APPROVED` và phân ca (`ON_LEAVE` với `LEAVE`, đổi ca đích với `SWAP`) cùng lúc; hủy phân ca, ghi vắng và hủy mục trong `PUT` từ chối luôn yêu cầu `PENDING` của phân ca đó (Yêu cầu#5, `decision_note` do hệ thống ghi, `decided_by` rỗng); thông báo ghi outbox cùng transaction (BR-NS-08). Một bước lỗi thì rollback tất cả, không `catch` trong transaction. Nguồn: `03` mục Quy ước và Phụ lục; ADR-0123 mới nêu cho outbox và lô `PUT`.
 11. **Thứ tự khóa** của hủy phân ca, ghi vắng, rút, duyệt, từ chối (đề xuất, Mạnh duyệt 2026-11-14): đọc không khóa để lấy `staffId` → khóa `accounts` của nhân viên `FOR NO KEY UPDATE` → khóa `shift_assignments` → khóa `shift_requests` → **đọc lại dưới khóa rồi mới kiểm** (trạng thái 409, rồi guard 400). Cùng thứ tự với `PUT` đăng ký và phân hộ (ADR-0123 mục 8: `accounts` → `shift_definitions FOR SHARE` → `shift_assignments`) nên không đảo khóa; `PUT` khóa `accounts` trước rồi mới hủy phân ca và từ chối yêu cầu. Duyệt `SWAP` kiểm lại chồng giờ ở bước này (BR-NS-06). Hàng "Workforce" của `concurrency-locking.md` thêm khi cài (T58–T59), gộp chuỗi này với chuỗi của ADR-0123.
 12. **Trần `items` của `PUT /me/shift-registrations/{weekStart}` = 100** (Q4, chốt 2026-11-17): một tuần có 7 ngày, kể cả 10 ca mỗi ngày cũng chỉ 70 mục; 100 chặn request quá lớn mà không cản nghiệp vụ; vượt thì 400 `VALIDATION_FAILED`. `@Size(max = 100)` và `maxItems` trong yaml làm cùng lát đăng ký tuần (T59), vì generator chưa có cú pháp `maxItems` và `PUT` chưa có code. Phương án đã loại: không đặt trần (chỉ bị chặn gián tiếp bởi số ca đang dùng).
-13. **409 cho `POST` / `PATCH /shift-definitions`** (2026-11-17, ADR-0138 mục 13): hai yêu cầu cùng tạo / đổi tên thành một tên trùng cùng lúc thì một bên nhận 409 `CONCURRENCY_CONFLICT`; hợp đồng và `@ApiErrorDoc` thêm mã này.
+13. **409 cho `POST` / `PATCH /shift-definitions`** (2026-11-17, ADR-0149 mục 13): hai yêu cầu cùng tạo / đổi tên thành một tên trùng cùng lúc thì một bên nhận 409 `CONCURRENCY_CONFLICT`; hợp đồng và `@ApiErrorDoc` thêm mã này.
 
 ## Hệ quả
 

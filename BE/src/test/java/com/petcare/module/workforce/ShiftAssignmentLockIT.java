@@ -32,7 +32,7 @@ import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
 import com.petcare.support.MutableClock;
 
 /**
- * Đồng thời trên phân ca (workforce-v1 #5; docs/adr/0123 mục 8, docs/adr/0138 bước 3). Cách giữ một request "đứng giữa
+ * Đồng thời trên phân ca (workforce-v1 #5; docs/adr/0123 mục 8, docs/adr/0149 bước 3). Cách giữ một request "đứng giữa
  * chừng" khi đang giữ khóa: trigger tạm gọi {@code pg_advisory_xact_lock}, còn test giữ advisory lock đó ở một
  * transaction khác, nên request dừng đúng lúc đã ghi dòng (giữ khóa dòng, chưa commit) — khuôn {@code
  * ShiftDefinitionLockIT}. Chứng minh: (1) hai phân ca chồng giờ của cùng một người chỉ một cái lọt; (2) khóa

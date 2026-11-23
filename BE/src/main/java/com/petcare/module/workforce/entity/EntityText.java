@@ -5,7 +5,7 @@ import static java.util.Objects.requireNonNull;
 /**
  * Kiểm chuỗi tự thân cho entity của workforce: không rỗng sau {@code strip()} và không quá độ dài cột. Vi phạm là lỗi
  * lập trình ({@link IllegalArgumentException}): service đã kiểm trước để trả 400 {@code VALIDATION_FAILED} /
- * {@code BR-NS-01}; đây là lớp chặn cuối nếu service sót (docs/adr/0138).
+ * {@code BR-NS-01}; đây là lớp chặn cuối nếu service sót (docs/adr/0149).
  */
 final class EntityText {
 

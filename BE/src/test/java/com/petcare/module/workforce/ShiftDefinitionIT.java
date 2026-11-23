@@ -24,7 +24,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Ca làm việc qua HTTP thật (workforce-v1 #1–3, UC34, BR-NS-01, BR-NS-10; docs/adr/0138): thành công, từng dòng ma trận
+ * Ca làm việc qua HTTP thật (workforce-v1 #1–3, UC34, BR-NS-01, BR-NS-10; docs/adr/0149): thành công, từng dòng ma trận
  * validate / exception (docs plan D3), dữ liệu và audit đúng, mọi nhánh lỗi không đổi dữ liệu. Authn / authz ở
  * {@link ShiftDefinitionSecurityIT}, đua khóa ở {@link ShiftDefinitionLockIT}, rollback ở
  * {@link ShiftDefinitionRollbackIT}. Era <b>năm 2045</b>.

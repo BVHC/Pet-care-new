@@ -14,7 +14,7 @@ import jakarta.validation.Payload;
  * của entity workforce. Thay {@code @NotBlank} vì Hibernate Validator dùng {@code trim()} (chỉ cắt ký tự ≤ U+0020): lý
  * do chỉ gồm khoảng trắng Unicode như U+3000 lọt qua DTO, bị {@code strip()} thành rỗng rồi làm
  * {@code EntityText.require} ném {@code IllegalArgumentException}, và {@code GlobalExceptionHandler} trả 500 thay vì 400
- * {@code VALIDATION_FAILED} (docs/adr/0138 bước 7, {@code ShiftReasonRequestTest}). {@code null} cũng là không hợp lệ.
+ * {@code VALIDATION_FAILED} (docs/adr/0149 bước 7, {@code ShiftReasonRequestTest}). {@code null} cũng là không hợp lệ.
  */
 @Documented
 @Constraint(validatedBy = StrippedNotBlankValidator.class)

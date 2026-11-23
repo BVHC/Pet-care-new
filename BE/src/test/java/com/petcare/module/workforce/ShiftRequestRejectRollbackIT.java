@@ -28,7 +28,7 @@ import com.petcare.module.workforce.mapper.ShiftRequestMapper;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>sau khi đã ghi</b> trong từ chối yêu cầu (workforce-v1 #14; docs/adr/0139): từ chối ghi một UPDATE yêu cầu rồi
+ * Lỗi <b>sau khi đã ghi</b> trong từ chối yêu cầu (workforce-v1 #14; docs/adr/0150): từ chối ghi một UPDATE yêu cầu rồi
  * một dòng audit rồi hai dòng outbox (IN_APP, EMAIL), tất cả cùng một transaction nên lỗi ở bất kỳ bước nào rút hết.
  * Lỗi được gây bằng trigger tạm của Postgres (INSERT / UPDATE chạy ngay nên lỗi nổi trong service, không đợi commit) và
  * bằng spy mapper cho lỗi dựng response sau cùng. Mỗi ca: dấu vết y như trước (yêu cầu còn {@code PENDING}, phân ca và

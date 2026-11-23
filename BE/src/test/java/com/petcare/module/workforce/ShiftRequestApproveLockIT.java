@@ -27,13 +27,13 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Khóa của duyệt yêu cầu nghỉ (workforce-v1 #13; docs/adr/0139, ADR-0123 mục 8) trên Postgres thật. Một transaction khác
+ * Khóa của duyệt yêu cầu nghỉ (workforce-v1 #13; docs/adr/0150, ADR-0123 mục 8) trên Postgres thật. Một transaction khác
  * giữ {@code FOR NO KEY UPDATE} trên dòng tài khoản của nhân viên; các request xếp hàng chờ khóa đó <b>theo thứ tự khởi
  * động</b>, nên kết quả của từng cặp xung đột là xác định, theo cả hai thứ tự: (1) hai quản lý cùng duyệt; (2) duyệt ∥
  * từ chối; (3) duyệt ∥ rút (#11); (4) duyệt ∥ hủy phân ca (#6); (5) duyệt ∥ ghi vắng (#7); (6) duyệt ∥ gửi lại (#9);
  * (7) khóa {@code accounts} <b>trước</b> phân ca và yêu cầu, và yêu cầu của chi nhánh khác không khóa gì; (8) duyệt ∥ vô
  * hiệu hóa nhân viên (listener BR-NS-09), giữ identity "giữa chừng" bằng trigger tạm gọi {@code pg_advisory_xact_lock};
- * {@code SWAP} (N3-S5b, ADR-0139 mục 18): (9) thứ tự {@code accounts} → ca đích {@code FOR SHARE} → phân ca; (10) duyệt ∥
+ * {@code SWAP} (N3-S5b, ADR-0150 mục 18): (9) thứ tự {@code accounts} → ca đích {@code FOR SHARE} → phân ca; (10) duyệt ∥
  * ngừng dùng ca đích (PATCH #3) theo cả hai thứ tự; (11) duyệt ∥ phân hộ #5 chồng giờ ca đích theo cả hai thứ tự.
  * Bên thua luôn nhận 409 (hoặc 400 của gửi lại) và không để lại dấu vết; bên thắng để lại đúng một bộ hiệu ứng. Era
  * <b>năm 2081</b>.

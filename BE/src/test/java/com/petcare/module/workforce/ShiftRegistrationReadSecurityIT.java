@@ -25,7 +25,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực / phân quyền của {@code GET /me/shift-registrations/{weekStart}} (workforce-v1 #17; docs/adr/0138): 401 theo
+ * Xác thực / phân quyền của {@code GET /me/shift-registrations/{weekStart}} (workforce-v1 #17; docs/adr/0149): 401 theo
  * từng nguyên nhân với body đồng nhất (không lộ lý do), 401 theo trạng thái phiên / tài khoản, BR-TK-17 đứng trước
  * binder, bảy vai trò (chỉ A06–A08), thứ tự binder → role → service, role đọc lại từ DB ở mỗi request, IDOR ngang, và
  * lỗi 401 / 403 không để lại dấu vết. Era <b>năm 2084</b>.

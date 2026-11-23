@@ -16,7 +16,7 @@ import com.petcare.module.workforce.dto.ShiftDefinitionResponse;
 import com.petcare.module.workforce.entity.ShiftDefinition;
 
 /**
- * {@link ShiftDefinitionMapper} (docs/adr/0138, workforce-v1 {@code ShiftDefinition}): mỗi trường của hợp đồng lấy đúng
+ * {@link ShiftDefinitionMapper} (docs/adr/0149, workforce-v1 {@code ShiftDefinition}): mỗi trường của hợp đồng lấy đúng
  * cột — giá trị khác nhau ở mọi trường nên map nhầm nguồn là đỏ; không lọt {@code createdAt} / {@code updatedAt};
  * snapshot audit có giờ dạng chuỗi {@code HH:mm}.
  */

@@ -26,7 +26,7 @@ import com.petcare.module.identity.service.SessionService;
 import com.petcare.support.MutableClock;
 
 /**
- * Nền chung của các IT ca làm việc (workforce-v1 #1–3, docs/adr/0138): dữ liệu qua {@link WorkforceItSupport}, token
+ * Nền chung của các IT ca làm việc (workforce-v1 #1–3, docs/adr/0149): dữ liệu qua {@link WorkforceItSupport}, token
  * qua {@code SessionService.open} trong transaction, gọi HTTP thật với body JSON thô. Mỗi lớp con có era riêng (xem
  * docs/architecture/testing-notes.md) và gọi {@link #begin} / {@link #finish}.
  */

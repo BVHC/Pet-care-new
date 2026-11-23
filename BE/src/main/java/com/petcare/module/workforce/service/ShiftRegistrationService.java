@@ -42,7 +42,7 @@ import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.security.BranchScope;
 
 /**
- * Đăng ký ca theo tuần của nhân viên (UC35, workforce-v1 #15–17; BR-NS-11, BR-NS-12; docs/adr/0138 mục "Đăng ký tuần").
+ * Đăng ký ca theo tuần của nhân viên (UC35, workforce-v1 #15–17; BR-NS-11, BR-NS-12; docs/adr/0149 mục "Đăng ký tuần").
  * <p>
  * <b>#17 đọc</b> — {@code readOnly} + REPEATABLE_READ để danh sách, tên ca / nhân viên và {@code pendingRequestId} cùng một
  * ảnh chụp; không ghi, không audit, không outbox (BR-NS-10 không liệt kê đọc). {@code staffId} luôn là người gọi (không có
@@ -307,7 +307,7 @@ public class ShiftRegistrationService {
     }
 
     /**
-     * BR-NS-11: {@code weekStart} là thứ Hai. Rồi giới hạn năm (giả định của docs/adr/0138, không có trong docs/02): năm
+     * BR-NS-11: {@code weekStart} là thứ Hai. Rồi giới hạn năm (giả định của docs/adr/0149, không có trong docs/02): năm
      * ngoài {@code [2000, 2100]} cũng là 400 {@code BR-NS-11} thay vì để {@code plusDays(6)} tràn hoặc PostgreSQL báo
      * date out of range (500). Dùng chung cho #15 và #16.
      */

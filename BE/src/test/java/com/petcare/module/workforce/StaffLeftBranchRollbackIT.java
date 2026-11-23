@@ -28,7 +28,7 @@ import com.petcare.module.identity.repository.StaffDetailRow;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>ở từng điểm</b> của chuỗi "nhân viên rời chi nhánh" (BR-NS-09; docs/adr/0138 bước 5): thao tác gốc của identity
+ * Lỗi <b>ở từng điểm</b> của chuỗi "nhân viên rời chi nhánh" (BR-NS-09; docs/adr/0149 bước 5): thao tác gốc của identity
  * (nhân viên, chi nhánh, phiên, audit) và mọi hiệu ứng của workforce (phân ca, yêu cầu, outbox) cùng một transaction nên
  * một lỗi ở bất kỳ bước nào rút <b>tất cả</b>, cho cả vô hiệu hóa lẫn điều chuyển. Lỗi gây bằng trigger tạm của Postgres
  * (UPDATE / INSERT chạy ngay nên lỗi nổi trong transaction, không đợi commit) và bằng spy mapper cho lỗi dựng response sau

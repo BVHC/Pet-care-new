@@ -28,7 +28,7 @@ import com.petcare.module.workforce.mapper.ShiftRequestMapper;
 import com.petcare.support.MutableClock;
 
 /**
- * Lỗi <b>sau khi đã ghi</b> trong gửi và rút yêu cầu (workforce-v1 #9, #11; docs/adr/0138 bước 6): gửi ghi yêu cầu rồi
+ * Lỗi <b>sau khi đã ghi</b> trong gửi và rút yêu cầu (workforce-v1 #9, #11; docs/adr/0149 bước 6): gửi ghi yêu cầu rồi
  * mỗi quản lý một dòng outbox, rút ghi một UPDATE, tất cả cùng một transaction nên lỗi ở bất kỳ bước nào rút hết. Lỗi
  * được gây bằng trigger tạm của Postgres (INSERT / UPDATE chạy ngay nên lỗi nổi trong service, không đợi commit) và bằng
  * spy mapper cho lỗi dựng response sau cùng. Mỗi ca: dấu vết y như trước, rồi khi hết lỗi thì gọi lại thành công đúng một

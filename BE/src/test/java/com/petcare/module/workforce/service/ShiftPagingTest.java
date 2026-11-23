@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
 
 /**
- * {@link ShiftAssignmentService#pageOf} (docs/adr/0138 bước 8): trang của mọi danh sách workforce (#4, #10, #12). Spring
+ * {@link ShiftAssignmentService#pageOf} (docs/adr/0149 bước 8): trang của mọi danh sách workforce (#4, #10, #12). Spring
  * Data JPA ném {@code InvalidDataAccessApiUsageException} (500) khi {@code page × size} vượt {@code Integer.MAX_VALUE},
  * nên {@code page} phải được kẹp; giá trị bình thường không đổi so với công thức cũ.
  */

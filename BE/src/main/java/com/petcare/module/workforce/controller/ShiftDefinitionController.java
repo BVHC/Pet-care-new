@@ -27,7 +27,7 @@ import io.swagger.v3.oas.annotations.enums.ParameterIn;
 import jakarta.validation.Valid;
 
 /**
- * Ca làm việc của chi nhánh (UC34, workforce-v1 #1–3; docs/adr/0138). Không chứa logic và không biết mã rule:
+ * Ca làm việc của chi nhánh (UC34, workforce-v1 #1–3; docs/adr/0149). Không chứa logic và không biết mã rule:
  * BR-NS-01 do {@link ShiftDefinitionService} kiểm.
  */
 @RestController

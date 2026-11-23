@@ -28,7 +28,7 @@ import com.petcare.TestcontainersConfiguration;
 import com.petcare.support.MutableClock;
 
 /**
- * Xác thực và phân quyền của ghi vắng đột xuất (workforce-v1 #7; docs/adr/0138 bước 7), khuôn
+ * Xác thực và phân quyền của ghi vắng đột xuất (workforce-v1 #7; docs/adr/0149 bước 7), khuôn
  * {@code ShiftAssignmentCancelSecurityIT}: 401 trước mọi xử lý (gồm <b>phiên hết hạn</b>), BR-TK-17 trước validation,
  * validation trước vai trò, chỉ BRANCH_MANAGER, phạm vi theo <b>chi nhánh của phân ca</b> (không phải chi nhánh hiện tại
  * của nhân viên), không khóa dòng tài khoản của chi nhánh khác, vai trò và chi nhánh đọc lại từ DB ở request kế tiếp,

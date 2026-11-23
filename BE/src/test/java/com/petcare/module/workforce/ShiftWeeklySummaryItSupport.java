@@ -11,7 +11,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 
 /**
- * Nền chung của các IT thống kê tuần (workforce-v1 #16, docs/adr/0138 mục "Thống kê tuần"): đường dẫn, khóa JSON của
+ * Nền chung của các IT thống kê tuần (workforce-v1 #16, docs/adr/0149 mục "Thống kê tuần"): đường dẫn, khóa JSON của
  * hợp đồng, gọi với query thô (URI dựng sẵn, không để {@code RestTemplate} mã hóa lại {@code %2B}) và hàm đổi tên nhân
  * viên. Mỗi lớp con có era riêng (xem docs/architecture/testing-notes.md) và gọi {@link #begin} / {@link #finish}.
  */
