@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,6 +27,8 @@ export function GroomingBoard({ userId, scope }: { userId: number; scope: BoardS
   const { columns, query, moveCard, pending } = useKanban(userId, scope);
   const now = useNow();
   const [shaking, setShaking] = useState<number | null>(null);
+  const shakeTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(shakeTimer.current), []);
   const byId = new Map(columns.flatMap((c) => c.items).map((v) => [v.visitId, v]));
 
   const attempt = (visit: Visit, to: GroomColumn) => {
@@ -41,7 +43,8 @@ export function GroomingBoard({ userId, scope }: { userId: number; scope: BoardS
     toast.error(rejection.message);
     announce(rejection.message);
     setShaking(visit.visitId);
-    window.setTimeout(() => setShaking(null), 400);
+    window.clearTimeout(shakeTimer.current);
+    shakeTimer.current = window.setTimeout(() => setShaking(null), 400);
   };
 
   const drag = useBoardDrag({

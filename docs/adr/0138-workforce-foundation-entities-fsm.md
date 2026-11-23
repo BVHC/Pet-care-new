@@ -6,7 +6,7 @@
 
 ## Bối cảnh
 
-Module `workforce` mới có hợp đồng và schema (V36, V55), chưa có Java. T58 chia nhiều bước: bước 1 dựng entity, repository, hai máy trạng thái; bước 2 CRUD ca (#1–3); bước 3 phân ca hộ (#4–5); bước 4 hủy phân ca và lịch của tôi (#6, #8); bước 5 (N2-S2) nghe `StaffLeftBranchEvent`; bước 6 (N3-S1) yêu cầu nghỉ / đổi ca của nhân viên (#9–11); bước 7 (N3-S2) ghi vắng đột xuất (#7); bước 8 (N3-S3) danh sách yêu cầu của chi nhánh (#12). Các điểm dưới đây là chỗ đặc tả chưa nói rõ khi viết code.
+Module `workforce` mới có hợp đồng và schema (V36, V61), chưa có Java. T58 chia nhiều bước: bước 1 dựng entity, repository, hai máy trạng thái; bước 2 CRUD ca (#1–3); bước 3 phân ca hộ (#4–5); bước 4 hủy phân ca và lịch của tôi (#6, #8); bước 5 (N2-S2) nghe `StaffLeftBranchEvent`; bước 6 (N3-S1) yêu cầu nghỉ / đổi ca của nhân viên (#9–11); bước 7 (N3-S2) ghi vắng đột xuất (#7); bước 8 (N3-S3) danh sách yêu cầu của chi nhánh (#12). Các điểm dưới đây là chỗ đặc tả chưa nói rõ khi viết code.
 
 ## Quyết định
 
@@ -24,7 +24,7 @@ Module `workforce` mới có hợp đồng và schema (V36, V55), chưa có Java
 ## Hệ quả và kiểm chứng
 
 - `ShiftAssignmentFsmIT` (era 2042), `ShiftRequestFsmIT` (2043), `WorkforceRepositoryIT` (2044): mọi cạnh hợp lệ đi qua handler của context rồi entity và **DB chấp nhận**; mọi cặp không hợp lệ bị từ chối, dòng không đổi. Khác `CareTaskFsmIT`: không đi qua endpoint, trạng thái nguồn chèn bằng SQL.
-- Lần đầu `ddl-auto=validate` kiểm V36 + V55 với entity (cột `source`).
+- Lần đầu `ddl-auto=validate` kiểm V36 + V61 với entity (cột `source`).
 
 ## Bước 2 (2026-11-17): CRUD ca làm việc, workforce-v1 #1–3
 

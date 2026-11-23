@@ -117,7 +117,7 @@ class SchemaMigrationIT {
         STATE_COLUMNS.put("articles.status", Set.of("DRAFT", "PUBLISHED", "HIDDEN", "PENDING_REVIEW", "REJECTED")); // V48, 08 §F.3 FSM #21
         // Tầng 3 phần BE-1 (docs/03 #11, #12, docs/09 FSM #23–#26)
         STATE_COLUMNS.put("shift_assignments.status", Set.of("SCHEDULED", "ON_LEAVE", "ABSENT", "CANCELLED"));
-        STATE_COLUMNS.put("shift_assignments.source", Set.of("SELF", "MANAGER")); // V55, docs/adr/0123
+        STATE_COLUMNS.put("shift_assignments.source", Set.of("SELF", "MANAGER")); // V61, docs/adr/0123
         STATE_COLUMNS.put("shift_requests.status", Set.of("PENDING", "APPROVED", "REJECTED", "WITHDRAWN"));
         STATE_COLUMNS.put("surgeries.status", Set.of("PLANNED", "CONSENTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"));
         STATE_COLUMNS.put("admissions.status", Set.of("ADMITTED", "DISCHARGED"));
@@ -214,47 +214,28 @@ class SchemaMigrationIT {
         // V52 công tắc [CFG] ai.chat.general_knowledge_enabled (docs/adr/0136, T92),
         // V53 ai_documents.external_id + ai_chat_logs.source_type + công tắc [CFG] ai.chat.business_intent_enabled (docs/adr/0134, T90),
         // V54 cột orders.version cho @Version của SalesOrder (docs/adr/0132, trả D045),
-<<<<<<< HEAD
         // V55 bỏ 5 cột trạng thái của feedbacks (docs/adr/0122, 0131; đánh số lại từ V52 vì trùng công tắc AI),
         // V56 ai_chat_logs.used_pet_context + công tắc [CFG] ai.chat.pet_context_enabled (docs/adr/0135, T91; đánh số lại từ V55 vì trùng V55 của feedbacks),
         // V57 ai_chat_logs.intent + công tắc [CFG] ai.chat.open_domain_enabled (docs/adr/0136 "Đã cài ở T92 (phần 2)"),
         // V58 online_orders.delivery_failure_reason (docs/adr/0137 D2, task 126),
         // V59 ai_documents.risk_level, topic thêm SAFETY / LIFESTYLE + khóa [CFG] ai.ingest.max_file_kb (docs/adr/0147, T89),
-=======
-        // V55 Nhân sự: shift_assignments.source + khóa [CFG] workforce.weekly_required_shifts (docs/adr/0123, T58),
-        // V56 bỏ 5 cột trạng thái của feedbacks (docs/adr/0122, 0131; trước là V52, đổi số vì trùng V52 của AI, D069),
-<<<<<<< HEAD
->>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
-=======
         // V60 shift_requests.current_shift_definition_id (ca lúc gửi, docs/adr/0139 N3-S5b; V57–V59 đã có trên dev, D069),
->>>>>>> 59313c40 (feat: T59: hoàn tất yêu cầu nghỉ / đổi ca của quản lý và đọc đăng ký tuần (workforce-v1 #7, #12–14, #17, ADR-0138, ADR-0139, D074, D076))
+        // V61 Nhân sự: shift_assignments.source + khóa [CFG] workforce.weekly_required_shifts (docs/adr/0123, T58; đánh số lại từ V55 ngày 23/11/2026 vì V55 đã dùng cho feedbacks),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-<<<<<<< HEAD
-<<<<<<< HEAD
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "9000");
-=======
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "9000");
->>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
-=======
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "60", "9000");
->>>>>>> 59313c40 (feat: T59: hoàn tất yêu cầu nghỉ / đổi ca của quản lý và đọc đăng ký tuần (workforce-v1 #7, #12–14, #17, ADR-0138, ADR-0139, D074, D076))
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
     /**
-<<<<<<< HEAD
      * V51 + V55 (docs/adr/0122, 0131): hai bảng khiếu nại, 6 khóa {@code complaint.*} và 7 mẫu {@code COMPLAINT_*} đã
-=======
-     * V51 + V56 (docs/adr/0122, 0131): hai bảng khiếu nại, 6 khóa {@code complaint.*} và 7 mẫu {@code COMPLAINT_*} đã
->>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
      * gỡ; {@code feedbacks} không còn 5 cột trạng thái (và các CHECK / index / FK dính cột đi theo), có hai index cho
      * ST24 và danh sách theo chi nhánh.
      */
     @Test
-    void v51And56DropComplaintsAndFeedbackStatus() {
+    void v51And55DropComplaintsAndFeedbackStatus() {
         assertThat(jdbc.queryForList("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name LIKE 'complaint%'
@@ -271,11 +252,7 @@ class SchemaMigrationIT {
         assertThat(jdbc.queryForList("""
                 SELECT column_name FROM information_schema.columns
                 WHERE table_schema = 'public' AND table_name = 'feedbacks'
-<<<<<<< HEAD
                 """, String.class)).as("cột feedbacks sau V55").containsExactlyInAnyOrder("id", "customer_id", "topic",
-=======
-                """, String.class)).as("cột feedbacks sau V56").containsExactlyInAnyOrder("id", "customer_id", "topic",
->>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
                 "branch_id", "rating", "content", "created_at", "updated_at");
         assertThat(jdbc.queryForList("""
                 SELECT conname FROM pg_constraint WHERE conrelid = 'feedbacks'::regclass AND contype IN ('c', 'f')
@@ -757,11 +734,7 @@ class SchemaMigrationIT {
         assertThat(foreignKeys).as("số cột FK trỏ tới accounts (V1: 43 cột ở 34 bảng; V34: + ai_documents.updated_by, "
                 + "ai_item_profiles.updated_by; V36–V38: + 13 cột — shift_assignments 2, shift_requests 2, surgeries 3, "
                 + "visit_material_usages 1, admissions 2, admission_orders 2, admission_observations 1; V39 thêm 3 cột "
-<<<<<<< HEAD
                 + "của complaints / complaint_messages và V51 gỡ lại; V43–V48 của BE-2: + 16 cột ở 14 bảng; V55 gỡ feedbacks.resolved_by)").hasSize(73);
-=======
-                + "của complaints / complaint_messages và V51 gỡ lại; V43–V48 của BE-2: + 16 cột ở 14 bảng; V56 gỡ feedbacks.resolved_by)").hasSize(73);
->>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
 
         List<String> unindexed = jdbc.queryForList("""
                 SELECT c.conrelid::regclass || '.' || a.attname

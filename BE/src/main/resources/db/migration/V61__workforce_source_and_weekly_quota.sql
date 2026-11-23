@@ -1,5 +1,5 @@
 -- =============================================================================
--- V55 — Nhân sự (T58, docs/adr/0123, D062; docs/05-erd.md §14.1, docs/02 BR-NS-02, BR-NS-11, BR-NS-12):
+-- V61 — Nhân sự (T58, docs/adr/0123, D062; docs/05-erd.md §14.1, docs/02 BR-NS-02, BR-NS-11, BR-NS-12):
 --   1. shift_assignments.source: SELF (nhân viên tự đăng ký tuần, BR-NS-11) | MANAGER (BRANCH_MANAGER phân hộ, BR-NS-02).
 --   2. Khóa [CFG] workforce.weekly_required_shifts: định mức ca mỗi tuần (BR-NS-12), khớp ConfigKey.
 --
@@ -8,6 +8,7 @@
 --   * Không thêm index: "phân ca SELF của nhân viên trong tuần" dùng ix_shift_assignments_staff_date (V36);
 --     ux_shift_assignments_scheduled (V36) không đổi và áp cho cả hai nguồn (BR-NS-02).
 --   * Khoảng 1–30 và mặc định 10 theo ADR-0123 mục 4. Không có ràng buộc chéo với khóa khác (ConfigConstraints không đổi).
+--   * Đánh số lại từ V55 ngày 23/11/2026: V55 đã dùng cho drop_feedback_status_columns (đã áp lên DB demo 5433); V60 (shift_requests_current_shift) không phụ thuộc file này.
 -- =============================================================================
 
 ALTER TABLE shift_assignments

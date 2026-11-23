@@ -1,5 +1,6 @@
-// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V51 + V52 + V53 + V56 + V57 + V59 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER, V51 xóa 7 mẫu COMPLAINT_*).
+// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V51 + V52 + V53 + V56 + V57 + V59 + V61 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER, V51 xóa 7 mẫu COMPLAINT_*).
 // T81 (V51, ADR-0122 / 0131): 88 → 83 khóa so với BE trước V51 (xóa 6 `complaint.*`, thêm `feedback.retention_days`); mẫu 70 → 63 (xóa 7 `COMPLAINT_*`).
+// T58 (V61, ADR-0123): 85 → 86 khóa (thêm `workforce.weekly_required_shifts`, định mức ca đăng ký mỗi tuần, INT 10 ca/tuần, 1–30, BR-NS-12).
 // T89 (V59, ADR-0147): 84 → 85 khóa (thêm `ai.ingest.max_file_kb`, trần cỡ file nạp tri thức, INT 2048 kB, 256–10240).
 // T92 (phần 2): 83 → 84 khóa (thêm `ai.chat.open_domain_enabled` của V57, công tắc BOOL thứ tư).
 // T91: 87 → 88 khóa (thêm `ai.chat.pet_context_enabled` của V56, công tắc BOOL thứ ba).
@@ -7,11 +8,11 @@
 // T92: 85 → 86 khóa (thêm `ai.chat.general_knowledge_enabled` của V52, khóa BOOL đầu tiên).
 // T57-A: 52 → 85 khóa (thêm 18 `ai.*` của V35 gồm 4 DECIMAL, 8 `complaint.*` / `workforce.*` của V40, 7 `shop.*` / `payment.*` / `returns.*` / `content.*` của V44, V45, V46, V48; V43 và V47 không seed khóa).
 // T57-A: mẫu thông báo 30 → 70 mã (thêm 40 mẫu tầng 3; migration V41…V48 không INSERT / UPDATE bảng mẫu, cả 40 mẫu nằm ở V40).
-// Không có `complaint.*` và `COMPLAINT_*` (V51 đã xóa chúng khỏi BE): 85 khóa (sau V59), 63 mẫu; identity-admin.mock.test.ts áp các lệnh DELETE của V51 khi đọc SQL để đối chiếu.
+// Không có `complaint.*` và `COMPLAINT_*` (V51 đã xóa chúng khỏi BE): 86 khóa (sau V61), 63 mẫu; identity-admin.mock.test.ts áp các lệnh DELETE của V51 khi đọc SQL để đối chiếu.
 // Không viết tay: identity-admin.mock.test.ts đọc lại SQL và so từng trường nên lệch BE là test đỏ. BE thêm khóa / mã mới thì thêm vào đây theo cùng migration.
 import type { NotificationTemplate, SystemConfig } from '../../types/identity';
 
-/** 85 tham số [CFG] của BE (`ConfigKey`), sắp theo key như `ORDER BY key`. `value` là mặc định. DECIMAL (4 khóa `ai.*`) là chuỗi chuẩn hóa như `ConfigValues`: '0.6', không '0.60'. */
+/** 86 tham số [CFG] của BE (`ConfigKey`), sắp theo key như `ORDER BY key`. `value` là mặc định. DECIMAL (4 khóa `ai.*`) là chuỗi chuẩn hóa như `ConfigValues`: '0.6', không '0.60'. */
 export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'account.pending_ttl_hours', value: '24', valueType: 'INT', minValue: '1', maxValue: '168', unit: 'giờ', description: 'Tài khoản chưa xác thực quá thời gian này thì bị xóa (BR-TK-08, ST02)' },
   { key: 'address.max_per_customer', value: '5', valueType: 'INT', minValue: '1', maxValue: '20', unit: 'địa chỉ', description: 'Số địa chỉ tối đa trong sổ địa chỉ của khách (BR-TK-18)' },
@@ -98,6 +99,7 @@ export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'visit.late_priority_minutes', value: '15', valueType: 'INT', minValue: '0', maxValue: '30', unit: 'phút', description: 'Trễ tối đa mà vẫn giữ ưu tiên lịch hẹn (BR-TN-03)' },
   { key: 'workforce.absence_report_max_days', value: '7', valueType: 'INT', minValue: '1', maxValue: '30', unit: 'ngày', description: 'Ghi nhận vắng đột xuất cho phân ca không quá số ngày này trước hôm nay (BR-NS-07)' },
   { key: 'workforce.request_lead_hours', value: '24', valueType: 'INT', minValue: '0', maxValue: '168', unit: 'giờ', description: 'Nhân viên gửi yêu cầu nghỉ / đổi ca trước giờ bắt đầu ca ít nhất số giờ này (BR-NS-04)' },
+  { key: 'workforce.weekly_required_shifts', value: '10', valueType: 'INT', minValue: '1', maxValue: '30', unit: 'ca/tuần', description: 'Số ca tối thiểu mỗi nhân viên phải đăng ký trong một tuần (BR-NS-12)' },
 ];
 
 /** 70 mẫu thông báo của BE (30 của V3…V26, 40 của V40), sắp theo code. `subject` / `body` là bản mặc định (BE: `default_subject` / `default_body`; mọi mẫu seed đều bằng nhau). */

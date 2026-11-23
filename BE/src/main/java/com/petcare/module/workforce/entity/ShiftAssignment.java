@@ -74,7 +74,7 @@ public class ShiftAssignment extends TimestampedEntity {
     @Column(name = "status_changed_at")
     private Instant statusChangedAt;
 
-    /** Phân ca#1: {@code — → SCHEDULED}. Mọi tham số bắt buộc; {@code source} không có giá trị mặc định (V55). */
+    /** Phân ca#1: {@code — → SCHEDULED}. Mọi tham số bắt buộc; {@code source} không có giá trị mặc định (V61). */
     public static ShiftAssignment schedule(Long branchId, Long staffId, Long shiftDefinitionId, LocalDate workDate,
             ShiftAssignmentSource source) {
         ShiftAssignment entity = new ShiftAssignment();

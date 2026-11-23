@@ -24,21 +24,14 @@ class ConfigKeyTest {
         // + 18 khóa ai.* (docs/07 §4.6, V35, docs/adr/0110) = 70
         // + 6 khóa complaint.* + 2 khóa workforce.* (V40, docs/adr/0113) = 78
         // + 7 khóa của BE-2 (docs/08 §G; V44, V45, V46, V48; docs/adr/0117) = 85
-<<<<<<< HEAD
         // + 1 công tắc BOOL ai.chat.general_knowledge_enabled (V52, docs/adr/0136) = 86
         // + 1 công tắc BOOL ai.chat.business_intent_enabled (V53, docs/adr/0134 "Đã cài ở T90") = 87
         // − 6 khóa complaint.* + 1 khóa feedback.retention_days (V51, docs/adr/0122, 0131) = 82
         // + 1 công tắc BOOL ai.chat.pet_context_enabled (V56, docs/adr/0135 "Đã cài ở T91") = 83
         // + 1 công tắc BOOL ai.chat.open_domain_enabled (V57, docs/adr/0136 "Đã cài ở T92 (phần 2)") = 84
         // + 1 khóa INT ai.ingest.max_file_kb (V59, docs/adr/0147, T89) = 85
-        assertThat(ConfigKey.values()).hasSize(85);
-=======
-        // − 6 khóa complaint.* + 1 khóa feedback.retention_days (V51, docs/adr/0122, 0131) = 80
-        // + 1 công tắc BOOL ai.chat.general_knowledge_enabled (V52, docs/adr/0136) = 81
-        // + 1 công tắc BOOL ai.chat.business_intent_enabled (V53, docs/adr/0134 "Đã cài ở T90") = 82
-        // + 1 khóa workforce.weekly_required_shifts (V55, docs/adr/0123) = 83
-        assertThat(ConfigKey.values()).hasSize(83);
->>>>>>> 20940d65 (feat: T58: nền module Nhân sự (V55, ADR-0138) + đổi V52 feedback thành V56, gỡ conflict marker (D069))
+        // + 1 khóa INT workforce.weekly_required_shifts (V61, docs/adr/0123) = 86
+        assertThat(ConfigKey.values()).hasSize(86);
     }
 
     @Test

@@ -33,7 +33,7 @@ import com.petcare.support.MutableClock;
 /**
  * Truy vấn của repository workforce (docs/adr/0138): tên ca trùng không phân biệt hoa thường, đếm phân ca
  * {@code SCHEDULED} từ hôm nay, "có phân ca bất kỳ", danh sách ca theo giờ, và entity {@code ShiftDefinition} ghi / đọc
- * đúng cột (lần đầu {@code ddl-auto=validate} kiểm bảng V36 + V55 với entity). Era <b>năm 2044</b>.
+ * đúng cột (lần đầu {@code ddl-auto=validate} kiểm bảng V36 + V61 với entity). Era <b>năm 2044</b>.
  */
 @SpringBootTest
 @ActiveProfiles("test")

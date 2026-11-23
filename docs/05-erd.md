@@ -1212,7 +1212,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | shift_definition_id | BIGINT | NN, FK→shift_definitions | Đổi khi duyệt `SWAP` (Phân ca#5) |
 | work_date | DATE | NN | Theo giờ Việt Nam |
 | status | VARCHAR(30) | NN, CHECK | `SCHEDULED`, `ON_LEAVE`, `ABSENT`, `CANCELLED` |
-| source | VARCHAR(30) | NN, CHECK | `SELF` (nhân viên tự đăng ký, BR-NS-11), `MANAGER` (quản lý phân hộ, BR-NS-02). *(ADR-0123; V36 chưa có cột, thêm ở V55 của T58)* |
+| source | VARCHAR(30) | NN, CHECK | `SELF` (nhân viên tự đăng ký, BR-NS-11), `MANAGER` (quản lý phân hộ, BR-NS-02). *(ADR-0123; V36 chưa có cột, thêm ở V61 của T58, đánh số lại từ V55 ngày 23/11/2026)* |
 | reason | VARCHAR(300) | ? | Lý do vắng đột xuất, hủy, hoặc nghỉ được duyệt (`ON_LEAVE`: chép lý do của yêu cầu nghỉ, ADR-0138) |
 | status_changed_by | BIGINT | ?, FK→accounts | Người xử lý; NULL nếu hệ thống chuyển |
 | status_changed_at | TIMESTAMPTZ | ? | Lúc rời `SCHEDULED` |
