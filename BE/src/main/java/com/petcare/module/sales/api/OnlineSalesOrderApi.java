@@ -1,5 +1,6 @@
 package com.petcare.module.sales.api;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +39,16 @@ public interface OnlineSalesOrderApi {
      * {@code MANDATORY}. Hủy sau khi {@code PAID} không đổi Order (08 §B #14b), nên không có ở đây.
      */
     void cancel(Long orderId, OnlineCancelType type, Long actorId, String reason);
+
+    /**
+     * Order#12 (Đơn hàng online#2, task 127): {@code PENDING} → {@code PAID}, {@code paid_at = paidAt}; {@code payment_id}
+     * luôn NULL với Order ONLINE (V42: tiền nằm ở {@code payment_transactions}). Khóa dòng Order trước khi đọc (ADR-0145
+     * C3: sau khóa {@code online_orders}, trước {@code payment_transactions}). Idempotent: Order đã {@code PAID} thì không
+     * đổi gì. Order không tồn tại hoặc không phải nguồn ONLINE là lỗi của bên gọi ({@code IllegalStateException}); Order
+     * {@code CANCELLED} là 409 {@code INVALID_STATE_TRANSITION}. {@code MANDATORY}. Kho xuất riêng qua
+     * {@code StockApi.consumeReservation}.
+     */
+    void markPaid(Long orderId, Instant paidAt);
 
     /**
      * Dòng hàng đã chốt của các Order ONLINE, theo lô: {@code orderId → dòng} (giá là bản chụp lúc đặt). Order không có

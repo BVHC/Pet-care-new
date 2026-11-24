@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
+import com.petcare.module.catalog.api.MedicalType;
 import com.petcare.module.catalog.api.ProductType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.catalog.dto.KennelTypeSpec;
@@ -71,8 +72,11 @@ public class PublicCatalogService {
     }
 
     public List<PublicServiceResponse> listServices(ServiceGroup group, Long branchId) {
+        // BR-LT-18 (docs/adr/0148): dịch vụ nội trú chỉ dùng qua nhập viện, không hiện công khai. medical_type NULL với
+        // nhóm khác MEDICAL nên phải cho qua tường minh (notEqual trên NULL ra NULL, loại nhầm dịch vụ thẩm mỹ, lưu trú).
         Specification<com.petcare.module.catalog.entity.Service> spec = (root, query, cb) -> cb.and(
                 cb.isTrue(root.get("active")),
+                cb.or(cb.isNull(root.get("medicalType")), cb.notEqual(root.get("medicalType"), MedicalType.INPATIENT)),
                 group == null ? cb.conjunction() : cb.equal(root.get("group"), group));
         List<com.petcare.module.catalog.entity.Service> active = services.findAll(spec, Sort.by("name", "id"));
         if (active.isEmpty()) {

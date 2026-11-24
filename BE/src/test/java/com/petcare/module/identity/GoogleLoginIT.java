@@ -63,15 +63,15 @@ import com.petcare.support.MutableClock;
  * trên DB thật, audit 401 lệch {@code sub} commit nhờ {@code noRollbackFor}, cờ BR-TK-19 đọc trong cùng transaction,
  * context dựng được {@code LoginAttemptService} với {@code EntityManager} tiêm qua constructor, race tạo trùng.
  * <p>
- * Era 2093 (tương lai: không job nào quét); mỗi test dùng email / {@code sub} UUID riêng.
+ * Era 2112 (tương lai: không job nào quét); mỗi test dùng email / {@code sub} UUID riêng.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Import({TestcontainersConfiguration.class, GoogleLoginIT.TestBeans.class})
 class GoogleLoginIT {
 
-    /** 09:00 giờ Việt Nam, 2093. */
-    private static final Instant T0 = Instant.parse("2093-03-02T02:00:00Z");
+    /** 09:00 giờ Việt Nam, 2112. */
+    private static final Instant T0 = Instant.parse("2112-03-02T02:00:00Z");
     private static final String CREDENTIAL = "credential-gia-dinh-cua-it";
     private static final String PASSWORD = "matkhau123";
     private static final String GOOGLE_FAILED = "Đăng nhập Google không thành công. Vui lòng thử lại";

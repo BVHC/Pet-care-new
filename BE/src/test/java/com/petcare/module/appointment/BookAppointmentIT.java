@@ -391,6 +391,21 @@ class BookAppointmentIT {
         }
     }
 
+    /** BR-LT-18 (docs/adr/0149 mục 40): dịch vụ nội trú không đặt lịch được, cả khách lẫn lễ tân, dù đang bật tại chi nhánh. */
+    @Test
+    void inpatientServiceIsRuleLtOneEightForBothRolesAndBooksNothing() {
+        long inpatient = data.service("MEDICAL");
+        jdbc.update("UPDATE services SET medical_type = 'INPATIENT' WHERE id = ?", inpatient);
+        data.branchService(branch, inpatient, true);
+        String message = "Dịch vụ nội trú chỉ dùng qua nhập viện, không đặt lịch được (BR-LT-18)";
+
+        assertRule(post(customerToken, body(pet, branch, inpatient, DAY, START, null)), message);
+        assertRule(post(receptionistToken, body(pet, branch, inpatient, DAY, START, null)), message);
+
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM appointments WHERE pet_id = ?", Integer.class, pet))
+                .isZero();
+    }
+
     @Test
     void pendingLinkDecisionBlocksTheCustomer() {
         jdbc.update("UPDATE customers SET link_decision_pending = true WHERE id = ?", customer);

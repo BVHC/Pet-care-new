@@ -1,5 +1,6 @@
 package com.petcare.module.boarding.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,25 @@ public interface KennelRepository extends JpaRepository<Kennel, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT k FROM Kennel k WHERE k.id = :id")
     Optional<Kennel> findByIdForUpdate(@Param("id") Long id);
+
+    /** Một cặp (id, mã chuồng) cho {@code KennelApi.findCodesBy*}. */
+    interface IdCode {
+        Long getId();
+
+        String getCode();
+    }
+
+    /** Mã chuồng theo id (không khóa). */
+    @Query(value = "SELECT id AS id, code AS code FROM kennels WHERE id IN (:ids)", nativeQuery = true)
+    List<IdCode> findCodesByIdIn(@Param("ids") Collection<Long> ids);
+
+    /** Mã chuồng đang gán cho đặt chỗ, theo id đặt chỗ (không khóa). */
+    @Query(value = """
+            SELECT b.id AS id, k.code AS code
+            FROM boarding_bookings b JOIN kennels k ON k.id = b.kennel_id
+            WHERE b.id IN (:ids)
+            """, nativeQuery = true)
+    List<IdCode> findCodesByBookingIdIn(@Param("ids") Collection<Long> ids);
 
     /** Chi nhánh của chuồng, đọc không khóa để phân quyền trước khi khóa. */
     @Query(value = "SELECT branch_id FROM kennels WHERE id = :id", nativeQuery = true)

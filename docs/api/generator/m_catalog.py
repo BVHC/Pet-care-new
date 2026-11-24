@@ -43,7 +43,7 @@ m.param("ProtocolId", "protocolId", "path", "int64")
 
 m.schema("Species", None, enum=["DOG", "CAT", "OTHER"])
 m.schema("ServiceGroup", None, enum=["MEDICAL", "GROOMING", "BOARDING"], desc="Khám/Tiêm, Thẩm mỹ, Lưu trú (05 §0)")
-m.schema("MedicalType", None, enum=["EXAM", "VACCINE"], desc="Chỉ nhóm MEDICAL (BR-SP-06)")
+m.schema("MedicalType", None, enum=["EXAM", "VACCINE", "INPATIENT"], desc="Chỉ nhóm MEDICAL (BR-SP-06). `INPATIENT`: dịch vụ nội trú, giá theo ngày, chỉ dùng qua nhập viện (BR-LT-18, ADR-0148)")
 m.schema("ProductType", None, enum=["GOODS", "DRUG", "VACCINE"])
 m.schema("ProductCategory", {"categoryId": "int64", "name": "string:100", "isActive": "bool"})
 m.schema("ProductCategoryRequest", {"name": "string:100"})
@@ -150,9 +150,9 @@ m.op("post", "/services", "createService", "Tạo dịch vụ / loại chuồng"
 m.op("get", "/services/{serviceId}", "getService", "Chi tiết dịch vụ", "Services", "UC30", "—", "A04–A08", STAFF_READ,
      resp="Service", path_params=["ServiceId"], errors=(401, 403, 404))
 m.op("patch", "/services/{serviceId}", "updateService", "Sửa dịch vụ / đổi giá / ngừng", "Services", "UC30",
-     "BR-SP-04, 06, BR-BH-03, BR-QT-15", "A04", A04, body="UpdateServiceRequest", resp="Service",
+     "BR-SP-04, 06, BR-BH-03, BR-QT-15, BR-LT-18", "A04", A04, body="UpdateServiceRequest", resp="Service",
      path_params=["ServiceId"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1)"},
+     err_desc={400: "`BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1) · `BR-LT-18` đổi loại dịch vụ sang hoặc khỏi nội trú (tạo dịch vụ mới)"},
      notes="Đổi giá ghi audit; giá đêm đã snapshot ở đặt chỗ lưu trú không đổi (BR-LT-02).")
 
 m.op("get", "/vaccine-types", "listVaccineTypes", "Danh sách loại vaccine", "Vaccines", "UC31, UC49", "BR-SP-07",
@@ -181,7 +181,7 @@ m.op("patch", "/vaccination-protocols/{protocolId}", "updateVaccinationProtocol"
 m.op("get", "/public/services", "listPublicServices", "Dịch vụ công khai", "Public", "UC15", "BR-CK-01, 02, BR-SP-04",
      "A01, A02", "Public", resp="array:PublicService", public=True, errors=(400,),
      query=["group=enum:MEDICAL,GROOMING,BOARDING", "branchId=int64"],
-     notes="Chỉ dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE.")
+     notes="Chỉ dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE; không gồm loại `INPATIENT` (BR-LT-18).")
 m.op("get", "/public/product-categories", "listPublicProductCategories", "Danh mục sản phẩm công khai", "Public",
      "UC16", "BR-CK-01", "A01, A02", "Public", resp="array:ProductCategory", public=True, errors=(400,))
 m.op("get", "/public/products", "listPublicProducts", "Xem & tìm sản phẩm", "Public", "UC16",

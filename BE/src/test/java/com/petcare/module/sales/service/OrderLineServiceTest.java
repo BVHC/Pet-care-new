@@ -404,6 +404,60 @@ class OrderLineServiceTest {
         assertThat(order.getLines()).isEmpty();
     }
 
+    /** BR-LT-18 (docs/adr/0148): dòng nội trú chỉ sinh lúc xuất viện, VET không tự thêm tay được. */
+    @Test
+    void inpatientServiceIsRefusedAsAManualLine() {
+        actingAs("VET");
+        SalesOrder order = visitOrder(OrderStatus.OPEN);
+        visitAssignedTo(ME);
+        when(catalog.findService(10L)).thenReturn(Optional.of(
+                new ServiceInfo(10L, "Nội trú", ServiceGroup.MEDICAL, MedicalType.INPATIENT, 300_000, true)));
+
+        assertThatThrownBy(() -> service.addLine(ORDER_ID, serviceReq()))
+                .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-18"));
+
+        assertThat(order.getLines()).isEmpty();
+        verify(branches, never()).isServiceEnabled(any(), any());
+    }
+
+    /**
+     * BR-LT-18, BR-LT-14 (docs/adr/0149 mục 24): dòng nội trú do xuất viện thêm là dòng tay của VET phụ trách, nên chính
+     * sách dòng cho sửa / xóa; guard dịch vụ phải chặn, không để lại gì và không flush.
+     */
+    @Test
+    void inpatientLineCannotBeEditedOrDeletedByHand() {
+        actingAs("VET");
+        SalesOrder order = visitOrder(OrderStatus.OPEN);
+        existing(order, 1, OrderLineType.SERVICE, ME, false, 4, 300_000);
+        when(catalog.findService(10L)).thenReturn(Optional.of(
+                new ServiceInfo(10L, "Nội trú", ServiceGroup.MEDICAL, MedicalType.INPATIENT, 300_000, true)));
+
+        assertThatThrownBy(() -> service.updateLine(ORDER_ID, 1L, new UpdateOrderLineRequest(1, null)))
+                .as("giảm số ngày").isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-18"));
+        assertThatThrownBy(() -> service.deleteLine(ORDER_ID, 1L))
+                .as("xóa dòng").isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-18"));
+
+        assertThat(order.getLines()).hasSize(1);
+        assertThat(order.getLines().get(0).getQuantity()).isEqualTo(4);
+        assertThat(order.getTotalAmount()).isEqualTo(1_200_000);
+        verify(orders, never()).flush();
+    }
+
+    /** Dòng của người khác / Order đã khóa bị chính sách chặn trước, nên không tra danh mục (thứ tự lỗi giữ nguyên). */
+    @Test
+    void policyDenialComesBeforeTheInpatientCheck() {
+        actingAs("VET");
+        SalesOrder order = visitOrder(OrderStatus.OPEN);
+        existing(order, 1, OrderLineType.SERVICE, OTHER, false, 4, 300_000);
+
+        assertThatThrownBy(() -> service.deleteLine(ORDER_ID, 1L)).isInstanceOf(OrderLineAccessDeniedException.class);
+
+        verify(catalog, never()).findService(any());
+    }
+
     // ---------------------------------------------------------------- sửa
 
     @Test
@@ -421,6 +475,7 @@ class OrderLineServiceTest {
         actingAs("VET");
         SalesOrder order = visitOrder(OrderStatus.OPEN);
         existing(order, 1, OrderLineType.SERVICE, ME, false, 3, 100_000);
+        when(catalog.findService(10L)).thenReturn(Optional.of(svc(ServiceGroup.MEDICAL, true)));
 
         service.updateLine(ORDER_ID, 1L, new UpdateOrderLineRequest(2, null));
 
@@ -511,11 +566,29 @@ class OrderLineServiceTest {
     }
 
     @Test
+    void autoServiceCannotBeReplacedByAnInpatientService() {
+        actingAs("VET");
+        SalesOrder order = visitOrder(OrderStatus.OPEN);
+        OrderLine auto = existing(order, 1, OrderLineType.SERVICE, ME, true, 1, 150_000);
+        when(catalog.findService(12L)).thenReturn(Optional.of(
+                new ServiceInfo(12L, "Nội trú", ServiceGroup.MEDICAL, MedicalType.INPATIENT, 300_000, true)));
+
+        assertThatThrownBy(() -> service.updateLine(ORDER_ID, 1L, new UpdateOrderLineRequest(null, 12L)))
+                .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                        e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-18"));
+
+        assertThat(auto.getServiceId()).as("dòng giữ nguyên dịch vụ và giá").isEqualTo(10L);
+        assertThat(auto.getUnitPrice()).isEqualTo(150_000);
+        assertThat(order.getTotalAmount()).isEqualTo(150_000);
+    }
+
+    @Test
     void replaceServiceRefusesManualLinesWrongGroupAndNonVisitOrders() {
         actingAs("VET");
         SalesOrder order = visitOrder(OrderStatus.OPEN);
         existing(order, 1, OrderLineType.SERVICE, ME, false, 1, 100);
         existing(order, 2, OrderLineType.SERVICE, ME, true, 1, 100);
+        when(catalog.findService(10L)).thenReturn(Optional.of(svc(ServiceGroup.MEDICAL, true)));
         when(catalog.findService(11L)).thenReturn(Optional.of(svc(ServiceGroup.GROOMING, true)));
 
         assertThatThrownBy(() -> service.updateLine(ORDER_ID, 1L, new UpdateOrderLineRequest(null, 11L)))
@@ -549,6 +622,7 @@ class OrderLineServiceTest {
         SalesOrder order = visitOrder(OrderStatus.OPEN);
         existing(order, 1, OrderLineType.SERVICE, ME, false, 1, 100_000);
         existing(order, 2, OrderLineType.GOODS, OTHER, false, 2, 5_000);
+        when(catalog.findService(10L)).thenReturn(Optional.of(svc(ServiceGroup.MEDICAL, true)));
 
         service.deleteLine(ORDER_ID, 1L);
 

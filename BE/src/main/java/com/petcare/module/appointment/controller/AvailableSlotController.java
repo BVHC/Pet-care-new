@@ -41,7 +41,7 @@ public class AvailableSlotController {
     /** appointment-v1 #1. Tăng dần theo giờ; ngày nghỉ / ngoài cửa sổ đặt lịch → mảng rỗng. */
     @Operation(operationId = "listAvailableSlots", tags = "Slots",
             summary = "Xem khung giờ trống",
-            description = "UC39 · BR-LH-01, 02, 03, 04. Actor: A02, A06. Quyền: Khách; lễ tân chi nhánh. "
+            description = "UC39 · BR-LH-01, 02, 03, 04, BR-LT-18. Actor: A02, A06. Quyền: Khách; lễ tân chi nhánh. "
                 + "Chuyển trạng thái: —. Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1). Khách chỉ thấy "
                 + "khung bắt đầu từ now + 24 giờ [CFG] và ngày hẹn ≤ hôm nay + 30 ngày [CFG]; lễ tân thấy mọi khung "
                 + "chưa bắt đầu (BR-LH-04). Khung AVAILABLE chưa giữ chỗ: đặt lịch kiểm lại (docs/adr/0046).",
@@ -51,7 +51,8 @@ public class AvailableSlotController {
                     @Parameter(name = "date", in = ParameterIn.QUERY, example = "2026-10-20",
                             description = "Ngày hẹn, theo giờ Việt Nam")})
     @ApiErrorDoc(status = 400, description = "`BR-LH-01` dịch vụ không đặt được tại chi nhánh (ngừng kinh doanh, "
-            + "nhóm Lưu trú, đang tắt) hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT)")
+            + "nhóm Lưu trú, đang tắt) hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT) · `BR-LT-18` dịch "
+            + "vụ nội trú (chỉ dùng qua nhập viện)")
     @ApiErrorDoc(status = 403, description = "Lễ tân xem chi nhánh khác")
     @ApiErrorDoc(status = 404, description = "Chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động) hoặc dịch "
             + "vụ không tồn tại")

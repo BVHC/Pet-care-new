@@ -131,7 +131,7 @@
 |---|---|---|
 | UC54 | Quản lý chuồng (tạo chuồng theo loại chuồng, đổi trạng thái `AVAILABLE` / `MAINTENANCE`) | A05 |
 | UC55 | Nhập / xuất viện (gồm chuyển từ lưu trú sang điều trị) | A07 |
-| UC56 | Điều trị nội trú (ra y lệnh, theo dõi nội trú) | A07 |
+| UC56 | Điều trị nội trú (ra y lệnh, theo dõi nội trú) | A07 (A08 thực hiện việc không phải thuốc, ghi theo dõi; A06 chỉ xem) |
 | UC57 | Ghi nhật ký chăm sóc | A08, A07 |
 | UC58 | Đặt chỗ lưu trú theo loại chuồng (đặt, hủy, gia hạn) | A02, A06 |
 | UC59 | Nhận / trả thú cưng lưu trú (kiểm tra tiêm phòng khi nhận; thu tiền trước khi trả; hủy phiên trả thú khi khách không thanh toán; kết thúc lưu trú khi thú mất) | A06, A08 (A08 chỉ nhận thú) |
@@ -255,6 +255,7 @@ Các mục dưới đây do hệ thống tự chạy theo thời gian hoặc the
 | UC44 Tiếp nhận khách (khách chưa có hồ sơ) | «extend» | UC22 Quản lý hồ sơ khách tại quầy |
 | UC48 Khám bệnh | «extend» | UC55 Nhập viện *(tầng 3)* (UC50 Phẫu thuật đã bỏ, ADR-0125) |
 | UC55 Nhập viện *(tầng 3)* | «extend» | UC67 Thêm dịch vụ / hàng vào Order |
+| UC59 Nhận / trả thú lưu trú (thú đang lưu trú cần điều trị) | «extend» | UC55 Nhập viện *(tầng 3)* |
 | UC62 Đặt hàng online *(tầng 3)* | «include» | UC63 Thanh toán online |
 | UC66 Chốt Order tại quầy | «include» | UC70 Thu tiền tại quầy |
 | UC59 Nhận / trả thú lưu trú (khi trả thú — BR-LT-09) | «include» | UC70 Thu tiền tại quầy |

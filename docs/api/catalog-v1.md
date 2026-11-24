@@ -28,7 +28,7 @@
 | 8 | `GET /services` | Danh sách dịch vụ | UC30 | BR-SP-04, 06 |
 | 9 | `POST /services` | Tạo dịch vụ / loại chuồng | UC30 | BR-SP-04, 06 |
 | 10 | `GET /services/{serviceId}` | Chi tiết dịch vụ | UC30 | — |
-| 11 | `PATCH /services/{serviceId}` | Sửa dịch vụ / đổi giá / ngừng | UC30 | BR-SP-04, 06, BR-BH-03, BR-QT-15 |
+| 11 | `PATCH /services/{serviceId}` | Sửa dịch vụ / đổi giá / ngừng | UC30 | BR-SP-04, 06, BR-BH-03, BR-QT-15, BR-LT-18 |
 | 12 | `GET /vaccine-types` | Danh sách loại vaccine | UC31, UC49 | BR-SP-07 |
 | 13 | `POST /vaccine-types` | Tạo loại vaccine | UC31 | BR-SP-07 |
 | 14 | `PATCH /vaccine-types/{vaccineTypeId}` | Sửa / ngừng loại vaccine | UC31 | BR-SP-07 |
@@ -65,7 +65,7 @@
 | Phác đồ tiêm chủng | A04–A08 | Mọi nhân viên | — | — | — |
 | Thêm dòng phác đồ | A04 | Chỉ SUPER_MANAGER | — | — | — |
 | Sửa dòng phác đồ | A04 | Chỉ SUPER_MANAGER | — | — | Ngày tái chủng đã tính giữ nguyên (BR-SP-03). |
-| Dịch vụ công khai | A01, A02 | Public | — | — | Chỉ dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE. |
+| Dịch vụ công khai | A01, A02 | Public | — | — | Chỉ dịch vụ đang kinh doanh và bật ở ≥ 1 chi nhánh ACTIVE; không gồm loại `INPATIENT` (BR-LT-18). |
 | Danh mục sản phẩm công khai | A01, A02 | Public | — | — | — |
 | Xem & tìm sản phẩm | A01, A02 | Public | — | — | — |
 | Chi tiết sản phẩm công khai | A01, A02 | Public | — | — | Thuốc kê đơn hoặc ngừng kinh doanh trả 404. |
@@ -90,7 +90,7 @@
 - **`GET /services`** — Danh sách dịch vụ. Query: `group?`, `isActive?`. Response `200` mảng `Service`. Lỗi: `401` · `403`.
 - **`POST /services`** — Tạo dịch vụ / loại chuồng. Request `CreateServiceRequest`. Response `201` `Service`. Lỗi: `400` `BR-SP-06` nhóm MEDICAL chưa chọn loại · `BR-SP-04` loại chuồng thiếu loài hoặc giá ≤ 0 · tên trùng · `401` · `403`.
 - **`GET /services/{serviceId}`** — Chi tiết dịch vụ. Response `200` `Service`. Lỗi: `401` · `403` · `404`.
-- **`PATCH /services/{serviceId}`** — Sửa dịch vụ / đổi giá / ngừng. Request `UpdateServiceRequest`. Response `200` `Service`. Lỗi: `400` `BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1) · `401` · `403` · `404`.
+- **`PATCH /services/{serviceId}`** — Sửa dịch vụ / đổi giá / ngừng. Request `UpdateServiceRequest`. Response `200` `Service`. Lỗi: `400` `BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1) · `BR-LT-18` đổi loại dịch vụ sang hoặc khỏi nội trú (tạo dịch vụ mới) · `401` · `403` · `404`.
 ### Vaccines
 
 - **`GET /vaccine-types`** — Danh sách loại vaccine. Query: `species?`, `isActive?`. Response `200` mảng `VaccineType`. Lỗi: `401` · `403`.
@@ -113,7 +113,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 
 - **`Species`** — enum: `DOG`, `CAT`, `OTHER`.
 - **`ServiceGroup`** — enum: `MEDICAL`, `GROOMING`, `BOARDING`. Khám/Tiêm, Thẩm mỹ, Lưu trú (05 §0)
-- **`MedicalType`** — enum: `EXAM`, `VACCINE`. Chỉ nhóm MEDICAL (BR-SP-06)
+- **`MedicalType`** — enum: `EXAM`, `VACCINE`, `INPATIENT`. Chỉ nhóm MEDICAL (BR-SP-06). `INPATIENT`: dịch vụ nội trú, giá theo ngày, chỉ dùng qua nhập viện (BR-LT-18, ADR-0148)
 - **`ProductType`** — enum: `GOODS`, `DRUG`, `VACCINE`.
 - **`ProductCategory`** — {`categoryId`: int64, `name`: string, `isActive`: boolean}
 - **`ProductCategoryRequest`** — {`name`: string}

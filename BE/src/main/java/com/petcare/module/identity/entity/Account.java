@@ -94,7 +94,7 @@ public class Account extends TimestampedEntity {
     private Instant pendingExpiresAt;
 
     /**
-     * {@code sub} của Google (V63, docs/adr/0152): định danh bất biến của tài khoản Google gắn với tài khoản này; chỉ
+     * {@code sub} của Google (V64, docs/adr/0152): định danh bất biến của tài khoản Google gắn với tài khoản này; chỉ
      * khách có (CHECK {@code ck_accounts_google_customer_only}, BR-TK-17), duy nhất ({@code uq_accounts_google_sub}).
      */
     @Column(name = "google_sub")

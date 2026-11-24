@@ -32,7 +32,7 @@ import lombok.NoArgsConstructor;
  * {@code moveVisitInQueue}, {@code markVisitEmergency}. Đã có: {@link #checkIn} (T26 phần 1, docs/adr/0059),
  * {@link #assignTo}, {@link #reorder}, {@link #markEmergency} (T26 phần 3, docs/adr/0061), {@link #call},
  * {@link #cancel} (T26 phần 4, docs/adr/0062), {@link #reassignTo} (T26 phần 5, docs/adr/0063), {@link #complete}
- * (T27 phần 3, docs/adr/0069). {@code needsReassign} chỉ được đặt bằng câu UPDATE hàng loạt khi khóa tài khoản người
+ * (T27 phần 3, docs/adr/0069), {@link #startTreatment} (Visit#7, T69 N2, docs/adr/0149). {@code needsReassign} chỉ được đặt bằng câu UPDATE hàng loạt khi khóa tài khoản người
  * phụ trách ({@code VisitRepository.flagNeedsReassign}) và chỉ được gỡ khi gán lại lượt đã gọi hoặc hoàn tất lượt.
  */
 @Getter
@@ -119,6 +119,35 @@ public class Visit extends TimestampedEntity {
         visit.needsReassign = false;
         visit.checkedInBy = checkedInBy;
         visit.checkedInAt = at;
+        return visit;
+    }
+
+    /**
+     * Visit#7 ({@code — → IN_PROGRESS}, SYS ← Nhập viện#1 đường b, BR-LT-13b; docs/adr/0148 mục 5, docs/adr/0149 mục 12):
+     * Visit điều trị của thú đang lưu trú. Không qua hàng đợi, không lịch hẹn; VET nhập viện vừa tiếp nhận vừa là người
+     * phụ trách. Bên gọi đã khóa thú {@code FOR SHARE} và kiểm BR-LT-13b; {@code at} đã cắt về µs. Nhóm {@code MEDICAL}
+     * vì dịch vụ {@code INPATIENT} thuộc nhóm Khám/Tiêm (V41); hạng {@code WALK_IN} vì lượt không bao giờ ở {@code WAITING}
+     * nên hạng không ảnh hưởng thứ tự hàng đợi.
+     */
+    public static Visit startTreatment(String code, Long branchId, Long customerId, Long petId, Long vetId,
+            Instant at) {
+        if (code == null || branchId == null || customerId == null || petId == null || vetId == null || at == null) {
+            throw new IllegalArgumentException("Visit điều trị cần đủ mã, chi nhánh, khách, thú, VET và thời điểm");
+        }
+        Visit visit = new Visit();
+        visit.code = code;
+        visit.branchId = branchId;
+        visit.customerId = customerId;
+        visit.petId = petId;
+        visit.serviceGroup = ServiceGroup.MEDICAL;
+        visit.status = VisitStatus.IN_PROGRESS;
+        visit.priorityClass = PriorityClass.WALK_IN;
+        visit.queueSortKey = at;
+        visit.assigneeId = vetId;
+        visit.needsReassign = false;
+        visit.checkedInBy = vetId;
+        visit.checkedInAt = at;
+        visit.calledAt = at;
         return visit;
     }
 

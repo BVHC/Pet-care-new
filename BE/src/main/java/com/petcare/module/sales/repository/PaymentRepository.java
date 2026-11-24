@@ -27,9 +27,17 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
         long getTotal();
     }
 
-    /** Dùng {@code ix_payments_shift_method}; phương thức không có phiếu thì không xuất hiện. */
-    @Query("SELECT p.method AS method, COALESCE(SUM(p.amount), 0) AS total FROM Payment p "
-            + "WHERE p.cashierShiftId = :shiftId GROUP BY p.method")
+    /** Thu trừ hoàn tại quầy theo từng hình thức, đọc sau khi khóa ca. */
+    @Query(value = """
+            SELECT method, CAST(SUM(net.amount) AS bigint) AS total
+            FROM (
+                SELECT method, amount FROM payments WHERE cashier_shift_id = :shiftId
+                UNION ALL
+                SELECT method, -amount FROM refunds
+                WHERE cashier_shift_id = :shiftId AND status = 'SUCCEEDED' AND method IN ('CASH', 'TRANSFER')
+            ) net
+            GROUP BY method
+            """, nativeQuery = true)
     List<MethodTotal> totalsByMethod(@Param("shiftId") Long shiftId);
 
     /** Một câu cho cả trang ca; ca không có phiếu thu không xuất hiện. */

@@ -102,10 +102,14 @@ m.schema("CashierShift", {
     "shiftId": "int64", "branchId": "int64", "cashierId": "int64", "cashierName": "string",
     "isAfterHours": "bool|Ca ngoài giờ thu tiền cấp cứu (BR-CN-05)", "businessDate": "date",
     "status": "enum:OPEN,CLOSED,RECONCILED", "openedAt": "datetime", "closedAt": "datetime?",
-    "autoClosed": "bool|ST13", "expectedCash": "money?", "expectedTransfer": "money?", "countedCash": "money?",
+    "autoClosed": "bool|ST13",
+    "expectedCash": "int64?|Tiền mặt thu trừ tiền mặt hoàn trong ca (VND), có thể âm.",
+    "expectedTransfer": "int64?|Tiền chuyển khoản thu trừ tiền chuyển khoản hoàn trong ca (VND), có thể âm.",
+    "countedCash": "money?",
     "difference": "int64?|countedCash − expectedCash (VND), có thể âm", "reconcileNote": "string?",
     "reconciledBy": "int64?", "reconciledAt": "datetime?", "paymentCount": "int",
-})
+}, desc="`expectedCash` và `expectedTransfer` là tiền thu trừ tiền hoàn theo từng hình thức (VND), có thể âm. "
+        "`countedCash` là tiền mặt thực đếm, không âm.")
 m.schema("OpenShiftRequest", {"afterHours": "bool|false = ca thường, true = ca ngoài giờ (BR-TG-05)"})
 m.schema("CurrentShift", {"open": "bool", "shift": "ref:CashierShift"}, required=["open"])
 m.schema("CloseShiftRequest", {"countedCash": "money|Tiền mặt thực đếm (A4)"})
@@ -129,19 +133,20 @@ m.op("post", "/orders/{orderId}/lines", "addOrderLine", "Thêm dịch vụ / hà
      "Lễ tân: GOODS; VET: SERVICE nhóm MEDICAL của Visit mình; CARETAKER: SERVICE nhóm GROOMING của Visit mình",
      body="AddOrderLineRequest", resp="AddOrderLineResult", status=201, path_params=["OrderId"],
      errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-SP-01` thuốc kê đơn (dùng kê đơn) · sản phẩm / dịch vụ ngừng kinh doanh",
+     err_desc={400: "`BR-SP-01` thuốc kê đơn (dùng kê đơn) · sản phẩm / dịch vụ ngừng kinh doanh · `BR-LT-18` dịch vụ loại `INPATIENT` (chỉ sinh lúc xuất viện)",
                403: "`BR-BH-02` vai trò không được thêm loại dòng này",
                409: "Order không OPEN (khi PENDING chỉ lễ tân thêm GOODS) / đã PAID, CANCELLED"},
      notes="Giá snapshot lúc thêm. Thiếu tồn bán lẻ: cảnh báo, không chặn.")
 m.op("patch", "/orders/{orderId}/lines/{lineId}", "updateOrderLine", "Sửa dòng (giảm số lượng / đổi dịch vụ tự sinh)",
      "Orders", "UC66, UC67", "BR-BH-02, 03, 04, BR-TN-01", "A06, A07, A08", "Chủ dòng (ownerAccountId)",
      body="UpdateOrderLineRequest", resp="Order", path_params=["OrderId", "LineId"], errors=(400, 401, 403, 404, 409),
-     err_desc={403: "`BR-BH-02` không phải chủ dòng, hoặc dòng dịch vụ / thuốc đã khóa khi PENDING",
+     err_desc={400: "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT` · sửa dòng nội trú do xuất viện thêm (dòng này không sửa tay, BR-LT-14)",
+               403: "`BR-BH-02` không phải chủ dòng, hoặc dòng dịch vụ / thuốc đã khóa khi PENDING",
                409: "Order đã PAID / CANCELLED"})
 m.op("delete", "/orders/{orderId}/lines/{lineId}", "deleteOrderLine", "Xóa dòng", "Orders", "UC66, UC67",
      "BR-BH-02, BR-KB-04", "A06, A07, A08", "Chủ dòng (ownerAccountId)", resp="Order", path_params=["OrderId", "LineId"],
      errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG xóa qua đơn thuốc",
+     err_desc={400: "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG xóa qua đơn thuốc · `BR-LT-18` dòng nội trú do xuất viện thêm (không xóa tay)",
                403: "`BR-BH-02` không phải chủ dòng", 409: "Order đã PAID / CANCELLED"})
 m.op("post", "/orders/{orderId}/close", "closeRetailOrder", "Chốt Order bán lẻ", "Orders", "UC66", "BR-BH-01", "A06",
      "Lễ tân", "OPEN → PENDING, RETAIL (Order#5)", resp="Order", path_params=["OrderId"], errors=(400, 401, 403, 404, 409),

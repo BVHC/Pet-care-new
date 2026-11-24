@@ -94,12 +94,12 @@ erDiagram
 | must_change_password | BOOLEAN | NN, DEFAULT false | BR-TK-17, BR-QT-10 |
 | notification_settings | JSONB | NN, DEFAULT '{}' | Cài đặt nhận thông báo của khách (UC88) [ERD] |
 | pending_expires_at | TIMESTAMPTZ | ? | Hạn xác thực của tài khoản `PENDING` = lúc đăng ký + `account.pending_ttl_hours` [CFG], chốt theo BR-QT-13; ST02 xóa khi `now >= pending_expires_at` (BR-TK-08). Xác thực thì về NULL [ERD] (V5, §13 mục 12) |
-| google_sub | VARCHAR(255) | ?, UQ | Mã `sub` ổn định của tài khoản Google đã gắn (ADR-0152, V63). Chỉ tài khoản khách (BR-TK-17). Tra tài khoản theo `sub`, không theo email. `Account.changeEmail` (UC22) và `Account.resetPassword` (UC04) đặt về NULL |
+| google_sub | VARCHAR(255) | ?, UQ | Mã `sub` ổn định của tài khoản Google đã gắn (ADR-0152, V64). Chỉ tài khoản khách (BR-TK-17). Tra tài khoản theo `sub`, không theo email. `Account.changeEmail` (UC22) và `Account.resetPassword` (UC04) đặt về NULL |
 
 - `CHECK ((role = 'CUSTOMER') = (phone IS NULL))` — nhân viên bắt buộc có SĐT, tài khoản khách không lưu SĐT (BR-TK-01)
 - `CHECK (status <> 'DISABLED' OR role <> 'CUSTOMER')` — chỉ nhân viên bị vô hiệu hóa (BR-QT-07)
 - `CHECK ((status = 'PENDING') = (pending_expires_at IS NOT NULL))` — có hạn ⇔ `PENDING` (V5)
-- `UNIQUE (google_sub)` — `uq_accounts_google_sub`; `CHECK (google_sub IS NULL OR role = 'CUSTOMER')` — `ck_accounts_google_customer_only`: chỉ tài khoản khách gắn Google (BR-TK-17, V63, ADR-0152)
+- `UNIQUE (google_sub)` — `uq_accounts_google_sub`; `CHECK (google_sub IS NULL OR role = 'CUSTOMER')` — `ck_accounts_google_customer_only`: chỉ tài khoản khách gắn Google (BR-TK-17, V64, ADR-0152)
 - Index: `(status, created_at)` (V1, dự kiến cho ST02; từ V5 ST02 dùng index dưới, index này không còn query nào dùng)
 - Index: `(pending_expires_at) WHERE status = 'PENDING'` cho ST02 dọn tài khoản `PENDING` (V5)
 
@@ -443,7 +443,7 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | id | BIGINT | PK | |
 | name | VARCHAR(150) | NN, UQ | |
 | service_group | VARCHAR(10) | NN, CHECK | `MEDICAL`, `GROOMING`, `BOARDING` |
-| medical_type | VARCHAR(10) | ?, CHECK | `EXAM`, `VACCINE` (BR-SP-06) |
+| medical_type | VARCHAR(30) | ?, CHECK | `EXAM`, `VACCINE` (BR-SP-06); tầng 3 thêm `INPATIENT` (V41, BR-LT-18, ADR-0148) và `SURGERY` (V41, đã bỏ ở ADR-0125, không dùng) |
 | price | BIGINT | NN, CHECK ≥ 0 | Với nhóm `BOARDING` là giá theo đêm |
 | price_is_from | BOOLEAN | NN, DEFAULT true | Hiển thị "Từ X đ" (BR-CK-02) |
 | description | TEXT | ? | |
@@ -1182,6 +1182,7 @@ Mục 1–4: các câu hỏi mở của bản v14, chốt ở v15. Mục 5: thay
 | 26 | Cột và giá trị mới của bảng có sẵn (T51, T52) | `orders.source` thêm `ONLINE`; `order_lines.line_type` thêm `HOME_FEE` (không `service_id`, `product_id`; sửa hai `CHECK` ở §8); `services.medical_type` thêm `SURGERY`, `INPATIENT`; `appointments` thêm `is_home_visit`, `home_address`, `home_contact_phone`, `home_fee`; `visits.is_home_visit`; `branches.status` thêm `SUSPENDED`, `CLOSED` và `suspended_at`, `suspend_reason`, `expected_resume_on`, `closed_at`, `close_reason`; `customers.merged_into_id`; `articles.status` thêm `PENDING_REVIEW`, `REJECTED` và `author_account_id`, `review_note`, `submitted_at`, `reviewed_by`, `reviewed_at`; `stock_movements.type` thêm `TRANSFER_OUT`, `TRANSFER_IN`, `TRANSFER_CANCEL`, `SALE_RETURN` (`SALE_RETURN` và nguồn `return_requests` thêm ở task 137, ADR-0138); `stock_adjustments.reason` thêm `COUNT_DIFF`, `RETURN_DISCARD`; mã chứng từ thêm tiền tố `DH`, `CK`, `KK`, `TH`, `HT`, `NT`, `KN` (`document_code_sequences`, ADR-0043) | nhiều bảng |
 | 27 | Migration tầng 3 phần BE-1 (T55b, 6/11/2026, ADR-0113) | `09` ghi cột enum ngắn `VARCHAR(10/20)`: làm `VARCHAR(30)` theo mục 7; `complaint_messages.author_type`, `kind` thêm `NOT NULL`; CHECK cột ↔ trạng thái cho `surgeries`, `admissions`, `admission_orders`, `complaints` (khuôn mục 22); thêm index `admissions (visit_id)`, `admission_orders (prescription_item_id)` một phần và index cho mọi FK → `accounts` (mục 14); `EXCLUDE` chống chồng giờ ca (mục 24) **chưa làm**; `orders.source = ONLINE` đã có ở V42 (ADR-0116: 4 CHECK của `orders`, tiền online ở `payment_transactions`, không vào `payments`); `HOME_FEE`, `SURGERY`, `INPATIENT` đã có ở V41 | `shift_definitions`, `shift_assignments`, `shift_requests`, `surgeries`, `visit_material_usages`, `admissions`, `admission_orders`, `admission_observations`, `complaints`, `complaint_messages`; `appointments`, `visits`, `services`, `order_lines` (V36–V39, V41), `orders` (V42) |
 | 28 | Bỏ khiếu nại; `feedbacks` không trạng thái, xóa sau 30 ngày (ADR-0122, 2026-11-08) | `complaints`, `complaint_messages` (V39) bỏ ở V51 chưa viết; `feedbacks` bỏ `status`, `seen_at`, `resolved_by`, `resolved_at`, `resolution_note` và index `(branch_id, status)`, thêm `(branch_id, created_at)` và `(created_at)`. Các dòng liên quan tới `complaints` ở mục 27 và §14 là lịch sử của V39 | Hiện trạng code còn theo V39 (nợ D061) |
+| 29 | Nội trú, nền module (T69 N1, 22/11/2026, ADR-0149) | V63 thêm `ck_admissions_source`: `CHECK ((boarding_booking_id IS NULL) <> (kennel_id IS NULL))` — mỗi ca nhập viện có đúng **một** nguồn (nhập từ khám: chuồng điều trị; nhập từ lưu trú: đặt chỗ), V38 và `09` §C chưa nêu; seed hai mẫu `INPATIENT_OBSERVATION_ABNORMAL` / `_APP`. Bảng rỗng nên không dọn dữ liệu | `admissions`, `notification_templates` |
 
 ---
 

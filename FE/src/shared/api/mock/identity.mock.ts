@@ -172,7 +172,7 @@ interface State {
   templateOverrides: Record<string, { subject?: string | null; body: string }>;
   /** UC11: nhật ký kiểm toán. */
   audit: AuditLogEntry[];
-  /** `accounts.google_sub` (V63, ADR-0152): tài khoản khách đã gắn Google. Mỗi `sub` và mỗi tài khoản chỉ một dòng. */
+  /** `accounts.google_sub` (V64, ADR-0152): tài khoản khách đã gắn Google. Mỗi `sub` và mỗi tài khoản chỉ một dòng. */
   googleLinks: { accountId: number; sub: string }[];
 }
 

@@ -82,12 +82,15 @@ public interface StockApi {
     void release(OrderRef orderRef);
 
     /**
-     * Đơn hàng online#2 (BR-BH-09): xuất FEFO từ phần giữ trong cùng transaction với {@code PAID}, movement {@code SALE}
-     * nguồn {@code orders/<orderId>}; {@code HELD} → {@code CONSUMED}. Bản thật trước 17/11 (T63), nối với thanh toán ở T65.
+     * Đơn hàng online#2 (BR-BH-09, task 127): xuất FEFO từ phần giữ trong cùng transaction với {@code PAID}, movement
+     * {@code SALE} nguồn {@code orders/<orderId>}; {@code HELD} → {@code CONSUMED}. Chỉ chạm phần giữ của
+     * {@code orderRef.onlineOrderId()}: khóa dòng giữ của đơn đó rồi khóa lô một câu (id tăng dần), chia FEFO trên lô chưa
+     * hết hạn. Idempotent: không còn dòng {@code HELD} (đã {@code CONSUMED} / {@code RELEASED} / chưa giữ) thì không đổi gì
+     * và không xuất lần hai. Hàng đã giữ phải đủ: thiếu lô khả dụng là {@link IllegalStateException}. {@code MANDATORY};
+     * bên gọi đã khóa {@code online_orders} và {@code orders} (ADR-0145 C3). {@code actorId} ghi vào
+     * {@code stock_movements.created_by} (NOT NULL).
      */
-    default void consumeReservation(OrderRef orderRef, Long actorId) {
-        throw placeholder("consumeReservation", "T63");
-    }
+    void consumeReservation(OrderRef orderRef, Long actorId);
 
     /**
      * Đơn hàng online#10, #13 (BR-BH-09): hủy sau thanh toán mà chưa bàn giao, hoàn hàng về <b>đúng lô đã xuất</b>. Loại

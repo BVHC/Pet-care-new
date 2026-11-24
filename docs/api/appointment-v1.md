@@ -18,8 +18,8 @@
 
 | # | Endpoint | Thao tác | Use case | Rule |
 |---|---|---|---|---|
-| 1 | `GET /branches/{branchId}/available-slots` | Xem khung giờ trống | UC39 | BR-LH-01, 02, 03, 04 |
-| 2 | `POST /appointments` | Đặt lịch hẹn | UC39 | BR-LH-01…05, 09, BR-KH-05, BR-TK-19 |
+| 1 | `GET /branches/{branchId}/available-slots` | Xem khung giờ trống | UC39 | BR-LH-01, 02, 03, 04, BR-LT-18 |
+| 2 | `POST /appointments` | Đặt lịch hẹn | UC39 | BR-LH-01…05, 09, BR-KH-05, BR-TK-19, BR-LT-18 |
 | 3 | `GET /appointments` | Danh sách lịch hẹn | UC40, UC44 | BR-LH-11, BR-TN-02 |
 | 4 | `GET /appointments/{appointmentId}` | Chi tiết lịch hẹn | UC40 | — |
 | 5 | `POST /appointments/{appointmentId}/reschedule` | Đổi khung giờ | UC40 | BR-LH-02, 03, 04, 05, 06 |
@@ -50,10 +50,10 @@
 
 ### Slots
 
-- **`GET /branches/{branchId}/available-slots`** — Xem khung giờ trống. Query: `serviceId`, `date`. Response `200` mảng `Slot`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được tại chi nhánh (ngừng kinh doanh, nhóm Lưu trú, đang tắt) hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT) · `401` · `403` Lễ tân xem chi nhánh khác · `404` Chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động) hoặc dịch vụ không tồn tại.
+- **`GET /branches/{branchId}/available-slots`** — Xem khung giờ trống. Query: `serviceId`, `date`. Response `200` mảng `Slot`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được tại chi nhánh (ngừng kinh doanh, nhóm Lưu trú, đang tắt) hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT) · `BR-LT-18` dịch vụ nội trú (chỉ dùng qua nhập viện) · `401` · `403` Lễ tân xem chi nhánh khác · `404` Chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động) hoặc dịch vụ không tồn tại.
 ### Appointments
 
-- **`POST /appointments`** — Đặt lịch hẹn. Request `BookAppointmentRequest`. Response `201` `Appointment`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online (message kèm thời điểm hết hạn chế, giờ Việt Nam) · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` Lễ tân đặt lịch cho chi nhánh khác · `404` Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động).
+- **`POST /appointments`** — Đặt lịch hẹn. Request `BookAppointmentRequest`. Response `201` `Appointment`. Lỗi: `400` `BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · `BR-LT-18` dịch vụ nội trú (chỉ dùng qua nhập viện) · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online (message kèm thời điểm hết hạn chế, giờ Việt Nam) · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết · `401` · `403` Lễ tân đặt lịch cho chi nhánh khác · `404` Thú cưng (kể cả thú của khách khác), dịch vụ hoặc chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động).
 - **`GET /appointments`** — Danh sách lịch hẹn. Query: `branchId?`, `date?`, `from?`, `to?`, `status?`, `petId?`, `customerId?`, `checkInReady?`, `page?`, `size?`. Response `200` trang `Appointment`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Sai vai trò hoặc nhân viên lọc chi nhánh khác.
 - **`GET /appointments/{appointmentId}`** — Chi tiết lịch hẹn. Response `200` `Appointment`. Lỗi: `400` Tham số sai kiểu (`MALFORMED_REQUEST`); BR-TK-17 · `401` · `403` Nhân viên xem lịch của chi nhánh khác · `404` Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập.
 - **`POST /appointments/{appointmentId}/reschedule`** — Đổi khung giờ. Request `RescheduleRequest`. Response `200` `Appointment`. Lỗi: `400` `BR-LH-06` hết lượt đổi (3 [CFG]), khách đổi khi còn < 12 giờ [CFG] hoặc lễ tân đổi khi đã tới giờ hẹn · `BR-LH-04`, `BR-LH-02`, `BR-LH-05`, `BR-LH-03` với khung mới; tham số / body sai kiểu (`MALFORMED_REQUEST`, `VALIDATION_FAILED`); BR-TK-17 · `401` · `403` Sai vai trò hoặc lễ tân đổi lịch của chi nhánh khác · `404` Lịch hẹn không tồn tại hoặc không phải của khách đang đăng nhập · `409` Lịch không còn BOOKED (kiểm ngay sau khi khóa, trước mọi rule).

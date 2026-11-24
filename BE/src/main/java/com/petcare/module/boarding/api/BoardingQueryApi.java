@@ -50,6 +50,24 @@ public interface BoardingQueryApi {
     /** Đặt chỗ BOOKED/CHECKED_IN/OVERDUE của khách — việc dở khi khóa tài khoản khách (BR-QT-11, Q2). */
     List<StaySummary> findActiveStaysByCustomer(Long customerId);
 
+    /**
+     * Đặt chỗ lưu trú đang giữ thú trong chuồng ({@code CHECKED_IN} hoặc {@code OVERDUE}) — nhập viện từ lưu trú
+     * (BR-LT-13b) và chặn nhập từ lượt khám khi thú đang lưu trú (docs/adr/0148). Một thú không có hai đặt chỗ chồng
+     * ngày (BR-LT-02) nên tối đa một dòng; rỗng nếu thú không ở trong chuồng. Đọc không khóa.
+     */
+    Optional<StaySummary> findCurrentStay(Long petId);
+
+    /**
+     * Khóa chia sẻ dòng đặt chỗ ({@code FOR SHARE}) rồi đọc — nhập viện từ lưu trú (BR-LT-13b, BR-LT-17; docs/adr/0149 mục
+     * 16). Xung đột với {@code FOR NO KEY UPDATE} của giao thú / thú mất / gia hạn / hủy nên trạng thái trả về đứng yên
+     * tới khi transaction của bên gọi kết thúc; không xung đột với nhật ký chăm sóc ({@code FOR SHARE}). ST15 bỏ qua dòng
+     * đang bị khóa ({@code SKIP LOCKED}) và xử lý ở lượt sau. {@code MANDATORY}; bên gọi khóa thú {@code FOR SHARE} trước
+     * và tự kiểm quyền, chi nhánh, trạng thái.
+     *
+     * @return rỗng nếu đặt chỗ không tồn tại
+     */
+    Optional<StaySummary> findBookingForShare(Long bookingId);
+
     // ------------------------------------------------------------------------------------------------------------
     // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 13, 16): placeholder dạng default — ném UnsupportedOperationException
     // tới khi BoardingQueryService ghi đè; khi đó xóa default (method thành trừu tượng).

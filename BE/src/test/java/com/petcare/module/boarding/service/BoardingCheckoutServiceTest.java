@@ -46,6 +46,7 @@ import com.petcare.module.catalog.api.CatalogQueryApi.KennelTypeInfo;
 import com.petcare.module.customer.api.Species;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.inpatient.api.AdmissionQueryApi;
 import com.petcare.module.sales.api.BoardingOrderApi;
 import com.petcare.module.sales.api.BoardingOrderApi.BoardingCharge;
 import com.petcare.module.sales.api.BoardingOrderApi.BoardingOrderRef;
@@ -60,7 +61,9 @@ class BoardingCheckoutServiceTest {
     private static final long TYPE = 5L;
     private static final long KENNEL = 12L;
     private static final long ACTOR = 3L;
+    private static final long PET = 21L;
 
+    private AdmissionQueryApi admissions;
     private BoardingOrderApi boardingOrders;
     private CareTaskApi careTasks;
     private BoardingBookingRepository bookings;
@@ -112,9 +115,85 @@ class BoardingCheckoutServiceTest {
         boardingOrders = mock(BoardingOrderApi.class);
         careTasks = mock(CareTaskApi.class);
         when(boardingOrders.openOrReuse(any())).thenReturn(new BoardingOrderRef(501L, 3, 450_000L));
-        service = new BoardingCheckoutService(scope, branches, catalog, configs, boardingOrders, careTasks, bookings,
-                kennels, new BoardingBookingTransitionHandler(), new KennelTransitionHandler(),
+        admissions = mock(AdmissionQueryApi.class);
+        service = new BoardingCheckoutService(scope, branches, catalog, configs, boardingOrders, careTasks, admissions,
+                bookings, kennels, new BoardingBookingTransitionHandler(), new KennelTransitionHandler(),
                 mock(BoardingAssembler.class), clockAt(now));
+    }
+
+    /** BR-LT-17 (docs/adr/0149 mục 37): thú còn ca nội trú → 409 có mã rule, không ghi gì. */
+    private void assertAdmittedIs409(org.assertj.core.api.ThrowableAssert.ThrowingCallable call, String action) {
+        assertThatThrownBy(call).isInstanceOfSatisfying(BoardingConflictException.class,
+                e -> assertThat(e.getMessage()).contains(action).endsWith("(BR-LT-17)"));
+        verify(bookings, never()).saveAndFlush(any());
+        verify(kennels, never()).findByIdForUpdate(anyLong());
+        verify(kennels, never()).saveAndFlush(any());
+        verify(boardingOrders, never()).openOrReuse(any());
+        verifyNoInteractions(careTasks);
+        assertThat(booking.getStatus()).isEqualTo(BoardingBookingStatus.CHECKED_IN);
+        assertThat(kennel.getStatus()).isEqualTo(KennelStatus.OCCUPIED);
+    }
+
+    @Test
+    void startCheckoutWhileAdmittedIsBrLt17AndReadsAfterTheBookingLock() {
+        when(admissions.hasActiveAdmission(PET)).thenReturn(true);
+
+        assertAdmittedIs409(() -> service.startCheckout(ID), "bắt đầu trả thú");
+
+        InOrder order = inOrder(bookings, admissions);
+        order.verify(bookings).findByIdForUpdate(ID);
+        order.verify(admissions).hasActiveAdmission(PET);
+        verify(boardingOrders, never()).hasPaidOrder(anyLong());
+    }
+
+    @Test
+    void handOverWhileAdmittedIsBrLt17BeforeThePaidCheck() {
+        when(admissions.hasActiveAdmission(PET)).thenReturn(true);
+        when(boardingOrders.hasPaidOrder(ID)).thenReturn(true);
+
+        assertAdmittedIs409(() -> service.handOver(ID), "giao thú");
+
+        InOrder order = inOrder(bookings, admissions);
+        order.verify(bookings).findByIdForUpdate(ID);
+        order.verify(admissions).hasActiveAdmission(PET);
+        verify(boardingOrders, never()).hasPaidOrder(anyLong());
+    }
+
+    @Test
+    void endDeceasedWhileAdmittedIsBrLt17AndOpensNoOrder() {
+        when(admissions.hasActiveAdmission(PET)).thenReturn(true);
+
+        assertAdmittedIs409(() -> service.endDeceased(ID, new DeceasedEndRequest("Mất")), "kết thúc lưu trú do thú mất");
+
+        verify(boardingOrders, never()).findPaidOrder(anyLong());
+    }
+
+    @Test
+    void notInKennelOrWrongStatusWinsOverAdmittedAndNeverReadsAdmissions() {
+        booking = BoardingBooking.book("LT-2", 14L, PET, BRANCH, TYPE, LocalDate.parse("2009-06-10"),
+                LocalDate.parse("2009-06-14"), 150_000L, BookingChannel.COUNTER, 9L);
+        ReflectionTestUtils.setField(booking, "id", ID);
+        when(bookings.findByIdForUpdate(ID)).thenReturn(Optional.of(booking));
+        when(admissions.hasActiveAdmission(PET)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.startCheckout(ID)).isInstanceOf(BoardingConflictException.class)
+                .hasMessageNotContaining("BR-LT-17");
+        assertThatThrownBy(() -> service.handOver(ID))
+                .isInstanceOf(com.petcare.platform.exception.InvalidStateTransitionException.class);
+        assertThatThrownBy(() -> service.endDeceased(ID, new DeceasedEndRequest("x")))
+                .isInstanceOf(com.petcare.platform.exception.InvalidStateTransitionException.class);
+
+        verifyNoInteractions(admissions);
+    }
+
+    @Test
+    void notAdmittedKeepsTheExistingFlowsUntouched() {
+        when(boardingOrders.hasPaidOrder(ID)).thenReturn(true);
+
+        service.handOver(ID);
+
+        verify(admissions).hasActiveAdmission(PET);
+        assertThat(booking.getStatus()).isEqualTo(BoardingBookingStatus.CHECKED_OUT);
     }
 
     @Test

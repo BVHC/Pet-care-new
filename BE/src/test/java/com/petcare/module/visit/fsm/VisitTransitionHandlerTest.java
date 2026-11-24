@@ -18,8 +18,8 @@ import com.petcare.platform.fsm.StateMachineBase;
 
 /**
  * Bản sao độc lập của bảng "4. Visit" (docs/03-state-machines.md L100–107): #1 — → WAITING; #2 WAITING → WAITING;
- * #3 WAITING → IN_PROGRESS; #4 IN_PROGRESS → IN_PROGRESS; #5 IN_PROGRESS → COMPLETED; #6 WAITING → CANCELLED.
- * COMPLETED, CANCELLED là FINAL.
+ * #3 WAITING → IN_PROGRESS; #4 IN_PROGRESS → IN_PROGRESS; #5 IN_PROGRESS → COMPLETED; #6 WAITING → CANCELLED;
+ * #7 — → IN_PROGRESS (Visit điều trị, nhập viện từ lưu trú, docs/adr/0148 mục 5). COMPLETED, CANCELLED là FINAL.
  */
 class VisitTransitionHandlerTest extends FsmTransitionTestBase<VisitStatus> {
 
@@ -42,7 +42,7 @@ class VisitTransitionHandlerTest extends FsmTransitionTestBase<VisitStatus> {
 
     @Override
     protected Set<VisitStatus> expectedInitialStates() {
-        return Set.of(WAITING);                                            // #1
+        return Set.of(WAITING, IN_PROGRESS);                               // #1, #7
     }
 
     /** Message 409 mà client nhận dùng tên nghiệp vụ, không lộ tên lớp (khuôn docs/adr/0033). */
@@ -53,8 +53,8 @@ class VisitTransitionHandlerTest extends FsmTransitionTestBase<VisitStatus> {
         assertThatThrownBy(() -> handler.validateTransition(IN_PROGRESS, CANCELLED))
                 .isInstanceOf(InvalidStateTransitionException.class)
                 .hasMessage("Không thể chuyển trạng thái lượt tiếp nhận từ IN_PROGRESS sang CANCELLED");
-        assertThatThrownBy(() -> handler.validateInitial(IN_PROGRESS))
+        assertThatThrownBy(() -> handler.validateInitial(COMPLETED))
                 .isInstanceOf(InvalidStateTransitionException.class)
-                .hasMessage("Không thể chuyển trạng thái lượt tiếp nhận từ — sang IN_PROGRESS");
+                .hasMessage("Không thể chuyển trạng thái lượt tiếp nhận từ — sang COMPLETED");
     }
 }

@@ -47,7 +47,7 @@ import com.petcare.platform.security.SecurityPrincipal;
  * {@code WAITING} + Lịch hẹn#3 ({@code AppointmentApi.checkIn}) + Order#1 ({@code VisitOrderApi.openForVisit}).
  * <p>
  * Thứ tự (docs/api/00-method.md L70, docs/adr/0059): khóa thú (404) → lịch hẹn không khóa (404, chi nhánh khác 400
- * BR-TN-02) → dịch vụ walk-in (404) → các 400 của visit (BR-TN-01, BR-CN-01, BR-CN-05, BR-LH-01) → {@code checkIn}
+ * BR-TN-02) → dịch vụ walk-in (404) → các 400 của visit (BR-TN-01, BR-CN-01, BR-CN-05, BR-LT-18, BR-LH-01) → {@code checkIn}
  * (409 → 400 BR-TN-02, lệch sẵn có của docs/adr/0050) → mã lượt → INSERT {@code visits} → Order. Mọi 400 của visit
  * đứng trước câu ghi đầu tiên. Thứ tự khóa: {@code pets FOR SHARE → appointments → document_counters (visits → ORDER)
  * → orders} (docs/adr/0058 mục 5). Không bắt exception nào: lỗi từ callee {@code MANDATORY} đã đánh dấu rollback-only.
@@ -189,11 +189,18 @@ public class VisitCheckInService {
     }
 
     /**
-     * BR-LH-01. Walk-in: dịch vụ đang kinh doanh, nhóm Khám/Tiêm hoặc Thẩm mỹ, đang bật tại chi nhánh. Có lịch: chỉ
+     * BR-LT-18: dịch vụ {@code INPATIENT} bị từ chối ở cả hai đường (400). BR-LH-01. Walk-in: dịch vụ đang kinh doanh, nhóm Khám/Tiêm hoặc Thẩm mỹ, đang bật tại chi nhánh. Có lịch: chỉ
      * chặn khi dịch vụ đã ngừng hẳn ({@code openForVisit} cần dịch vụ đang kinh doanh); tắt tại chi nhánh sau khi đặt vẫn
      * tiếp nhận được (docs/adr/0059 Q3, nợ D040).
      */
     private void checkService(ServiceInfo service, boolean fromAppointment, Long branchId) {
+        if (service.medicalType() == MedicalType.INPATIENT) {
+            // BR-LT-18 (docs/adr/0148, 0149 mục 40): dịch vụ nội trú chỉ bắt đầu bằng nhập viện, kể cả lịch hẹn đặt trước
+            // khi có luật này (ngoại lệ của ADR-0088: dòng tự sinh nội trú sẽ sửa / xóa được và lách BR-KB-02).
+            throw new BusinessRuleViolationException("BR-LT-18", fromAppointment
+                    ? "Lịch hẹn mang dịch vụ nội trú: hủy lịch rồi tiếp nhận như khách walk-in với dịch vụ khác"
+                    : "Dịch vụ nội trú chỉ dùng qua nhập viện, không tiếp nhận được");
+        }
         if (fromAppointment) {
             // Docs/adr/0088 (thay docs/adr/0059 Q3, trả D040): BR-LH-01 là điều kiện đặt lịch (UC39); lịch đã đặt vẫn
             // tiếp nhận được dù dịch vụ đã ngừng kinh doanh hay bị tắt tại chi nhánh, nếu không ST05 tính NO_SHOW oan.

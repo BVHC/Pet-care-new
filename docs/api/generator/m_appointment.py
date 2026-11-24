@@ -67,21 +67,22 @@ m.schema("RestrictionStatus", {
 m.schema("LiftRestrictionRequest", {"reason": "string:300"})
 
 BOOK_ERR = ("`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh chưa ACTIVE · "
-            "`BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) "
+            "`BR-LT-18` dịch vụ nội trú (chỉ dùng qua nhập viện) · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 giờ – 30 ngày [CFG] (khách) "
             "hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng nhóm trong ngày hoặc trùng khung · "
             "`BR-LH-09` khách đang bị hạn chế đặt online (message kèm thời điểm hết hạn chế, giờ Việt Nam) · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết")
 m.op("get", "/branches/{branchId}/available-slots", "listAvailableSlots", "Xem khung giờ trống", "Slots", "UC39",
-     "BR-LH-01, 02, 03, 04", "A02, A06", "Khách; lễ tân chi nhánh", resp="array:Slot", path_params=["BranchId"],
+     "BR-LH-01, 02, 03, 04, BR-LT-18", "A02, A06", "Khách; lễ tân chi nhánh", resp="array:Slot", path_params=["BranchId"],
      query=["serviceId!=int64", "date!=date"], errors=(400, 401, 403, 404),
      err_desc={400: "`BR-LH-01` dịch vụ không đặt được tại chi nhánh (ngừng kinh doanh, nhóm Lưu trú, đang tắt) "
-                    "hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT)",
+                    "hoặc chi nhánh chưa nhận đặt lịch (lễ tân của chi nhánh DRAFT) · `BR-LT-18` dịch vụ nội trú "
+                    "(chỉ dùng qua nhập viện)",
                403: "Lễ tân xem chi nhánh khác",
                404: "Chi nhánh không tồn tại (khách: cả chi nhánh chưa hoạt động) hoặc dịch vụ không tồn tại"},
      notes="Ngày nghỉ hoặc ngày không có giờ mở cửa trả mảng rỗng (A1). Khách chỉ thấy khung bắt đầu từ "
            "now + 24 giờ [CFG] và ngày hẹn ≤ hôm nay + 30 ngày [CFG]; lễ tân thấy mọi khung chưa bắt đầu (BR-LH-04). "
            "Khung AVAILABLE chưa giữ chỗ: đặt lịch kiểm lại (docs/adr/0046).")
 m.op("post", "/appointments", "bookAppointment", "Đặt lịch hẹn", "Appointments", "UC39",
-     "BR-LH-01…05, 09, BR-KH-05, BR-TK-19", "A02, A06", "Khách: thú của mình · lễ tân: chi nhánh mình",
+     "BR-LH-01…05, 09, BR-KH-05, BR-TK-19, BR-LT-18", "A02, A06", "Khách: thú của mình · lễ tân: chi nhánh mình",
      "— → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6", body="BookAppointmentRequest", resp="Appointment",
      status=201, errors=(400, 401, 403, 404),
      err_desc={400: BOOK_ERR, 403: "Lễ tân đặt lịch cho chi nhánh khác",

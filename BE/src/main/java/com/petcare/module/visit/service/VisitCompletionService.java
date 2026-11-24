@@ -18,6 +18,7 @@ import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi;
+import com.petcare.module.inpatient.api.AdmissionQueryApi;
 import com.petcare.module.sales.api.OrderQueryApi;
 import com.petcare.module.sales.api.VisitOrderApi;
 import com.petcare.module.visit.dto.VisitResponse;
@@ -31,6 +32,7 @@ import com.petcare.module.visit.repository.VisitRepository;
 import com.petcare.module.visit.repository.VisitRepository.SummaryRow;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
@@ -40,7 +42,8 @@ import com.petcare.platform.security.SecurityPrincipal;
  * transaction ghi, READ COMMITTED: Visit → {@code COMPLETED}, Lịch hẹn#7, Order#4, khóa bệnh án.
  * <ul>
  * <li>Thứ tự: role → lượt (projection, 404) → chi nhánh (403) → khóa {@code visits} → người phụ trách hiện tại (403) →
- * chức vụ khớp nhóm (400 BR-TN-05) → {@code IN_PROGRESS} (409) → ghi → guard BR-KB-02 (400).</li>
+ * chức vụ khớp nhóm (400 BR-TN-05) → {@code IN_PROGRESS} (409) → còn ca nội trú {@code ADMITTED} (409, BR-LT-14;
+ * docs/adr/0149) → ghi → guard BR-KB-02 (400).</li>
  * <li>Thứ tự khóa: {@code visits → appointments → orders}. Order được khóa (và nạp lần đầu) ở
  * {@link VisitOrderApi#markPendingByVisit}, <b>rồi mới</b> đọc dòng dịch vụ: đọc trước sẽ nạp entity cũ và lần
  * {@code markPending} sau ghi đè {@code total_amount} (D045); đọc sau khóa trả D044.</li>
@@ -61,12 +64,13 @@ public class VisitCompletionService {
     private final MedicalRecordRepository records;
     private final VisitTransitionHandler transitions;
     private final VisitResponder responder;
+    private final AdmissionQueryApi admissions;
     private final Clock clock;
 
     public VisitCompletionService(BranchScope branchScope, StaffDirectoryApi staffDirectory, AppointmentApi appointments,
             VisitOrderApi visitOrders, CatalogQueryApi catalog, VisitRepository visits,
             MedicalRecordRepository records, VisitTransitionHandler transitions, OrderQueryApi orders, PetQueryApi pets,
-            CustomerQueryApi customers, VisitMapper mapper, Clock clock) {
+            CustomerQueryApi customers, VisitMapper mapper, Clock clock, AdmissionQueryApi admissions) {
         this.branchScope = branchScope;
         this.appointments = appointments;
         this.visitOrders = visitOrders;
@@ -75,6 +79,7 @@ public class VisitCompletionService {
         this.records = records;
         this.transitions = transitions;
         this.responder = new VisitResponder(orders, pets, customers, staffDirectory, mapper);
+        this.admissions = admissions;
         this.clock = clock;
     }
 
@@ -99,6 +104,12 @@ public class VisitCompletionService {
                     "Chức vụ hiện tại không phụ trách được nhóm dịch vụ của lượt — cần gán lại lượt");
         }
         transitions.validateTransition(visit.getStatus(), VisitStatus.COMPLETED);
+        // BR-LT-14: xuất viện trước rồi mới hoàn tất. Đọc sau khóa `visits`; nhập viện từ lượt khám khóa cùng dòng này
+        // nên hai thao tác tuần tự (docs/adr/0149). Kiểm trước mọi lệnh ghi nên 409 không để lại gì.
+        if (admissions.hasActiveAdmissionForVisit(visitId)) {
+            throw new InvalidStateTransitionException("lượt tiếp nhận (còn ca nội trú đang điều trị)",
+                    VisitStatus.IN_PROGRESS.name(), VisitStatus.COMPLETED.name());
+        }
 
         Instant at = clock.instant().truncatedTo(ChronoUnit.MICROS);
         visit.complete(at);
@@ -119,7 +130,10 @@ public class VisitCompletionService {
         return responder.one(visit);
     }
 
-    /** BR-KB-02, BR-SP-06: có dịch vụ Khám → chẩn đoán; chỉ Tiêm → ≥ 1 mũi; không có dịch vụ nào → từ chối (A16). */
+    /**
+     * BR-KB-02, BR-SP-06: có dịch vụ Khám → chẩn đoán; chỉ Tiêm → ≥ 1 mũi; chỉ nội trú ({@code INPATIENT}, Visit điều
+     * trị) → không cần gì thêm (BR-LT-14, tóm tắt xuất viện thay chẩn đoán); không có dịch vụ nào → từ chối (A16).
+     */
     private void requireCompletable(Visit visit, Optional<MedicalRecord> record) {
         List<Long> serviceIds = visitOrders.findServiceIds(visit.getId());
         List<ServiceInfo> services = serviceIds.isEmpty() ? List.of() : catalog.findServices(serviceIds);
@@ -128,6 +142,8 @@ public class VisitCompletionService {
         }
         boolean exam = services.stream().anyMatch(s -> s.medicalType() == MedicalType.EXAM);
         boolean vaccine = services.stream().anyMatch(s -> s.medicalType() == MedicalType.VACCINE);
+        boolean inpatientOnly = !services.isEmpty()
+                && services.stream().allMatch(s -> s.medicalType() == MedicalType.INPATIENT);
         if (exam) {
             if (record.map(MedicalRecord::getDiagnosis).isEmpty()) {
                 throw new BusinessRuleViolationException("BR-KB-02",
@@ -138,9 +154,9 @@ public class VisitCompletionService {
                 throw new BusinessRuleViolationException("BR-KB-02",
                         "Lượt chỉ có dịch vụ tiêm phải ghi nhận ít nhất 1 mũi tiêm");
             }
-        } else {
+        } else if (!inpatientOnly) {
             throw new BusinessRuleViolationException("BR-KB-02",
-                    "Lượt khám/tiêm phải còn ít nhất 1 dịch vụ khám hoặc tiêm");
+                    "Lượt khám/tiêm phải còn ít nhất 1 dịch vụ khám, tiêm hoặc nội trú");
         }
     }
 }

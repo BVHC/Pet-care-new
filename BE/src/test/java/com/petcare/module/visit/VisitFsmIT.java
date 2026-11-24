@@ -1,6 +1,7 @@
 package com.petcare.module.visit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.net.URI;
 import java.time.Instant;
@@ -33,17 +34,19 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.appointment.AppointmentItSupport;
 import com.petcare.module.identity.service.SessionService;
+import com.petcare.module.visit.api.VisitApi;
 import com.petcare.support.MutableClock;
 
 /**
  * T40.5 — đủ 6 chuyển của bảng "4. Visit" (docs/03-state-machines.md), mỗi chuyển kiểm cả hệ quả chéo trên Lịch hẹn và
- * Order (Phụ lục 03), cùng 15 cặp sai (gọi / gán / hủy / hoàn tất / gán lại từ trạng thái không cho phép) qua endpoint
+ * Order (Phụ lục 03); #7 (Visit điều trị, T69 N2) đi qua bean {@code VisitApi} vì chưa có endpoint; cùng 15 cặp sai (gọi / gán / hủy / hoàn tất / gán lại từ trạng thái không cho phép) qua endpoint
  * thật, **không stand-in nào** (IT cũ của từng luồng còn mock, docs/testcases/T40-be.md §2.3). Lượt luôn có lịch hẹn
  * đặt qua {@code POST /api/appointments}; trạng thái nguồn đi bằng API, không {@code UPDATE visits.status}.
  * <p>
@@ -80,6 +83,8 @@ class VisitFsmIT {
     private PlatformTransactionManager transactionManager;
     @Autowired
     private MutableClock clock;
+    @Autowired
+    private VisitApi visitApi;
 
     private AppointmentItSupport data;
     private TransactionTemplate tx;
@@ -219,6 +224,59 @@ class VisitFsmIT {
                 WHERE v.id = ?""", visit)).containsEntry("status", "CANCELLED").containsEntry("cancel_source", "STAFF")
                 .containsEntry("late_cancel", false);
         assertThat(orderStatus(visit)).isEqualTo("CANCELLED");
+    }
+
+    /**
+     * #7 — Visit điều trị (nhập viện từ lưu trú, docs/adr/0149 mục 12) qua {@code VisitApi} trên bean thật: thẳng
+     * {@code IN_PROGRESS}, giao cho VET, không lịch hẹn; Order {@code VISIT} {@code OPEN} <b>không có dòng nào</b> (Order#14).
+     * Chưa có endpoint nhập viện (N3) nên gọi bean trong một transaction như bên inpatient sẽ làm.
+     */
+    @Test
+    void startingATreatmentVisitOpensItInProgressWithAnEmptyOrder() {
+        long pet = data.pet(customer);
+
+        VisitApi.TreatmentVisitRef ref = tx.execute(status -> visitApi.startTreatmentVisit(pet, customer, branch, vetA));
+
+        assertThat(jdbc.queryForMap("""
+                SELECT status, assignee_id, checked_in_by, appointment_id, service_group, priority_class,
+                       called_at = checked_in_at AS called_on_entry
+                FROM visits WHERE id = ?""", ref.visitId()))
+                .containsEntry("status", "IN_PROGRESS").containsEntry("assignee_id", vetA)
+                .containsEntry("checked_in_by", vetA).containsEntry("appointment_id", null)
+                .containsEntry("service_group", "MEDICAL").containsEntry("priority_class", "WALK_IN")
+                .containsEntry("called_on_entry", true);
+        assertThat(jdbc.queryForMap("SELECT id, status, source FROM orders WHERE visit_id = ?", ref.visitId()))
+                .containsEntry("id", ref.orderId()).containsEntry("status", "OPEN").containsEntry("source", "VISIT");
+        assertThat(count("SELECT count(*) FROM order_lines WHERE order_id = ?", ref.orderId())).isZero();
+    }
+
+    /** Lượt điều trị là một lượt {@code IN_PROGRESS} bình thường: gọi / gán / hủy → 409, không ghi gì. */
+    @Test
+    void aTreatmentVisitRefusesTheEdgesOfAWaitingVisit() {
+        long pet = data.pet(customer);
+        long visit = tx.execute(status -> visitApi.startTreatmentVisit(pet, customer, branch, vetA)).visitId();
+        String footprint = """
+                SELECT v.xmin::text || '/' || o.xmin::text || '/' ||
+                       (SELECT count(*) FROM order_lines l WHERE l.order_id = o.id) || '/' ||
+                       (SELECT count(*) FROM visit_assignments a WHERE a.visit_id = v.id)
+                FROM visits v JOIN orders o ON o.visit_id = v.id WHERE v.id = ?""";
+        String before = jdbc.queryForObject(footprint, String.class, visit);
+
+        for (String operation : List.of("call", "assign", "cancel")) {
+            assertConflict(operation, attempt(operation, visit));
+        }
+
+        assertThat(jdbc.queryForObject(footprint, String.class, visit)).isEqualTo(before);
+    }
+
+    /** {@code MANDATORY}: gọi ngoài transaction bị từ chối trước khi ghi. */
+    @Test
+    void startTreatmentVisitRequiresTheCallersTransaction() {
+        long pet = data.pet(customer);
+
+        assertThatThrownBy(() -> visitApi.startTreatmentVisit(pet, customer, branch, vetA))
+                .isInstanceOf(IllegalTransactionStateException.class);
+        assertThat(count("SELECT count(*) FROM visits WHERE pet_id = ?", pet)).isZero();
     }
 
     // ================================================================ cặp sai → 409, không ghi gì

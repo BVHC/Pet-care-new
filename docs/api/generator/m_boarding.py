@@ -180,11 +180,11 @@ m.op("get", "/boarding-bookings/{bookingId}/check-in-readiness", "getCheckInRead
      resp="CheckInReadiness", path_params=["BookingId"], errors=(401, 403, 404, 409),
      err_desc={409: "Đặt chỗ không còn BOOKED"})
 m.op("post", "/boarding-bookings/{bookingId}/check-in", "checkInBoarding", "Nhận thú", "Stay", "UC59",
-     "BR-LT-04, 05, 08, BR-KH-04", "A06, A08", "Lễ tân, CARETAKER chi nhánh",
+     "BR-LT-04, 05, 08, BR-KH-04, BR-LT-17", "A06, A08", "Lễ tân, CARETAKER chi nhánh",
      "BOOKED → CHECKED_IN (Đặt chỗ#3) · Chuồng#2 (→ OCCUPIED)", body="CheckInRequest", resp="Booking",
      path_params=["BookingId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-LT-05` thiếu / quá hạn mũi bắt buộc (lễ tân tiếp nhận walk-in để tiêm trước) · `BR-LT-08` chuồng không AVAILABLE hoặc sai loại, thiếu cân nặng · `BR-LT-04` ngoài giờ mở cửa · `BR-LT-03` nhận sớm khi hết chỗ",
-               409: "Đặt chỗ không còn BOOKED"},
+               409: "Đặt chỗ không còn BOOKED · `BR-LT-17` thú còn ca nội trú (xuất viện trước)"},
      notes="Cân nặng ghi vào lịch sử (source INTAKE); nhận sớm được nếu còn chỗ.")
 m.op("post", "/boarding-bookings/{bookingId}/cancel-no-kennel", "cancelBoardingNoKennel",
      "Hủy vì không còn chuồng đúng loại lúc nhận", "Stay", "UC59", "BR-LT-08, BR-LH-09", "A06", "Lễ tân chi nhánh",
@@ -192,20 +192,21 @@ m.op("post", "/boarding-bookings/{bookingId}/cancel-no-kennel", "cancelBoardingN
      errors=(400, 401, 403, 404, 409), err_desc={400: "Vẫn còn chuồng AVAILABLE đúng loại", 409: "Đặt chỗ không còn BOOKED"},
      notes="Không tính hủy muộn; thông báo khách và BRANCH_MANAGER (A3).")
 m.op("post", "/boarding-bookings/{bookingId}/start-checkout", "startBoardingCheckout", "Bắt đầu trả thú", "Stay",
-     "UC59", "BR-LT-04, 09, BR-BH-01", "A06", "Chỉ lễ tân chi nhánh",
+     "UC59", "BR-LT-04, 09, BR-BH-01, BR-LT-17", "A06", "Chỉ lễ tân chi nhánh",
      "CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#9) · Order#3 (BOARDING → PENDING)", resp="CheckoutStarted",
      path_params=["BookingId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LT-04` ngoài giờ mở cửa", 409: "Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú)"},
+     err_desc={400: "`BR-LT-04` ngoài giờ mở cửa", 409: "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước) · đã thu tiền lưu trú (chỉ còn giao thú)"},
      notes="Đã có Order BOARDING PENDING thì dùng lại và tính lại số đêm. Tiếp theo: `POST /payments`.")
 m.op("post", "/boarding-bookings/{bookingId}/hand-over", "handOverBoardingPet", "Giao thú (trả thú)", "Stay", "UC59",
-     "BR-LT-09, BR-BH-06", "A06", "Chỉ lễ tân chi nhánh", "CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3",
+     "BR-LT-09, BR-BH-06, BR-LT-17", "A06", "Chỉ lễ tân chi nhánh", "CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3",
      resp="Booking", path_params=["BookingId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ", 409: "Thú không còn trong chuồng"})
+     err_desc={400: "`BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ",
+               409: "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước)"})
 m.op("post", "/boarding-bookings/{bookingId}/end-deceased", "endBoardingDeceased", "Kết thúc lưu trú do thú mất",
-     "Stay", "UC59", "BR-LT-12, BR-KH-05", "A06", "Chỉ lễ tân chi nhánh",
+     "Stay", "UC59", "BR-LT-12, BR-KH-05, BR-LT-17", "A06", "Chỉ lễ tân chi nhánh",
      "CHECKED_IN / OVERDUE → CHECKED_OUT, PET_DECEASED (Đặt chỗ#11) · Chuồng#3 · Order#3 (tính đến ngày mất)",
      body="DeceasedEndRequest", resp="CheckoutStarted", path_params=["BookingId"], errors=(400, 401, 403, 404, 409),
-     err_desc={409: "Thú không còn trong chuồng"},
+     err_desc={409: "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước)"},
      notes="Sau đó mới đánh dấu thú đã mất (`POST /pets/{petId}/mark-deceased`). Order xử lý như PENDING thường.")
 
 m.op("get", "/boarding-bookings/{bookingId}/care-logs", "listCareLogs", "Xem nhật ký chăm sóc", "Care logs",

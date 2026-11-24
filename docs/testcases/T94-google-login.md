@@ -1,6 +1,6 @@
 # T94 (BE + FE): Đăng nhập / đăng ký bằng Google: ca kiểm tay trên BE thật
 
-> Phạm vi: `POST /api/auth/google` (identity-v1 #40, ADR-0152, V63) và các màn `/auth/login`, `/auth/register`. Hợp đồng: `docs/api/identity-v1.md` #40. Thiết kế: `docs/superpowers/specs/2026-11-24-google-login-design.md`.
+> Phạm vi: `POST /api/auth/google` (identity-v1 #40, ADR-0152, V64) và các màn `/auth/login`, `/auth/register`. Hợp đồng: `docs/api/identity-v1.md` #40. Thiết kế: `docs/superpowers/specs/2026-11-24-google-login-design.md`.
 > **Không có kết quả nào trong file này đã được chạy.** Cột Kết quả để Hiến tự điền sau khi chạy tay; tất cả bắt đầu ở "Chưa test". Mọi ca cần **client ID thật** của Hiến (Google Cloud) nên không chạy tự động được; phần tự động (unit, `GoogleLoginIT`, Vitest) nằm ở ADR-0152 mục "Test".
 > Ghi DB: các ca G-01, G-03, G-04, G-05, G-09, G-10, G-11 tạo hoặc sửa dòng trong DB mà BE đang dùng. Nếu đó là DB demo 5433 thì **hỏi Hiến trước** (đặc biệt G-04 xóa dòng `PENDING`, G-05 và G-10 sửa tài khoản nhân viên / khách).
 
@@ -15,7 +15,7 @@
 ## 2. Chuẩn bị môi trường
 
 - Đặt **cùng một giá trị** client ID cho BE (`.env` gốc: `GOOGLE_CLIENT_ID=…`) và FE (`FE/.env`: `VITE_GOOGLE_CLIENT_ID=…`). `FE/.env` và `.env` gốc **chưa có** hai dòng này: thiếu thì nút Google **ẩn** ở dev (G-07). Sau khi đặt, **khởi động lại Vite và BE** (Vite đọc biến lúc khởi động; `mvn spring-boot:run` không đọc `.env`, nên export `GOOGLE_CLIENT_ID` trong shell trước khi chạy BE; docker compose đọc `.env`).
-- Chạy BE trên cổng 8082 (lệnh ở `docs/testcases/test-tay-ghep-api-theo-cum.md` mục 0, cần Redis và Postgres bật) và Vite với `VITE_API_MOCK=false` và `VITE_API_URL=http://localhost:8082`. BE phải chạy mã có V63 (Flyway tự áp V63 lên DB khi khởi động). **V63 là migration một chiều:** trỏ BE này vào DB demo dùng chung (5433) là áp V63 lên DB đó, một việc **riêng** cần hỏi Hiến trước (ngoài các ca ghi dòng ở đầu file). Cách thay thế: dựng DB thử từ dump (`BE/scripts/demo-db`) hoặc sao chép DB 5433 sang một DB tạm rồi chạy BE vào DB đó (`DB_NAME=…`).
+- Chạy BE trên cổng 8082 (lệnh ở `docs/testcases/test-tay-ghep-api-theo-cum.md` mục 0, cần Redis và Postgres bật) và Vite với `VITE_API_MOCK=false` và `VITE_API_URL=http://localhost:8082`. BE phải chạy mã có V64 (Flyway tự áp V64 lên DB khi khởi động). **V64 là migration một chiều:** trỏ BE này vào DB demo dùng chung (5433) là áp V64 lên DB đó, một việc **riêng** cần hỏi Hiến trước (ngoài các ca ghi dòng ở đầu file). Cách thay thế: dựng DB thử từ dump (`BE/scripts/demo-db`) hoặc sao chép DB 5433 sang một DB tạm rồi chạy BE vào DB đó (`DB_NAME=…`).
 - Email (thư OTP, nếu có): Mailpit `http://localhost:8025`. Xem DB (chỉ đọc): DBeaver hoặc pgAdmin, `localhost:5433`.
 - Truy vấn kiểm chung (thay `<email>` bằng Gmail thử, chữ thường):
 

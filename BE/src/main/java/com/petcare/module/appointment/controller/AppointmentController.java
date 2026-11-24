@@ -64,12 +64,12 @@ public class AppointmentController {
     /** appointment-v1 #2. Khách → kênh ONLINE, lễ tân → COUNTER; khách của lịch là chủ hiện tại của thú (A2). */
     @Operation(operationId = "bookAppointment", tags = "Appointments",
             summary = "Đặt lịch hẹn",
-            description = "UC39 · BR-LH-01…05, 09, BR-KH-05, BR-TK-19. Actor: A02, A06. Quyền: Khách: thú của mình · "
+            description = "UC39 · BR-LH-01…05, 09, BR-KH-05, BR-TK-19, BR-LT-18. Actor: A02, A06. Quyền: Khách: thú của mình · "
                 + "lễ tân: chi nhánh mình. Chuyển trạng thái: — → BOOKED (Lịch hẹn#1); nhóm MEDICAL → Care Task#6. "
                 + "Khách → channel ONLINE, lễ tân → COUNTER (A2). Nhóm MEDICAL: hủy nhắc tái khám đang chờ của thú "
                 + "và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084).")
     @ApiErrorDoc(status = 400, description = "`BR-LH-01` dịch vụ không đặt được / đang tắt tại chi nhánh, chi nhánh "
-            + "chưa ACTIVE · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 "
+            + "chưa ACTIVE · `BR-LT-18` dịch vụ nội trú (chỉ dùng qua nhập viện) · `BR-LH-02` khung không hợp lệ · `BR-LH-03` khung đã đủ quota · `BR-LH-04` ngoài khoảng 24 "
             + "giờ – 30 ngày [CFG] (khách) hoặc khung đã bắt đầu (lễ tân) · `BR-LH-05` thú đã có 2 lịch BOOKED, trùng "
             + "nhóm trong ngày hoặc trùng khung · `BR-LH-09` khách đang bị hạn chế đặt online (message kèm thời điểm hết "
             + "hạn chế, giờ Việt Nam) · `BR-KH-05` thú đã mất · `BR-TK-19` hồ sơ còn chờ quyết định liên kết")

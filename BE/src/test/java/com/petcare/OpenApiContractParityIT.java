@@ -56,7 +56,7 @@ class OpenApiContractParityIT {
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
             "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml", "report-v1.yaml",
-            "ai-v1.yaml", "fees-v1.yaml", "shop-v1.yaml", "workforce-v1.yaml");
+            "ai-v1.yaml", "fees-v1.yaml", "shop-v1.yaml", "workforce-v1.yaml", "inpatient-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -135,11 +135,15 @@ class OpenApiContractParityIT {
         // + 1 workforce #17 (GET /me/shift-registrations/{weekStart}, đăng ký ca của tôi trong tuần, N3-S6, docs/adr/0149).
         // + 1 workforce #15 (PUT /me/shift-registrations/{weekStart}, đăng ký ca theo tuần, N3-S7, docs/adr/0149).
         // + 1 workforce #16 (GET /shift-weekly-summaries, thống kê số ca mỗi nhân viên trong tuần, N3-S8, docs/adr/0149).
+        // + 3 inpatient #1–3 (POST / GET /admissions, GET /admissions/{id}, nhập viện và đọc ca, T69 N3, docs/adr/0149).
+        // + 1 inpatient #4 (POST /admissions/{id}/discharge, xuất viện, T69 N4, docs/adr/0149).
+        // + 4 inpatient #5–8 (POST / GET /admissions/{id}/orders, POST /admission-orders/{id}/complete và /cancel, y lệnh, T69 N5, docs/adr/0149).
+        // + 2 inpatient #9–10 (POST / GET /admissions/{id}/observations, theo dõi nội trú, T69 N6, docs/adr/0149).
         // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V55, docs/adr/0122, 0131): content còn 21.
         // + 1 identity #40 (POST /auth/google, đăng nhập / đăng ký bằng Google, T94, docs/adr/0152)
         assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop + workforce đã cài")
-                .hasSize(238);
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop + workforce + inpatient đã cài")
+                .hasSize(248);
     }
 
     @Test

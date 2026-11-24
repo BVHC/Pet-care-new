@@ -213,7 +213,7 @@ public class BoardingBookingController {
     /** boarding-v1 #14 (Đặt chỗ#3, Chuồng#2). */
     @Operation(operationId = "checkInBoarding", tags = "Stay",
             summary = "Nhận thú",
-            description = "UC59 · BR-LT-04, 05, 08, BR-KH-04. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. "
+            description = "UC59 · BR-LT-04, 05, 08, BR-KH-04, BR-LT-17. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. "
                 + "Chuyển trạng thái: BOOKED → CHECKED_IN (Đặt chỗ#3) · Chuồng#2 (→ OCCUPIED). "
                 + "Cân nặng ghi vào lịch sử (source INTAKE); nhận sớm được nếu còn chỗ.",
             parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
@@ -222,7 +222,8 @@ public class BoardingBookingController {
             + "mở cửa · `BR-LT-03` nhận sớm khi hết chỗ")
     @ApiErrorDoc(status = 403)
     @ApiErrorDoc(status = 404)
-    @ApiErrorDoc(status = 409, description = "Đặt chỗ không còn BOOKED")
+    @ApiErrorDoc(status = 409, description = "Đặt chỗ không còn BOOKED · `BR-LT-17` thú còn ca nội trú (xuất viện "
+            + "trước)")
     @PostMapping("/boarding-bookings/{bookingId}/check-in")
     @PreAuthorize(RECEPTIONIST_OR_CARETAKER)
     public ApiResponse<BookingResponse> checkIn(@PathVariable Long bookingId,
@@ -250,14 +251,15 @@ public class BoardingBookingController {
     /** boarding-v1 #16 (Đặt chỗ#9, Order#3). */
     @Operation(operationId = "startBoardingCheckout", tags = "Stay",
             summary = "Bắt đầu trả thú",
-            description = "UC59 · BR-LT-04, 09, BR-BH-01. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
+            description = "UC59 · BR-LT-04, 09, BR-BH-01, BR-LT-17. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
                 + "Chuyển trạng thái: CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#9) · Order#3 (BOARDING → PENDING). "
                 + "Đã có Order BOARDING PENDING thì dùng lại và tính lại số đêm. Tiếp theo: `POST /payments`.",
             parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
     @ApiErrorDoc(status = 400, description = "`BR-LT-04` ngoài giờ mở cửa")
     @ApiErrorDoc(status = 403)
     @ApiErrorDoc(status = 404)
-    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú)")
+    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện "
+            + "trước) · đã thu tiền lưu trú (chỉ còn giao thú)")
     @PostMapping("/boarding-bookings/{bookingId}/start-checkout")
     @PreAuthorize(RECEPTIONIST)
     public ApiResponse<CheckoutStartedResponse> startCheckout(@PathVariable Long bookingId) {
@@ -267,13 +269,14 @@ public class BoardingBookingController {
     /** boarding-v1 #17 (Đặt chỗ#10, Chuồng#3). */
     @Operation(operationId = "handOverBoardingPet", tags = "Stay",
             summary = "Giao thú (trả thú)",
-            description = "UC59 · BR-LT-09, BR-BH-06. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
+            description = "UC59 · BR-LT-09, BR-BH-06, BR-LT-17. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
                 + "Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3.",
             parameters = {@Parameter(name = "bookingId", in = ParameterIn.PATH, example = "88")})
     @ApiErrorDoc(status = 400, description = "`BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ")
     @ApiErrorDoc(status = 403)
     @ApiErrorDoc(status = 404)
-    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng")
+    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện "
+            + "trước)")
     @PostMapping("/boarding-bookings/{bookingId}/hand-over")
     @PreAuthorize(RECEPTIONIST)
     public ApiResponse<BookingResponse> handOver(@PathVariable Long bookingId) {
@@ -283,7 +286,7 @@ public class BoardingBookingController {
     /** boarding-v1 #18 (Đặt chỗ#11, Chuồng#3, Order#3). */
     @Operation(operationId = "endBoardingDeceased", tags = "Stay",
             summary = "Kết thúc lưu trú do thú mất",
-            description = "UC59 · BR-LT-12, BR-KH-05. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
+            description = "UC59 · BR-LT-12, BR-KH-05, BR-LT-17. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. "
                 + "Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, PET_DECEASED (Đặt chỗ#11) · Chuồng#3 · "
                 + "Order#3 (tính đến ngày mất). Sau đó mới đánh dấu thú đã mất (`POST /pets/{petId}/mark-deceased`). "
                 + "Order xử lý như PENDING thường.",
@@ -291,7 +294,8 @@ public class BoardingBookingController {
     @ApiErrorDoc(status = 400)
     @ApiErrorDoc(status = 403)
     @ApiErrorDoc(status = 404)
-    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng")
+    @ApiErrorDoc(status = 409, description = "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện "
+            + "trước)")
     @PostMapping("/boarding-bookings/{bookingId}/end-deceased")
     @PreAuthorize(RECEPTIONIST)
     public ApiResponse<CheckoutStartedResponse> endDeceased(@PathVariable Long bookingId,
