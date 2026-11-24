@@ -24,3 +24,9 @@
 - L9 on codex/be2-payment-reconcile-resolve: delegated patch, parent checked the five allowed source paths and ran bash ./verify.sh PaymentReconciliationJobIT,PaymentReconciliationListIT,PaymentReconciliationItemsIT,PaymentReconciliationResolveIT. Exit 0. 6832 unit and 52 integration tests with zero failures, errors or skips.
 - L7, L8 and L9 committed as `4fef8676`, `b0d60f6d` and `53da1a4a`. L10's delegated four-file patch compiled with Java 21 and Lombok in the ignored draft directory, then was applied after switching to `codex/be2-gateway-refund`.
 - L10 `bash ./verify.sh GatewayRefundJobIT,RefundConfirmIT` exited 0 (6,832 unit and 52 integration tests). The parent checked the exact four allowed source paths and reviewed the FAKE gate, stable refund code, amount/identity checks and locking. The six worker tests use scripted outcomes and a successful original payment fixture.
+- L10 committed as `026b22cd`. Delegated L12 on `codex/be2-return-refund-fsm` added only `ReturnRefundFsmIT.java`. It exercised reuse of rejected return capacity, the linked refund confirmation transition, preservation of refunded quantity, and invalid edges without duplicate audit. The APPROVED state is a fixture while L2 is blocked.
+- Combined gate exited 0: 24 API contracts and 346 operations passed, followed by 6,832 unit and 92 integration tests with zero failures, errors or skips. Maven packaged the executable Java API.
+
+```powershell
+& 'C:/Program Files/Git/bin/bash.exe' ./verify.sh ReturnRequestCreateIT,ReturnRequestRejectIT,RefundConfirmIT,CashierShiftIT,PaymentReconciliationJobIT,PaymentReconciliationListIT,PaymentReconciliationItemsIT,PaymentReconciliationResolveIT,GatewayRefundJobIT,ReturnRefundFsmIT
+```
