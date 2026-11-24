@@ -1,4 +1,4 @@
-// Mock module identity (docs/api/identity-v1.md): đăng ký + OTP, đăng nhập, đăng xuất, quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên,
+// Mock module identity (docs/api/identity-v1.md): đăng ký + OTP, đăng nhập (mật khẩu, Google), đăng xuất, quên / đặt lại mật khẩu, GET /me, đổi mật khẩu, hồ sơ nhân viên,
 // liên kết hồ sơ (UC07). Quản trị (UC08–11: staff, accounts, system-configs, notification-templates, audit-logs) KHÔNG ở file này mà ở identity-admin.mock.ts (adminIdentityRoutes). Câu báo lỗi chép từ BE.
 // Cuối file (identityRoutes) còn UC22 (identity-v1 #25–27: lễ tân sửa email / liên kết tài khoản của hồ sơ khách tại quầy): BE đã có cả ba (CustomerAccountController; mock chép thứ tự kiểm,
 // câu báo lỗi, `maskedEmail: null`, `codeLength` ở #25–26; #27 link-account không OTP, hồ sơ quầy phải có email, tài khoản phải ACTIVE và không bị khóa).
@@ -10,6 +10,7 @@ import {
   createOnlineProfile,
   customerOfAccount,
   declineLink,
+  deleteOnlineProfileOfUnverifiedAccount,
   findCustomer,
   flagLinkDecisionIfPhoneMatches,
   linkAccount,
@@ -118,6 +119,7 @@ const RESEND_SECONDS = 60; // BR-TK-07, mặc định [CFG]
 const MAX_FAILED_OTP = 5; // BR-TK-06, mặc định [CFG]
 const INVALID_OTP = 'OTP không đúng hoặc đã hết hạn';
 const BAD_CREDENTIALS = 'Email hoặc mật khẩu không đúng'; // BR-TK-10: một câu cho mọi trường hợp
+const CONSENT_REQUIRED = 'Bạn cần xác nhận đủ 18 tuổi và đồng ý điều khoản sử dụng'; // BR-TK-02: đăng ký và đăng nhập Google tạo tài khoản mới
 
 // Trạng thái thay đổi được giữ trong localStorage để qua F5 vẫn còn.
 interface Registered {
@@ -170,6 +172,8 @@ interface State {
   templateOverrides: Record<string, { subject?: string | null; body: string }>;
   /** UC11: nhật ký kiểm toán. */
   audit: AuditLogEntry[];
+  /** `accounts.google_sub` (V63, ADR-0152): tài khoản khách đã gắn Google. Mỗi `sub` và mỗi tài khoản chỉ một dòng. */
+  googleLinks: { accountId: number; sub: string }[];
 }
 
 const STATE_KEY = 'petcare-mock-identity';
@@ -189,9 +193,10 @@ export function load(): State {
       configOverrides: s.configOverrides ?? {},
       templateOverrides: s.templateOverrides ?? {},
       audit: s.audit ?? [],
+      googleLinks: s.googleLinks ?? [],
     };
   } catch {
-    return { sessions: {}, changes: {}, registered: [], otps: {}, profiles: {}, extraStaff: {}, emailChanges: {}, locks: {}, configOverrides: {}, templateOverrides: {}, audit: [] };
+    return { sessions: {}, changes: {}, registered: [], otps: {}, profiles: {}, extraStaff: {}, emailChanges: {}, locks: {}, configOverrides: {}, templateOverrides: {}, audit: [], googleLinks: [] };
   }
 }
 
@@ -239,6 +244,9 @@ function accounts(s: State): Account[] {
 
 const normalize = (email: string) => email.trim().toLowerCase();
 const byEmail = (s: State, email: string) => accounts(s).find((a) => a.email === normalize(email));
+
+/** Id khách tự đăng ký: 100, 101, … Lớn hơn mọi id còn lại nên không trùng id đã xóa khi Google thay tài khoản PENDING (như sequence của BE, không dùng lại id). */
+const nextRegisteredId = (s: State) => Math.max(99, ...s.registered.map((r) => r.id)) + 1;
 
 /**
  * Email của hồ sơ khách có tài khoản (customer-pet.mock `emailOf`): email GỐC của tài khoản, KHÔNG theo email lễ tân vừa sửa hộ (UC22 #26). BE chỉ đổi email
@@ -347,7 +355,7 @@ const register: MockHandler = ({ body }) => {
   ]);
   if (bad) return bad;
   if (!b.isAdult || !b.termsAccepted) {
-    return ruleFail('BR-TK-02', 'Bạn cần xác nhận đủ 18 tuổi và đồng ý điều khoản sử dụng');
+    return ruleFail('BR-TK-02', CONSENT_REQUIRED);
   }
   const s = load();
   const email = normalize(b.email as string);
@@ -357,7 +365,7 @@ const register: MockHandler = ({ body }) => {
   const policy = passwordPolicyError(b.password as string);
   if (policy) return ruleFail('BR-TK-03', policy);
 
-  const id = 100 + s.registered.length;
+  const id = nextRegisteredId(s);
   const fullName = (b.fullName as string).trim();
   s.registered.push({ id, email, fullName, password: b.password as string, active: false });
   const otp = issueOtp(s, `REGISTER:${email}`);
@@ -405,6 +413,22 @@ const resendRegistrationOtp: MockHandler = ({ body }) => {
   return ok({ resendAvailableAt: resendAt(otp), maskedEmail: maskEmail(reg.email), codeLength: CODE_LENGTH });
 };
 
+/** Mở phiên cho tài khoản và trả LoginResponse; đăng nhập mật khẩu và Google dùng chung. Handler tự `save(s)`. */
+function openSession(s: State, account: Account): LoginResponse {
+  const now = Date.now();
+  for (const [id, old] of Object.entries(s.sessions)) if (old.expiresAt <= now) delete s.sessions[id];
+  const sid = now.toString(36) + Math.random().toString(36).slice(2, 8);
+  const session: MockSession = {
+    accountId: account.id, access: '', refresh: '', usedRefresh: [], seq: 0, accessExpiresAt: 0, expiresAt: now + mockSessionConfig.sessionTtlMs,
+  };
+  s.sessions[sid] = session;
+  return {
+    ...issueTokens(sid, session, now),
+    account: summaryOf(account),
+    linkDecisionPending: customerOfAccount(account.id)?.linkDecisionPending ?? false,
+  };
+}
+
 const login: MockHandler = ({ body }) => {
   const b = (body ?? {}) as Record<string, unknown>;
   const bad = invalid([...emailChecks(b.email), ['password', 'Mật khẩu không được để trống', !isText(b.password)]]);
@@ -415,18 +439,7 @@ const login: MockHandler = ({ body }) => {
   if (account.status === 'PENDING') {
     return ruleFail('BR-TK-08', 'Tài khoản chưa xác thực email. Vui lòng nhập mã OTP đã gửi tới email');
   }
-  const now = Date.now();
-  for (const [id, old] of Object.entries(s.sessions)) if (old.expiresAt <= now) delete s.sessions[id];
-  const sid = now.toString(36) + Math.random().toString(36).slice(2, 8);
-  const session: MockSession = {
-    accountId: account.id, access: '', refresh: '', usedRefresh: [], seq: 0, accessExpiresAt: 0, expiresAt: now + mockSessionConfig.sessionTtlMs,
-  };
-  s.sessions[sid] = session;
-  const res: LoginResponse = {
-    ...issueTokens(sid, session, now),
-    account: summaryOf(account),
-    linkDecisionPending: customerOfAccount(account.id)?.linkDecisionPending ?? false,
-  };
+  const res = openSession(s, account);
   save(s);
   return ok(res);
 };
@@ -502,6 +515,7 @@ const resetPassword: MockHandler = ({ body }) => {
   // Mã vẫn dùng lại được khi mật khẩu mới trùng mật khẩu cũ.
   if (b.newPassword === account.password) return ruleFail('BR-TK-03', 'Mật khẩu mới không được trùng mật khẩu hiện tại');
   s.changes[account.id] = { ...s.changes[account.id], password: b.newPassword as string, mustChangePassword: false };
+  s.googleLinks = s.googleLinks.filter((l) => l.accountId !== account.id); // BE Account.resetPassword gỡ google_sub (ADR-0152)
   delete s.otps[key];
   save(s);
   return noContent();
@@ -773,6 +787,7 @@ const confirmCustomerEmailChange: MockHandler = ({ account, params, body }) => {
   const newEmail = pending!.newEmail!;
   if (emailTaken(s, newEmail)) return ruleFail('BR-TK-01', 'Email đã được sử dụng');
   s.changes[a.id] = { ...s.changes[a.id], email: newEmail };
+  s.googleLinks = s.googleLinks.filter((l) => l.accountId !== a.id); // BE Account.changeEmail gỡ google_sub (ADR-0152, spec §6.5)
   delete s.otps[key];
   save(s);
   return noContent();
@@ -828,6 +843,118 @@ const linkCounterAccount: MockHandler = ({ account, params, body }) => {
   return ok({ customerId }, 200, 'Đã liên kết hồ sơ với tài khoản');
 };
 
+// ─── Đăng nhập Google (identity-v1 #40, UC01 + UC03, ADR-0152) ───
+// Thứ tự lỗi theo spec 2026-11-24 §6.2 và nhánh theo BE `LoginAttemptService.loginWithGoogle` (§6.3): sub trước, email sau; mọi 400 đứng trước lệnh ghi đầu tiên.
+// Khác BE: mock không có đếm sai mật khẩu nên không có BR-TK-09; không ghi audit.
+
+const GOOGLE_FAILED = 'Đăng nhập Google không thành công. Vui lòng thử lại';
+const GOOGLE_STAFF = 'Tài khoản nhân viên đăng nhập bằng email và mật khẩu';
+const GOOGLE_EMAIL_TAKEN = 'Email này đã có tài khoản. Vui lòng đăng nhập bằng email và mật khẩu';
+const GOOGLE_UNAVAILABLE = 'Đăng nhập Google tạm thời không khả dụng. Vui lòng đăng nhập bằng email và mật khẩu';
+const GOOGLE_ISSUERS = ['accounts.google.com', 'https://accounts.google.com'];
+/** `customers.full_name VARCHAR(100)`: cắt theo code point, không cắt đôi cặp surrogate. */
+const FULL_NAME_MAX = 100;
+
+/** Payload của ID token Google; mock không kiểm chữ ký. */
+export function decodeGoogleCredential(token: string): Record<string, unknown> | null {
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))));
+  } catch {
+    return null;
+  }
+}
+
+interface GoogleIdentity {
+  sub: string;
+  email: string;
+  /** `name`, trống thì `given_name` + `family_name`; vẫn trống thì rỗng (người gọi lấy phần trước `@`). */
+  name: string;
+  /** Google có thẩm quyền về email: `@gmail.com` hoặc claim `hd` (Workspace). Email khác có thể đã đổi chủ sau khi Google xác minh (spec §5.5). */
+  authoritative: boolean;
+}
+
+/** Như `NimbusGoogleIdentityVerifier` (trừ chữ ký): aud, iss, exp, email_verified, có sub và email. Null = 401. */
+function verifyGoogleCredential(token: string, clientId: string): GoogleIdentity | null {
+  const p = decodeGoogleCredential(token);
+  if (!p) return null;
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const sub = text(p.sub);
+  const email = normalize(text(p.email));
+  const valid =
+    [p.aud].flat().includes(clientId) &&
+    GOOGLE_ISSUERS.includes(text(p.iss)) &&
+    typeof p.exp === 'number' &&
+    p.exp * 1000 > Date.now() &&
+    (p.email_verified === true || p.email_verified === 'true') && // BE nhận cả chuỗi "true"
+    sub !== '' &&
+    email !== '';
+  if (!valid) return null;
+  return {
+    sub,
+    email,
+    name: text(p.name) || [text(p.given_name), text(p.family_name)].filter(Boolean).join(' '),
+    authoritative: email.endsWith('@gmail.com') || text(p.hd) !== '',
+  };
+}
+
+const loginWithGoogle: MockHandler = ({ body }) => {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const bad = invalid([
+    ['credential', 'Thiếu mã đăng nhập Google', !isText(b.credential)],
+    ['credential', 'Mã đăng nhập Google tối đa 4096 ký tự', tooLong(b.credential, 4096)],
+    ['phone', 'Số điện thoại phải có dạng 0xxxxxxxxx', b.phone != null && !/^0\d{9}$/.test(String(b.phone))],
+  ]);
+  if (bad) return bad;
+  // Đọc lúc gọi (không ở cấp module) để test đổi được bằng vi.stubEnv.
+  const clientId = String(import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '').trim();
+  if (!clientId) return fail('SERVICE_UNAVAILABLE', GOOGLE_UNAVAILABLE, 503);
+  const identity = verifyGoogleCredential(b.credential as string, clientId);
+  if (!identity) return fail('UNAUTHENTICATED', GOOGLE_FAILED, 401);
+
+  const s = load();
+  const consented = b.isAdult === true && b.termsAccepted === true;
+  const succeed = (account: Account) => {
+    const res = openSession(s, account);
+    save(s);
+    return ok(res);
+  };
+  const locked = (account: Account) => (s.locks[account.id] ? ruleFail('BR-TK-11', ACCOUNT_LOCKED) : null);
+
+  /** `pending`: tài khoản PENDING bị thay (xóa như ST02: mã OTP, hồ sơ online, dòng tài khoản), không kích hoạt tại chỗ. */
+  const create = (pending?: Account) => {
+    if (!consented) return ruleFail('BR-TK-02', CONSENT_REQUIRED);
+    const id = nextRegisteredId(s); // tính khi dòng PENDING còn nằm trong `registered`: không dùng lại id của nó
+    if (pending) {
+      delete s.otps[`REGISTER:${pending.email}`];
+      s.registered = s.registered.filter((r) => r.id !== pending.id);
+      deleteOnlineProfileOfUnverifiedAccount(pending.id);
+    }
+    const fullName = [...(identity.name || identity.email.split('@')[0])].slice(0, FULL_NAME_MAX).join('').trim();
+    // Mật khẩu không ai biết (BE lưu hash BCrypt của một UUID bỏ đi): đăng nhập mật khẩu của tài khoản này không bao giờ khớp.
+    s.registered.push({ id, email: identity.email, fullName, password: crypto.randomUUID(), active: true });
+    s.googleLinks.push({ accountId: id, sub: identity.sub });
+    createOnlineProfile(id, fullName, (b.phone as string | undefined) ?? null);
+    flagLinkDecisionIfPhoneMatches(id); // đúng hàm của verifyRegistration (BR-TK-19); không SĐT thì không làm gì
+    return succeed(byEmail(s, identity.email)!);
+  };
+
+  const linked = s.googleLinks.find((l) => l.sub === identity.sub);
+  const bySub = linked && accounts(s).find((a) => a.id === linked.accountId);
+  if (bySub) return locked(bySub) ?? succeed(bySub); // sub thắng: email tài khoản giữ nguyên
+
+  const existing = byEmail(s, identity.email);
+  if (!existing) return create();
+  if (existing.role !== 'CUSTOMER') return ruleFail('BR-TK-17', GOOGLE_STAFF);
+  if (s.googleLinks.some((l) => l.accountId === existing.id)) return fail('UNAUTHENTICATED', GOOGLE_FAILED, 401); // đã gắn sub khác
+  if (!identity.authoritative) return ruleFail('BR-TK-01', GOOGLE_EMAIL_TAKEN);
+  if (existing.status === 'PENDING') return create(existing); // không áp BR-TK-11 cho dòng PENDING (như BE)
+  const blocked = locked(existing);
+  if (blocked) return blocked;
+  s.googleLinks.push({ accountId: existing.id, sub: identity.sub });
+  return succeed(existing);
+};
+
 export const identityRoutes: Record<string, MockHandler> = {
   'POST /api/customers/:customerId/account-email-change': sendCustomerEmailChange,
   'POST /api/customers/:customerId/account-email-change/confirm': confirmCustomerEmailChange,
@@ -836,6 +963,7 @@ export const identityRoutes: Record<string, MockHandler> = {
   'POST /api/auth/register/verify': verifyRegistration,
   'POST /api/auth/register/resend-otp': resendRegistrationOtp,
   'POST /api/auth/login': login,
+  'POST /api/auth/google': loginWithGoogle,
   'POST /api/auth/refresh': refresh,
   'POST /api/auth/logout': () => noContent(),
   'POST /api/auth/password/forgot': forgotPassword,

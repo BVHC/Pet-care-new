@@ -27,7 +27,7 @@ npx --yes @redocly/cli@1 lint docs/api/openapi/*.yaml   # kiểm tra chuẩn Ope
 ### 3.1 Địa chỉ và xác thực
 - `servers: /api`. Path trong yaml **không** có tiền tố `/api`; gọi thật là `/api/<path>`. Phiên bản nằm ở tên file (`-v1`), không nằm trong path.
 - Bearer token trả về từ `POST /auth/login`, gắn 1-1 với một phiên (`sessions`) và sống ngắn (`session.access_ttl_minutes` [CFG], mặc định 10 phút); lấy token mới bằng `POST /auth/refresh` (ADR-0091). Phiên bị hủy (khóa, vô hiệu hóa, đổi / đặt lại mật khẩu) thì token hết hiệu lực ngay ở request kế tiếp.
-- Không cần đăng nhập: `/auth/register…`, `/auth/login`, `/auth/refresh`, `/auth/password/…` và mọi `/public/…`. Các path này luôn xử lý như chưa đăng nhập: token gửi kèm bị bỏ qua (ADR-0005).
+- Không cần đăng nhập: `/auth/register…`, `/auth/login`, `/auth/google` (đăng nhập / đăng ký bằng Google, ADR-0152), `/auth/refresh`, `/auth/password/…` và mọi `/public/…`. Các path này luôn xử lý như chưa đăng nhập: token gửi kèm bị bỏ qua (ADR-0005).
 
 ### 3.2 Đặt tên đường dẫn
 - Resource số nhiều, kebab-case: `/boarding-bookings`, `/stock-receipts`.
@@ -66,7 +66,8 @@ Khớp `platform/model/ErrorResponse` và `platform/exception/ErrorCode`. Mọi 
 | 404 | `RESOURCE_NOT_FOUND` | Không có, hoặc người gọi không được biết là có (thú của chủ khác, bài viết ẩn) |
 | 409 | `INVALID_STATE_TRANSITION` | Trạng thái hiện tại không cho phép (không có trong bảng chuyển trạng thái của 03) |
 | 409 | `CONCURRENCY_CONFLICT` | Cập nhật đồng thời, vi phạm ràng buộc DB do tranh chấp |
-| 429 | `TOO_MANY_REQUESTS` | Một IP gọi quá nhiều lần vào endpoint public của `/auth` (đăng nhập, đăng ký, quên / đặt lại mật khẩu; ADR-0100). Kèm header `Retry-After` (số giây nguyên ≥ 1), đọc được cả khi gọi chéo origin. Chặn trước khi xử lý: không ghi audit, không đếm vào khóa tạm hay quota OTP |
+| 429 | `TOO_MANY_REQUESTS` | Một IP gọi quá nhiều lần vào endpoint public của `/auth` (đăng nhập, đăng ký, quên / đặt lại mật khẩu; ADR-0100). Kèm header `Retry-After` (số giây nguyên ≥ 1), đọc được cả khi gọi chéo origin. Chặn trước khi xử lý: không ghi audit, không đếm vào khóa tạm hay quota OTP. `POST /auth/google` dùng chung cửa sổ với đăng nhập (ADR-0152) |
+| 503 | `SERVICE_UNAVAILABLE` | Dịch vụ ngoài tạm không dùng được. Hiện chỉ `POST /auth/google` (identity #40): chưa cấu hình `GOOGLE_CLIENT_ID` hoặc không lấy được khóa công khai của Google (ADR-0152). Đăng nhập bằng email và mật khẩu vẫn dùng được |
 
 **Không dùng 422.** Rule mà FE cần phân biệt (chưa xác thực, khóa tạm, bắt đổi mật khẩu, chờ liên kết hồ sơ…) trả 400 `BUSINESS_RULE_VIOLATION`, không trả 403, vì 403 chỉ có message chung. Thứ tự kiểm tra: quyền → tồn tại → guard nghiệp vụ (400) → chuyển trạng thái hợp lệ (409). Trong từng file contract, mục lỗi ghi `` `400` `BR-…` …`` nghĩa là `BUSINESS_RULE_VIOLATION` với mã rule đó trong `message`.
 

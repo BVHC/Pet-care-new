@@ -18,7 +18,9 @@ export type ErrorCode =
   | 'TOO_MANY_REQUESTS'
   | 'INTERNAL_ERROR'
   /** BE hoặc phụ thuộc ngoài chưa sẵn sàng (500). */
-  | 'UNAVAILABLE';
+  | 'UNAVAILABLE'
+  /** Phụ thuộc ngoài (Google) chưa sẵn sàng (503, ADR-0152). */
+  | 'SERVICE_UNAVAILABLE';
 
 /** Envelope lỗi, luôn đủ 6 trường. */
 export interface ErrorResponse {

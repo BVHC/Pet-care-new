@@ -13,13 +13,21 @@ import com.petcare.platform.exception.PlatformException;
  *   <li>tiêu chí 3 — phải <b>commit</b> bộ đếm sai / khóa tạm / email cảnh báo / audit dù request lỗi: use case khai báo
  *       {@code noRollbackFor = InvalidCredentialsException.class}.</li>
  * </ul>
- * Chỉ ném trực tiếp trong method có {@code noRollbackFor}, sau khi các lệnh ghi của nhánh đó đã xong.
+ * Chỉ ném trực tiếp trong method có {@code noRollbackFor} (sau khi các lệnh ghi của nhánh đó đã xong), hoặc ngoài
+ * transaction như {@code GoogleIdentityVerifier} (docs/adr/0152) khi token Google không hợp lệ.
  */
 public class InvalidCredentialsException extends PlatformException {
 
     public static final String MESSAGE = "Email hoặc mật khẩu không đúng";
 
+    /** Thông điệp chung của đăng nhập Google (docs/adr/0152): token sai và {@code google_sub} lệch dùng chung một chuỗi. */
+    public static final String GOOGLE_MESSAGE = "Đăng nhập Google không thành công. Vui lòng thử lại";
+
     public InvalidCredentialsException() {
         super(ErrorCode.UNAUTHENTICATED, MESSAGE);
+    }
+
+    public InvalidCredentialsException(String message) {
+        super(ErrorCode.UNAUTHENTICATED, message);
     }
 }

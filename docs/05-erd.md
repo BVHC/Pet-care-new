@@ -94,10 +94,12 @@ erDiagram
 | must_change_password | BOOLEAN | NN, DEFAULT false | BR-TK-17, BR-QT-10 |
 | notification_settings | JSONB | NN, DEFAULT '{}' | Cài đặt nhận thông báo của khách (UC88) [ERD] |
 | pending_expires_at | TIMESTAMPTZ | ? | Hạn xác thực của tài khoản `PENDING` = lúc đăng ký + `account.pending_ttl_hours` [CFG], chốt theo BR-QT-13; ST02 xóa khi `now >= pending_expires_at` (BR-TK-08). Xác thực thì về NULL [ERD] (V5, §13 mục 12) |
+| google_sub | VARCHAR(255) | ?, UQ | Mã `sub` ổn định của tài khoản Google đã gắn (ADR-0152, V63). Chỉ tài khoản khách (BR-TK-17). Tra tài khoản theo `sub`, không theo email. `Account.changeEmail` (UC22) và `Account.resetPassword` (UC04) đặt về NULL |
 
 - `CHECK ((role = 'CUSTOMER') = (phone IS NULL))` — nhân viên bắt buộc có SĐT, tài khoản khách không lưu SĐT (BR-TK-01)
 - `CHECK (status <> 'DISABLED' OR role <> 'CUSTOMER')` — chỉ nhân viên bị vô hiệu hóa (BR-QT-07)
 - `CHECK ((status = 'PENDING') = (pending_expires_at IS NOT NULL))` — có hạn ⇔ `PENDING` (V5)
+- `UNIQUE (google_sub)` — `uq_accounts_google_sub`; `CHECK (google_sub IS NULL OR role = 'CUSTOMER')` — `ck_accounts_google_customer_only`: chỉ tài khoản khách gắn Google (BR-TK-17, V63, ADR-0152)
 - Index: `(status, created_at)` (V1, dự kiến cho ST02; từ V5 ST02 dùng index dưới, index này không còn query nào dùng)
 - Index: `(pending_expires_at) WHERE status = 'PENDING'` cho ST02 dọn tài khoản `PENDING` (V5)
 

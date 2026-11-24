@@ -49,6 +49,14 @@ export interface LoginResponse {
   linkDecisionPending: boolean;
 }
 
+/** `POST /api/auth/google` (identity-v1 #40, public). Ba trường sau chỉ dùng khi phải tạo tài khoản (BR-TK-02); `phone` không bao giờ là chuỗi rỗng. */
+export interface GoogleLoginRequest {
+  credential: string;
+  isAdult?: boolean;
+  termsAccepted?: boolean;
+  phone?: string;
+}
+
 /** `POST /api/auth/refresh` (identity-v1 #39, public). */
 export interface RefreshResponse {
   accessToken: string;

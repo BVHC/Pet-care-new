@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authApi } from '../api/auth.api';
 import { bindAuth } from '../api/axios';
 import { profileApi } from '../api/profile.api';
-import type { AccountSummary, LoginRequest, SessionUser } from '../types/auth';
+import type { AccountSummary, GoogleLoginRequest, LoginRequest, LoginResponse, SessionUser } from '../types/auth';
 
 // Phiên đăng nhập duy nhất cho mọi role: một endpoint POST /api/auth/login (identity-v1).
 
@@ -27,6 +27,8 @@ interface SessionData {
 
 interface SessionState extends SessionData {
   login: (req: LoginRequest) => Promise<AccountSummary>;
+  /** Đăng nhập hoặc tạo tài khoản khách bằng ID token Google (identity-v1 #40); lưu phiên như `login`. */
+  loginWithGoogle: (req: GoogleLoginRequest) => Promise<AccountSummary>;
   logout: () => Promise<void>;
   /** Bỏ phiên phía client (BE trả 401). */
   clear: () => void;
@@ -45,33 +47,37 @@ const EMPTY: SessionData = {
   fullName: null,
 };
 
+/** Lưu phiên từ LoginResponse rồi đọc hồ sơ lấy tên và chi nhánh. Chung cho đăng nhập mật khẩu và Google (cùng LoginResponse). */
+async function startSession(res: LoginResponse, set: StoreApi<SessionState>['setState']): Promise<AccountSummary> {
+  set({
+    ...EMPTY,
+    token: res.accessToken,
+    refreshToken: res.refreshToken,
+    accessTokenExpiresAt: res.accessTokenExpiresAt,
+    expiresAt: res.expiresAt,
+    account: res.account,
+    linkDecisionPending: res.linkDecisionPending,
+  });
+  try {
+    const me = await profileApi.me();
+    const fullName = me.staffProfile ? me.staffProfile.fullName : (await profileApi.customerProfile()).fullName;
+    // BE không trả `branchId` ở login (chỉ `GET /me` → staffProfile): gộp vào phiên để mọi trang nhân viên có chi nhánh ngay.
+    const branchId = me.staffProfile?.branchId;
+    set({ fullName, linkDecisionPending: me.linkDecisionPending, ...(branchId != null ? { account: { ...res.account, branchId } } : {}) });
+  } catch {
+    // Chưa đọc được hồ sơ: giữ email làm tên hiển thị.
+  }
+  return res.account;
+}
+
 export const useSession = create<SessionState>()(
   persist(
     (set, get) => ({
       ...EMPTY,
 
-      login: async (req) => {
-        const res = await authApi.login(req);
-        set({
-          ...EMPTY,
-          token: res.accessToken,
-          refreshToken: res.refreshToken,
-          accessTokenExpiresAt: res.accessTokenExpiresAt,
-          expiresAt: res.expiresAt,
-          account: res.account,
-          linkDecisionPending: res.linkDecisionPending,
-        });
-        try {
-          const me = await profileApi.me();
-          const fullName = me.staffProfile ? me.staffProfile.fullName : (await profileApi.customerProfile()).fullName;
-          // BE không trả `branchId` ở login (chỉ `GET /me` → staffProfile): gộp vào phiên để mọi trang nhân viên có chi nhánh ngay.
-          const branchId = me.staffProfile?.branchId;
-          set({ fullName, linkDecisionPending: me.linkDecisionPending, ...(branchId != null ? { account: { ...res.account, branchId } } : {}) });
-        } catch {
-          // Chưa đọc được hồ sơ: giữ email làm tên hiển thị.
-        }
-        return res.account;
-      },
+      login: async (req) => startSession(await authApi.login(req), set),
+
+      loginWithGoogle: async (req) => startSession(await authApi.google(req), set),
 
       logout: async () => {
         try {

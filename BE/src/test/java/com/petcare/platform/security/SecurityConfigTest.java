@@ -112,6 +112,7 @@ class SecurityConfigTest {
     @ParameterizedTest
     @CsvSource({
             "POST, /api/auth/login,               true",
+            "POST, /api/auth/google,              true",
             "POST, /api/auth/register,            true",
             "POST, /api/auth/register/verify,     true",
             "POST, /api/auth/register/resend-otp, true",
@@ -128,10 +129,17 @@ class SecurityConfigTest {
             "GET,  /api/publicx,                  false",
             "POST, /api/auth/registerx,           false",
             "POST, /api/auth/loginx,              false",
+            "POST, /api/auth/googlex,             false",
             "GET,  /actuator/env,                 false"})
     void publicRequestMatcherCoversContractPublicPaths(String method, String path, boolean expected) {
         assertThat(SecurityConfig.PUBLIC_REQUESTS.matches(new MockHttpServletRequest(method, path)))
                 .isEqualTo(expected);
+    }
+
+    /** Danh sách cho tài liệu OpenAPI (security: []) phải có cùng path public với matcher runtime. */
+    @Test
+    void publicPathsListIncludesGoogleLogin() {
+        assertThat(SecurityConfig.publicPaths()).contains("/api/auth/google");
     }
 
     /** docs/adr/0005: token còn hạn gửi tới path public bị bỏ qua (không tra phiên); path thường vẫn tra phiên. */

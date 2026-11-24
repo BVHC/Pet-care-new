@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.petcare.module.identity.dto.ForgotPasswordRequest;
+import com.petcare.module.identity.dto.GoogleLoginRequest;
 import com.petcare.module.identity.dto.LoginRequest;
 import com.petcare.module.identity.dto.LoginResponse;
 import com.petcare.module.identity.dto.OtpSentResponse;
@@ -20,6 +21,7 @@ import com.petcare.module.identity.dto.ResendRegistrationOtpRequest;
 import com.petcare.module.identity.dto.ResetPasswordRequest;
 import com.petcare.module.identity.dto.VerificationResponse;
 import com.petcare.module.identity.dto.VerifyAccountRequest;
+import com.petcare.module.identity.service.GoogleLoginService;
 import com.petcare.module.identity.service.LoginService;
 import com.petcare.module.identity.service.LogoutService;
 import com.petcare.module.identity.service.PasswordResetService;
@@ -51,14 +53,16 @@ public class AuthController {
 
     private final RegistrationService registrations;
     private final LoginService logins;
+    private final GoogleLoginService googleLogins;
     private final RefreshTokenService refreshTokens;
     private final LogoutService logouts;
     private final PasswordResetService passwordResets;
 
-    public AuthController(RegistrationService registrations, LoginService logins, RefreshTokenService refreshTokens,
-            LogoutService logouts, PasswordResetService passwordResets) {
+    public AuthController(RegistrationService registrations, LoginService logins, GoogleLoginService googleLogins,
+            RefreshTokenService refreshTokens, LogoutService logouts, PasswordResetService passwordResets) {
         this.registrations = registrations;
         this.logins = logins;
+        this.googleLogins = googleLogins;
         this.refreshTokens = refreshTokens;
         this.logouts = logouts;
         this.passwordResets = passwordResets;
@@ -126,6 +130,43 @@ public class AuthController {
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
         return ApiResponse.ok(logins.login(request, httpRequest.getRemoteAddr(),
+                httpRequest.getHeader(HttpHeaders.USER_AGENT)), "Đăng nhập thành công");
+    }
+
+    /**
+     * UC01 + UC03 bằng Google (docs/adr/0152). Một endpoint cho cả đăng nhập và đăng ký; kiểm ID token (gọi mạng) nằm
+     * ngoài transaction, trong {@link GoogleLoginService}. Rate limit dùng chung cửa sổ {@code login} với {@code /login}.
+     */
+    @Operation(operationId = "loginWithGoogle", tags = "Auth",
+            summary = "Đăng nhập bằng Google",
+            description = "UC01, UC03 · BR-TK-01, 02, 08, 09, 10, 11, 17, 19, BR-QT-15. Actor: A01–A02. Quyền: Public. Chuyển trạng "
+                + "thái: —. Một endpoint cho cả đăng nhập và đăng ký: BE tự biết. Thứ tự lỗi: 429 → `MALFORMED_REQUEST` → "
+                + "`VALIDATION_FAILED` → 503 → 401 (token) → `BR-TK-17` → 401 (`google_sub` lệch) → `BR-TK-01` → `BR-TK-09` → "
+                + "`BR-TK-11` → `BR-TK-02` → 409. Tìm tài khoản theo `sub` trước, không thấy mới theo email; tài khoản khách "
+                + "ACTIVE chưa gắn Google và email do Google bảo đảm thì tự gắn `sub`, mật khẩu cũ vẫn dùng. Chưa có tài "
+                + "khoản, hoặc chỉ có PENDING: tạo tài khoản ACTIVE trong một giao dịch (— → PENDING → ACTIVE, Tài khoản#1 rồi "
+                + "#2), hồ sơ khách online, không OTP, không gửi email; PENDING của người khác bị xóa (OTP, hồ sơ, tài khoản) "
+                + "rồi tạo lại, không kích hoạt tại chỗ. Response y hệt `POST /auth/login`; `linkDecisionPending` bật khi "
+                + "`phone` trùng hồ sơ tại quầy (BR-TK-19). BR-TK-10: `BR-TK-17` và `BR-TK-02` cho biết email có tài khoản hay "
+                + "chưa, nhưng chỉ với người đã chứng minh sở hữu email qua Google. Audit `LOGIN_SUCCEEDED` kèm `method` = "
+                + "`GOOGLE` (và `accountCreated` khi tạo mới); thất bại ghi `LOGIN_FAILED` với reason `GOOGLE_STAFF` / "
+                + "`GOOGLE_SUB_MISMATCH` / `GOOGLE_EMAIL_NOT_AUTHORITATIVE` hoặc reason của khóa (ADR-0152).")
+    @ApiErrorDoc(status = 400, description = "`MALFORMED_REQUEST` body sai JSON / sai kiểu · `VALIDATION_FAILED` `credential` trống hoặc quá 4096 ký tự, "
+            + "`phone` sai dạng hoặc chuỗi rỗng · theo thứ tự kiểm sau khi token hợp lệ: `BR-TK-17` email thuộc tài khoản "
+            + "nhân viên · `BR-TK-01` email không do Google bảo đảm (không `@gmail.com`, không claim `hd`) mà đã có tài "
+            + "khoản · `BR-TK-09` khách đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa · `BR-TK-02` "
+            + "phải tạo tài khoản nhưng chưa xác nhận đủ 18 tuổi / đồng ý điều khoản")
+    @ApiErrorDoc(status = 401, description = "Token không hợp lệ (chữ ký, `iss`, `aud`, hết hạn, thiếu `sub` / `email`, `email_verified` khác true) hoặc "
+            + "email đã gắn với tài khoản Google khác — một thông điệp chung \"Đăng nhập Google không thành công. Vui lòng "
+            + "thử lại\"")
+    @ApiErrorDoc(status = 409, description = "`CONCURRENCY_CONFLICT` hai request tạo cùng email / `sub` song song; gọi lại là đăng nhập được")
+    @ApiErrorDoc(status = 429, description = TOO_MANY_REQUESTS)
+    @ApiErrorDoc(status = 503, description = "`SERVICE_UNAVAILABLE` BE chưa cấu hình `GOOGLE_CLIENT_ID` hoặc không lấy được khóa của Google (mạng, hết "
+            + "giờ); khách vẫn đăng nhập bằng email và mật khẩu")
+    @PostMapping("/google")
+    public ApiResponse<LoginResponse> loginWithGoogle(@Valid @RequestBody GoogleLoginRequest request,
+            HttpServletRequest httpRequest) {
+        return ApiResponse.ok(googleLogins.login(request, httpRequest.getRemoteAddr(),
                 httpRequest.getHeader(HttpHeaders.USER_AGENT)), "Đăng nhập thành công");
     }
 

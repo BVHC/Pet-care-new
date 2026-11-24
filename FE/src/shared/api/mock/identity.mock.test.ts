@@ -3,9 +3,10 @@
 // Ngược lại các mock khác (inventory, care, sales, cashier…) vẫn đọc `req.account.branchId` làm ngữ cảnh request: phần đó phải giữ nguyên.
 import axios, { type AxiosInstance, type AxiosResponse } from 'axios';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeGoogleCredential } from '../../../test/google';
 import { ruleIdOf } from '../api-error';
 import { customerOfAccount, findCustomer, markHasData, updateCustomerFields } from './customer.mock';
-import { MOCK_PASSWORD, accountForToken } from './identity.mock';
+import { MOCK_PASSWORD, accountForToken, load, save } from './identity.mock';
 import { installMockApi } from './mock-api';
 
 let client: AxiosInstance;
@@ -469,5 +470,262 @@ describe('UC22 #27 — lễ tân liên kết hộ tài khoản online với hồ
     }
     expect(errorOf(await link(987654321, 'chua-co@gmail.com'))).toEqual([404, 'RESOURCE_NOT_FOUND', 'Không tìm thấy hồ sơ khách #987654321']);
     expect(findCustomer(3)!.accountId).toBeNull();
+  });
+});
+
+// POST /api/auth/google (identity-v1 #40, ADR-0152, spec 2026-11-24 §6.2–6.3): thứ tự lỗi và các nhánh theo BE `LoginAttemptService.loginWithGoogle`.
+// Payload của token giải mã, không kiểm chữ ký; mock đọc VITE_GOOGLE_CLIENT_ID lúc gọi handler.
+describe('POST /api/auth/google, khớp BE', () => {
+  const BAD_TOKEN = 'Đăng nhập Google không thành công. Vui lòng thử lại';
+  const CONSENT_MSG = 'Bạn cần xác nhận đủ 18 tuổi và đồng ý điều khoản sử dụng (BR-TK-02)';
+  const RULE = 'BUSINESS_RULE_VIOLATION';
+  const CONSENT = { isAdult: true, termsAccepted: true };
+  const NEW = { email: 'lan@gmail.com', password: 'MatKhau1', fullName: 'Lan Cũ', ...CONSENT };
+
+  beforeEach(() => vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client'));
+  afterEach(() => vi.unstubAllEnvs());
+
+  /** Mock ném lỗi như axios khi status >= 400: lấy lại phản hồi. */
+  async function send(url: string, body: object, config?: object): Promise<AxiosResponse> {
+    try {
+      return await client.post(url, body, config);
+    } catch (e) {
+      if (axios.isAxiosError(e) && e.response) return e.response;
+      throw e;
+    }
+  }
+  const post = (body: object) => send('/api/auth/google', body);
+  const google = (claims: Record<string, unknown>, extra: object = {}) => post({ credential: fakeGoogleCredential(claims), ...extra });
+  const errorOf = (res: AxiosResponse) => [res.status, res.data.errorCode, res.data.message];
+  const loginStatus = async (email: string, password: string) => (await send('/api/auth/login', { email, password })).status;
+  const seedActive = (id: number, email: string) => {
+    const s = load();
+    s.registered.push({ id, email, fullName: 'Lan', password: 'MatKhau1', active: true });
+    save(s);
+  };
+  const lock = (accountId: number, on: boolean) => {
+    const s = load();
+    if (on) s.locks[accountId] = { reason: 'thử', statusBefore: 'ACTIVE', lockedAt: new Date().toISOString() };
+    else delete s.locks[accountId];
+    save(s);
+  };
+
+  it('googleBlankClientIdIs503', async () => {
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', '');
+    expect(errorOf(await google({ sub: 'g1', email: 'lan@gmail.com' }))).toEqual([
+      503,
+      'SERVICE_UNAVAILABLE',
+      'Đăng nhập Google tạm thời không khả dụng. Vui lòng đăng nhập bằng email và mật khẩu',
+    ]);
+    // §6.2: validation (#3) đứng trước 503 (#4).
+    expect(errorOf(await post({ credential: '' }))).toEqual([400, 'VALIDATION_FAILED', 'credential: Thiếu mã đăng nhập Google']);
+  });
+
+  it('googleBadTokenIs401', async () => {
+    const past = Math.floor(Date.now() / 1000) - 10;
+    const ok = { sub: 'g1', email: 'lan@gmail.com' };
+    const credentials: [label: string, credential: string][] = [
+      ['không phải JWT', 'abc'],
+      ['aud của app khác', fakeGoogleCredential({ ...ok, aud: 'app-khac' })],
+      ['exp đã qua', fakeGoogleCredential({ ...ok, exp: past })],
+      ['email_verified false', fakeGoogleCredential({ ...ok, email_verified: false })],
+      ['iss lạ', fakeGoogleCredential({ ...ok, iss: 'https://evil.example.com' })],
+      ['thiếu sub', fakeGoogleCredential({ email: 'lan@gmail.com' })],
+      ['thiếu email', fakeGoogleCredential({ sub: 'g1' })],
+    ];
+    for (const [label, credential] of credentials) {
+      expect([label, ...errorOf(await post({ credential, ...CONSENT }))]).toEqual([label, 401, 'UNAUTHENTICATED', BAD_TOKEN]);
+    }
+    expect(load()).toMatchObject({ registered: [], googleLinks: [] });
+  });
+
+  it('googleStaffEmailIsBrTk17', async () => {
+    const msg = 'Tài khoản nhân viên đăng nhập bằng email và mật khẩu (BR-TK-17)';
+    expect(errorOf(await google({ sub: 'g1', email: 'doctor@store1.vn' }, CONSENT))).toEqual([400, RULE, msg]);
+    expect(errorOf(await google({ sub: 'g1', email: 'Doctor@Store1.vn', hd: 'store1.vn' }))).toEqual([400, RULE, msg]);
+    expect(load().googleLinks).toEqual([]);
+  });
+
+  it('googleNonGmailExistingIsBrTk01', async () => {
+    const msg = 'Email này đã có tài khoản. Vui lòng đăng nhập bằng email và mật khẩu (BR-TK-01)';
+    expect(errorOf(await google({ sub: 'g1', email: 'khach@petcare.vn' }, CONSENT))).toEqual([400, RULE, msg]);
+    expect(load().googleLinks).toEqual([]);
+  });
+
+  it('googleHdClaimMakesEmailAuthoritative', async () => {
+    const res = await google({ sub: 'g1', email: 'khach@petcare.vn', hd: 'petcare.vn' });
+    expect(res.status).toBe(200);
+    expect(res.data.data.account).toMatchObject({ id: 7, email: 'khach@petcare.vn' });
+    expect(load().googleLinks).toEqual([{ accountId: 7, sub: 'g1' }]);
+  });
+
+  it('googleNewGmailNeedsConsentThenCreates', async () => {
+    const claims = { sub: 'g-new', email: ' Moi@Gmail.com ', name: 'Mới Toanh' };
+    expect(errorOf(await google(claims))).toEqual([400, RULE, CONSENT_MSG]);
+    expect(errorOf(await google(claims, { isAdult: true }))).toEqual([400, RULE, CONSENT_MSG]);
+    expect(errorOf(await google(claims, { isAdult: true, termsAccepted: false }))).toEqual([400, RULE, CONSENT_MSG]);
+    expect(load()).toMatchObject({ registered: [], googleLinks: [] });
+
+    const res = await google({ ...claims, email_verified: 'true' }, CONSENT); // BE nhận cả chuỗi "true"
+    expect(res.status).toBe(200);
+    expect(keysOf(res.data.data)).toEqual(['accessToken', 'accessTokenExpiresAt', 'account', 'expiresAt', 'linkDecisionPending', 'refreshToken']);
+    expect(keysOf(res.data.data.account)).toEqual(ACCOUNT_KEYS);
+    expect(res.data.data).toMatchObject({
+      account: { email: 'moi@gmail.com', role: 'CUSTOMER', status: 'ACTIVE', isLocked: false, mustChangePassword: false },
+      linkDecisionPending: false,
+    });
+    const id = res.data.data.account.id as number;
+    expect(customerOfAccount(id)).toMatchObject({ fullName: 'Mới Toanh', createdChannel: 'ONLINE', phone: null });
+
+    const me = await client.get('/api/me', { headers: { Authorization: `Bearer ${res.data.data.accessToken}` } });
+    expect(me.data.data.account.email).toBe('moi@gmail.com');
+
+    const again = await google(claims); // lần sau cùng sub: không cần xác nhận lại, cùng tài khoản
+    expect([again.status, again.data.data.account.id]).toEqual([200, id]);
+    expect(load().registered).toHaveLength(1);
+  });
+
+  it('googleNewAccountPhoneMatchingCounterProfileSetsLinkDecision', async () => {
+    const withPhone = await google({ sub: 'g1', email: 'a@gmail.com' }, { ...CONSENT, phone: '0905111222' }); // SĐT của hồ sơ tại quầy chưa liên kết (BR-TK-19)
+    expect(withPhone.data.data.linkDecisionPending).toBe(true);
+    expect(customerOfAccount(withPhone.data.data.account.id)).toMatchObject({ phone: '0905111222', linkDecisionPending: true });
+    expect((await google({ sub: 'g2', email: 'b@gmail.com' }, { ...CONSENT, phone: '0988000111' })).data.data.linkDecisionPending).toBe(false);
+    expect((await google({ sub: 'g3', email: 'c@gmail.com' }, CONSENT)).data.data.linkDecisionPending).toBe(false);
+    expect(errorOf(await google({ sub: 'g4', email: 'd@gmail.com' }, { ...CONSENT, phone: '' }))).toEqual([
+      400,
+      'VALIDATION_FAILED',
+      'phone: Số điện thoại phải có dạng 0xxxxxxxxx',
+    ]);
+  });
+
+  it('googleFullNameFallsBackToGivenFamilyThenLocalPartAndCutsAt100CodePoints', async () => {
+    const nameOf = async (claims: Record<string, unknown>) => customerOfAccount((await google(claims, CONSENT)).data.data.account.id)!.fullName;
+    expect(await nameOf({ sub: 'a', email: 'a@gmail.com', name: '  ', given_name: 'An', family_name: 'Nguyễn' })).toBe('An Nguyễn');
+    expect(await nameOf({ sub: 'b', email: 'binh.tran@gmail.com' })).toBe('binh.tran');
+    expect([...(await nameOf({ sub: 'c', email: 'c@gmail.com', name: '\u{20000}'.repeat(101) }))]).toHaveLength(100); // chữ Hán ngoài BMP: mỗi ký tự là cặp surrogate
+  });
+
+  it('googleLinksRegisteredGmailAccount', async () => {
+    seedActive(100, 'lan@gmail.com');
+    const res = await google({ sub: 'g-lan', email: 'Lan@Gmail.com ' }); // email viết hoa / thừa khoảng trắng vẫn khớp
+    expect(res.status).toBe(200);
+    expect(res.data.data.account).toMatchObject({ id: 100, email: 'lan@gmail.com' });
+    expect(load().googleLinks).toEqual([{ accountId: 100, sub: 'g-lan' }]);
+    expect(await loginStatus('lan@gmail.com', 'MatKhau1')).toBe(200); // mật khẩu cũ vẫn dùng song song
+
+    // Lần sau theo sub: sub thắng, email tài khoản không đổi theo email Google.
+    const bySub = await google({ sub: 'g-lan', email: 'khac@gmail.com' });
+    expect(bySub.data.data.account).toMatchObject({ id: 100, email: 'lan@gmail.com' });
+  });
+
+  it('googleSubMismatchIs401', async () => {
+    seedActive(100, 'lan@gmail.com');
+    expect((await google({ sub: 'g-lan', email: 'lan@gmail.com' })).status).toBe(200);
+    expect(errorOf(await google({ sub: 'g-khac', email: 'lan@gmail.com' }))).toEqual([401, 'UNAUTHENTICATED', BAD_TOKEN]);
+    expect(load().googleLinks).toEqual([{ accountId: 100, sub: 'g-lan' }]);
+  });
+
+  it('googleReplacesPendingGmail', async () => {
+    const reg = await client.post('/api/auth/register', NEW); // PENDING, hồ sơ online + OTP
+    const pendingId = reg.data.data.accountId as number;
+    const claims = { sub: 'g-lan', email: 'lan@gmail.com' };
+    expect(errorOf(await google(claims))).toEqual([400, RULE, CONSENT_MSG]); // PENDING coi như chưa có tài khoản
+    expect(load().registered).toHaveLength(1); // chưa xóa gì khi từ chối
+
+    const res = await google(claims, CONSENT);
+    expect(res.status).toBe(200);
+    const id = res.data.data.account.id as number;
+    expect(id).not.toBe(pendingId);
+    expect(await loginStatus('lan@gmail.com', 'MatKhau1')).toBe(401); // mật khẩu của kẻ đăng ký trước không còn dùng được
+    expect(customerOfAccount(pendingId)).toBeUndefined();
+    expect(customerOfAccount(id)?.fullName).toBe('lan');
+    expect(load().otps['REGISTER:lan@gmail.com']).toBeUndefined();
+    expect(load().registered).toMatchObject([{ id, email: 'lan@gmail.com', active: true }]);
+  });
+
+  it('googlePendingWithNonAuthoritativeEmailIsBrTk01AndKeepsPending', async () => {
+    await client.post('/api/auth/register', { ...NEW, email: 'abc@yahoo.com' });
+    const msg = 'Email này đã có tài khoản. Vui lòng đăng nhập bằng email và mật khẩu (BR-TK-01)';
+    expect(errorOf(await google({ sub: 'g1', email: 'abc@yahoo.com' }, CONSENT))).toEqual([400, RULE, msg]);
+    expect(load().registered).toMatchObject([{ id: 100, active: false }]);
+    expect(load().otps['REGISTER:abc@yahoo.com']).toBeDefined();
+    expect(await loginStatus('abc@yahoo.com', 'MatKhau1')).toBe(400); // vẫn BR-TK-08
+  });
+
+  it('googleLockedAccountIsBrTk11', async () => {
+    const msg = 'Tài khoản đã bị khóa. Vui lòng liên hệ Pet Care để được hỗ trợ (BR-TK-11)';
+    const claims = { sub: 'g-k', email: 'khach@petcare.vn', hd: 'petcare.vn' };
+    lock(7, true);
+    expect(errorOf(await google(claims))).toEqual([400, RULE, msg]);
+    expect(load().googleLinks).toEqual([]);
+    lock(7, false);
+    expect((await google(claims)).status).toBe(200);
+    lock(7, true);
+    expect(errorOf(await google(claims))).toEqual([400, RULE, msg]); // cả nhánh tìm theo sub
+  });
+
+  it('googleNewIdsNeverReuseDeletedOnes', async () => {
+    const registerId = async (email: string) => (await client.post('/api/auth/register', { ...NEW, email })).data.data.accountId as number;
+    expect([await registerId('lan@gmail.com'), await registerId('hai@petcare.vn')]).toEqual([100, 101]);
+    const g = await google({ sub: 'g-lan', email: 'lan@gmail.com' }, CONSENT); // xóa #100, tạo tài khoản mới
+    expect(g.data.data.account.id).toBe(102);
+    expect(await registerId('ba@petcare.vn')).toBe(103);
+  });
+
+  it('googleLinkIsDroppedWhenReceptionistChangesCustomerEmail', async () => {
+    // BE §6.5: Account.changeEmail đặt google_sub = NULL (UC22 / BR-TK-16 là đường khôi phục khi mất quyền vào email cũ).
+    const claims = { sub: 'g-old', email: 'khach@petcare.vn', hd: 'petcare.vn' };
+    expect((await google(claims)).data.data.account.id).toBe(7);
+    expect(load().googleLinks).toEqual([{ accountId: 7, sub: 'g-old' }]);
+
+    const reception = await as('reception@store1.vn');
+    await client.post('/api/customers/1/account-email-change', { newEmail: 'trang.moi@gmail.com', verificationMethod: 'ID_CARD_IN_PERSON' }, reception);
+    expect((await client.post('/api/customers/1/account-email-change/confirm', { code: '123456' }, reception)).status).toBe(204);
+
+    expect(load().googleLinks).toEqual([]);
+    // sub cũ không còn khớp và email cũ không còn tài khoản: coi như khách mới, cần xác nhận BR-TK-02 (mock từng cho 200 qua nhánh theo sub).
+    expect(errorOf(await google(claims))).toEqual([400, RULE, CONSENT_MSG]);
+  });
+
+  /** Quên mật khẩu theo luồng OTP của mock (mã mẫu 123456). */
+  const resetPassword = async (email: string, newPassword: string) => {
+    await client.post('/api/auth/password/forgot', { email });
+    return send('/api/auth/password/reset', { email, code: '123456', newPassword });
+  };
+
+  it('googleLinkIsDroppedWhenPasswordIsReset (UC04, ADR-0152: BE Account.resetPassword gỡ google_sub)', async () => {
+    const claims = { sub: 'g-old', email: 'khach@petcare.vn', hd: 'petcare.vn' };
+    expect((await google(claims)).data.data.account.id).toBe(7);
+    expect(load().googleLinks).toEqual([{ accountId: 7, sub: 'g-old' }]);
+
+    expect((await resetPassword('khach@petcare.vn', 'MatKhauMoi1')).status).toBe(204);
+    expect(load().googleLinks).toEqual([]);
+    expect(await loginStatus('khach@petcare.vn', 'MatKhauMoi1')).toBe(200);
+
+    // Email có thẩm quyền (hd): sub cũ không còn khớp, tìm theo email thấy ACTIVE chưa gắn => gắn lại và vào được, không cần xác nhận lại.
+    const again = await google(claims);
+    expect(again.status).toBe(200);
+    expect(again.data.data.account.id).toBe(7);
+    expect(load().googleLinks).toEqual([{ accountId: 7, sub: 'g-old' }]);
+  });
+
+  it('googleLinkOfNonAuthoritativeEmailIsDroppedByPasswordResetAndNotRebound', async () => {
+    seedActive(100, 'lan@yahoo.com');
+    const s = load();
+    s.googleLinks.push({ accountId: 100, sub: 'g-old' }); // kẻ gắn trước khi chủ thật đặt lại mật khẩu
+    save(s);
+
+    expect((await resetPassword('lan@yahoo.com', 'MatKhauMoi1')).status).toBe(204);
+    expect(load().googleLinks).toEqual([]);
+
+    const msg = 'Email này đã có tài khoản. Vui lòng đăng nhập bằng email và mật khẩu (BR-TK-01)';
+    expect(errorOf(await google({ sub: 'g-old', email: 'lan@yahoo.com' }, CONSENT))).toEqual([400, RULE, msg]);
+    expect(load().googleLinks).toEqual([]);
+    expect(await loginStatus('lan@yahoo.com', 'MatKhauMoi1')).toBe(200);
+  });
+
+  it('load() gộp googleLinks mặc định cho state cũ trong localStorage', () => {
+    localStorage.setItem('petcare-mock-identity', JSON.stringify({ registered: [] }));
+    expect(load().googleLinks).toEqual([]);
   });
 });

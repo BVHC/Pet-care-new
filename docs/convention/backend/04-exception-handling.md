@@ -61,6 +61,7 @@ Tất cả 6 field bắt buộc; `traceId` lấy từ MDC (xem [8. Logging & Aud
 | `AccessDeniedException` (Spring Security) | `ACCESS_DENIED` | 403 |
 | `PessimisticLockingFailureException`, `OptimisticLockingFailureException`, `DataIntegrityViolationException` | `CONCURRENCY_CONFLICT` — message chung, không lộ tên constraint | 409 |
 | `TooManyRequestsException` (platform; bộ lọc giới hạn tần suất theo IP của endpoint public, [ADR-0100](../../adr/0100-public-endpoint-rate-limit.md)) | `TOO_MANY_REQUESTS` — kèm header `Retry-After` (giây, ≥ 1); handler riêng vì phải gắn header | 429 |
+| `GoogleSignInUnavailableException` (identity, kế thừa `PlatformException`; `GOOGLE_CLIENT_ID` trống hoặc không lấy được JWKS của Google, [ADR-0152](../../adr/0152-google-sign-in.md)) | `SERVICE_UNAVAILABLE` — `ErrorCode.SERVICE_UNAVAILABLE`, status 503; `handlePlatform` lấy status từ `errorCode().status()` nên không có handler riêng | 503 |
 | Lỗi web khác của Spring mang status 4xx (`ResponseStatusException`…) | theo status: 401/403/404/405/415 như trên, còn lại `MALFORMED_REQUEST` | theo mã |
 | Mọi exception khác | `INTERNAL_ERROR` — message chung, log ERROR kèm stacktrace | 500 |
 

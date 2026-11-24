@@ -138,6 +138,7 @@ public class CustomerEmailChangeService {
         }
 
         String oldEmail = account.getEmail();
+        boolean googleBound = account.getGoogleSub() != null; // changeEmail gỡ Google (docs/adr/0152): đọc trước
         account.changeEmail(attempt.newEmail());
         String changedAt = LoginAttemptService.UNLOCK_TIME_FORMAT.format(Instant.now(clock));
         Map<String, Object> payload = Map.of("email_cu", oldEmail, "email_moi", attempt.newEmail(),
@@ -146,8 +147,12 @@ public class CustomerEmailChangeService {
                 null, oldEmail, payload, null));
         notifications.enqueue(new NotificationRequest(NotificationTemplateCode.EMAIL_CHANGED_NOTICE, Channel.EMAIL,
                 null, attempt.newEmail(), payload, null));
+        Map<String, Object> after = emailSnapshot(attempt.newEmail(), true);
+        if (googleBound) {
+            after.put("googleUnlinked", true);
+        }
         audit.record(AuditEntry.of(IdentityAuditActions.CUSTOMER_EMAIL_CHANGED).entity("accounts", account.getId())
-                .before(emailSnapshot(oldEmail, false)).after(emailSnapshot(attempt.newEmail(), true)));
+                .before(emailSnapshot(oldEmail, false)).after(after));
         accounts.flush();
 
         log.info("CUSTOMER_EMAIL_CHANGED customerId={} accountId={}", customerId, account.getId());

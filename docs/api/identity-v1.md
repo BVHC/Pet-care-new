@@ -13,7 +13,7 @@
 
 ---
 
-## A. Danh sách endpoint (39)
+## A. Danh sách endpoint (40)
 
 | # | Endpoint | Thao tác | Use case | Rule |
 |---|---|---|---|---|
@@ -56,6 +56,7 @@
 | 37 | `GET /public/vets` | Đội ngũ bác sĩ | UC15 | BR-TK-20, BR-CK-01 |
 | 38 | `GET /staff/assignable` | Nhân viên có thể gán lượt | UC45 | BR-TN-05, 06 |
 | 39 | `POST /auth/refresh` | Làm mới access token | UC03 | BR-TK-11, BR-TN-06 |
+| 40 | `POST /auth/google` | Đăng nhập bằng Google | UC01, UC03 | BR-TK-01, 02, 08, 09, 10, 11, 17, 19, BR-QT-15 |
 
 ---
 
@@ -102,6 +103,7 @@
 | Đội ngũ bác sĩ | A01, A02 | Public | — | — | Chỉ VET ACTIVE, không khóa (khóa tạm vẫn hiện), thuộc chi nhánh ACTIVE; `branchId` không phải chi nhánh ACTIVE → mảng rỗng. Sắp theo họ tên (ADR-0026). |
 | Nhân viên có thể gán lượt | A04, A05, A06 | A06, A05: chi nhánh mình · A04: chi nhánh do `branchId` chọn | — | — | Danh sách chọn người gán (visit-v1 #5) hoặc gán lại (#9), không có email, SĐT hay trạng thái; `GET /staff` vẫn chỉ A03–A05. Chỉ nhân viên ACTIVE, không bị khóa, đúng chi nhánh và chức vụ; người online xếp trước, rồi họ tên, rồi `accountId`. Mảng trong `data`, không phân trang. Chi nhánh không tồn tại → mảng rỗng. Chỉ đọc, không audit, không khóa: lệnh gán kiểm lại dưới khóa (ADR-0061). ADR-0089. |
 | Làm mới access token | A02–A08 | Public | — | — | Cấp cặp token mới cho cùng phiên: access token mới (hạn `session.access_ttl_minutes` [CFG], không vượt hạn phiên) và refresh token mới; access token cũ và refresh token vừa gửi hết hiệu lực ngay (request đang chạy với token cũ nhận 401, client gửi lại bằng token mới). Chỉ gọi khi người dùng có thao tác: refresh theo bộ đếm hoặc từ request poll làm nhân viên online mãi (D024). Hạn tuyệt đối của phiên không đổi. Không ghi audit khi thành công (ADR-0091). |
+| Đăng nhập bằng Google | A01–A02 | Public | — | — | Một endpoint cho cả đăng nhập và đăng ký: BE tự biết. Thứ tự lỗi: 429 → `MALFORMED_REQUEST` → `VALIDATION_FAILED` → 503 → 401 (token) → `BR-TK-17` → 401 (`google_sub` lệch) → `BR-TK-01` → `BR-TK-09` → `BR-TK-11` → `BR-TK-02` → 409. Tìm tài khoản theo `sub` trước, không thấy mới theo email; tài khoản khách ACTIVE chưa gắn Google và email do Google bảo đảm thì tự gắn `sub`, mật khẩu cũ vẫn dùng. Chưa có tài khoản, hoặc chỉ có PENDING: tạo tài khoản ACTIVE trong một giao dịch (— → PENDING → ACTIVE, Tài khoản#1 rồi #2), hồ sơ khách online, không OTP, không gửi email; PENDING của người khác bị xóa (OTP, hồ sơ, tài khoản) rồi tạo lại, không kích hoạt tại chỗ. Response y hệt `POST /auth/login`; `linkDecisionPending` bật khi `phone` trùng hồ sơ tại quầy (BR-TK-19). BR-TK-10: `BR-TK-17` và `BR-TK-02` cho biết email có tài khoản hay chưa, nhưng chỉ với người đã chứng minh sở hữu email qua Google. Audit `LOGIN_SUCCEEDED` kèm `method` = `GOOGLE` (và `accountCreated` khi tạo mới); thất bại ghi `LOGIN_FAILED` với reason `GOOGLE_STAFF` / `GOOGLE_SUB_MISMATCH` / `GOOGLE_EMAIL_NOT_AUTHORITATIVE` hoặc reason của khóa (ADR-0152). |
 
 ---
 
@@ -168,6 +170,7 @@
 ### Auth
 
 - **`POST /auth/refresh`** — Làm mới access token. Public. Request `RefreshRequest`. Response `200` `RefreshResponse`. Lỗi: `400` `VALIDATION_FAILED` refreshToken trống hoặc quá 128 ký tự · `401` Refresh token không đúng, đã dùng, hết hạn, phiên đã bị hủy hoặc tài khoản bị khóa / vô hiệu hóa — một thông điệp chung. Dùng lại token đã dùng hủy cả phiên và ghi audit `REFRESH_TOKEN_REUSED` (ADR-0091).
+- **`POST /auth/google`** — Đăng nhập bằng Google. Public. Request `GoogleLoginRequest`. Response `200` `LoginResponse`. Lỗi: `400` `MALFORMED_REQUEST` body sai JSON / sai kiểu · `VALIDATION_FAILED` `credential` trống hoặc quá 4096 ký tự, `phone` sai dạng hoặc chuỗi rỗng · theo thứ tự kiểm sau khi token hợp lệ: `BR-TK-17` email thuộc tài khoản nhân viên · `BR-TK-01` email không do Google bảo đảm (không `@gmail.com`, không claim `hd`) mà đã có tài khoản · `BR-TK-09` khách đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa · `BR-TK-02` phải tạo tài khoản nhưng chưa xác nhận đủ 18 tuổi / đồng ý điều khoản · `401` Token không hợp lệ (chữ ký, `iss`, `aud`, hết hạn, thiếu `sub` / `email`, `email_verified` khác true) hoặc email đã gắn với tài khoản Google khác — một thông điệp chung "Đăng nhập Google không thành công. Vui lòng thử lại" · `409` `CONCURRENCY_CONFLICT` hai request tạo cùng email / `sub` song song; gọi lại là đăng nhập được · `429` `TOO_MANY_REQUESTS` một IP gọi quá nhiều lần trong một cửa sổ thời gian (ADR-0100): header `Retry-After` là số giây nguyên phải chờ. Request bị chặn trước khi xử lý: không đếm vào khóa tạm BR-TK-09 hay quota OTP BR-TK-07, không ghi audit · `503` `SERVICE_UNAVAILABLE` BE chưa cấu hình `GOOGLE_CLIENT_ID` hoặc không lấy được khóa của Google (mạng, hết giờ); khách vẫn đăng nhập bằng email và mật khẩu.
 
 ### Schema
 
@@ -186,6 +189,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`LoginResponse`** — {`accessToken`: string, `expiresAt`: date-time, `accessTokenExpiresAt`: date-time, `refreshToken`: string, `account`: AccountSummary, `linkDecisionPending`: boolean}
 - **`RefreshRequest`** — {`refreshToken`: string}
 - **`RefreshResponse`** — {`accessToken`: string, `accessTokenExpiresAt`: date-time, `refreshToken`: string, `expiresAt`: date-time}
+- **`GoogleLoginRequest`** — {`credential`: string, `isAdult?`: boolean, `termsAccepted?`: boolean, `phone?`: string}
 - **`ResetPasswordRequest`** — {`email`: email, `code`: string, `newPassword`: string}
 - **`ChangePasswordRequest`** — {`currentPassword`: string, `newPassword`: string}
 - **`StaffProfile`** — {`accountId`: int64, `fullName`: string, `avatarUrl?`: string, `phone`: string, `branchId?`: int64, `specialty?`: string, `bio?`: string}

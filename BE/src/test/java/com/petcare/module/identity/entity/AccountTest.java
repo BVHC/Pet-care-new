@@ -267,6 +267,84 @@ class AccountTest {
         assertThatThrownBy(account::unlock).isInstanceOf(IllegalStateException.class);
     }
 
+    // ---------------------------------------------------------------- gắn Google (ADR-0152, BR-TK-17)
+
+    @Test
+    void bindGoogleSetsSubOnce() {
+        Account customer = activeCustomer();
+
+        customer.bindGoogle("g-1");
+        customer.bindGoogle("g-1");
+
+        assertThat(customer.getGoogleSub()).isEqualTo("g-1");
+    }
+
+    @Test
+    void bindGoogleRejectsDifferentSub() {
+        Account customer = activeCustomer();
+        customer.bindGoogle("g-1");
+
+        assertThatThrownBy(() -> customer.bindGoogle("g-2")).isInstanceOf(IllegalStateException.class);
+        assertThat(customer.getGoogleSub()).isEqualTo("g-1");
+    }
+
+    @Test
+    void bindGoogleRejectsStaff() {
+        Account staff = Account.createStaff("nv@petcare.test", "0901234567", "hash", Role.VET);
+
+        assertThatThrownBy(() -> staff.bindGoogle("g-1")).isInstanceOf(IllegalStateException.class);
+        assertThat(staff.getGoogleSub()).isNull();
+    }
+
+    @Test
+    void bindGoogleRejectsBlank() {
+        Account customer = activeCustomer();
+
+        assertThatThrownBy(() -> customer.bindGoogle(" ")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> customer.bindGoogle(null)).isInstanceOf(IllegalArgumentException.class);
+        assertThat(customer.getGoogleSub()).isNull();
+    }
+
+    @Test
+    void changeEmailClearsGoogleSub() {
+        Account customer = activeCustomer();
+        customer.bindGoogle("g-1");
+
+        customer.changeEmail("moi@petcare.test");
+
+        assertThat(customer.getEmail()).isEqualTo("moi@petcare.test");
+        assertThat(customer.getGoogleSub()).isNull();
+    }
+
+    /** UC04 (ADR-0152): đặt lại mật khẩu gỡ liên kết Google. */
+    @Test
+    void resetPasswordClearsGoogleSub() {
+        Account customer = activeCustomer();
+        customer.bindGoogle("g-1");
+
+        customer.resetPassword("new-hash");
+
+        assertThat(customer.getPasswordHash()).isEqualTo("new-hash");
+        assertThat(customer.getGoogleSub()).isNull();
+    }
+
+    @Test
+    void resetPasswordWithoutGoogleStaysNormal() {
+        Account customer = activeCustomer();
+
+        customer.resetPassword("new-hash");
+
+        assertThat(customer.getPasswordHash()).isEqualTo("new-hash");
+        assertThat(customer.getGoogleSub()).isNull();
+        assertThat(customer.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    private static Account activeCustomer() {
+        Account customer = account();
+        customer.verify();
+        return customer;
+    }
+
     private static Account staff(String phone) {
         Account account = account();
         ReflectionTestUtils.setField(account, "role", Role.VET);

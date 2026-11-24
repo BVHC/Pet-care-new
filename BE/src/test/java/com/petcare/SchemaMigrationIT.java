@@ -222,11 +222,12 @@ class SchemaMigrationIT {
         // V60 shift_requests.current_shift_definition_id (ca lúc gửi, docs/adr/0150 N3-S5b; V57–V59 đã có trên dev, D069),
         // V61 Nhân sự: shift_assignments.source + khóa [CFG] workforce.weekly_required_shifts (docs/adr/0123, T58; đánh số lại từ V55 ngày 23/11/2026 vì V55 đã dùng cho feedbacks),
         // V62 products.gallery_urls JSONB (ảnh phụ có thứ tự, tối đa 8; docs/adr/0151),
+        // V63 accounts.google_sub (đăng nhập Google, chỉ khách; docs/adr/0152),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -507,6 +508,36 @@ class SchemaMigrationIT {
         assertThat(jdbc.queryForList(
                 "SELECT indexdef FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'otp_tokens'", String.class))
                 .anySatisfy(def -> assertThat(def).endsWith("(account_id)"));
+    }
+
+    /**
+     * V63 (docs/adr/0152): {@code accounts.google_sub} là {@code sub} của Google, duy nhất và chỉ khách mới có
+     * (BR-TK-17); mọi dòng có từ trước để NULL.
+     */
+    @Test
+    void accountsGoogleSubIsUniqueAndCustomerOnly() {
+        assertThat(column("accounts.google_sub").dataType()).isEqualTo("character varying");
+
+        assertThatThrownBy(() -> jdbc.update("""
+                INSERT INTO accounts (email, phone, password_hash, role, status, google_sub)
+                VALUES (?, '0900000000', 'hash', 'RECEPTIONIST', 'ACTIVE', 'g-staff')
+                """, "it-" + SEQ.incrementAndGet() + "@petcare.test"))
+                .as("nhân viên có google_sub").isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23514"));
+
+        String sub = "g-it-" + SEQ.incrementAndGet();
+        String insertCustomer = """
+                INSERT INTO accounts (email, password_hash, role, status, google_sub)
+                VALUES (?, 'hash', 'CUSTOMER', 'ACTIVE', ?)
+                """;
+        jdbc.update(insertCustomer, "it-" + SEQ.incrementAndGet() + "@petcare.test", sub);
+        assertThatThrownBy(() -> jdbc.update(insertCustomer, "it-" + SEQ.incrementAndGet() + "@petcare.test", sub))
+                .as("hai khách cùng google_sub").isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23505"));
+
+        // NULL không đụng unique: nhiều khách chưa gắn Google
+        customerAccount("ACTIVE", null);
+        customerAccount("ACTIVE", null);
     }
 
     /**

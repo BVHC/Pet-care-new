@@ -6,7 +6,7 @@
 
 | Module | Mã | Owner | Endpoint | Đọc | Máy đọc |
 |---|---|---|---|---|---|
-| identity | TK, QT | BE-1 | 39 | [identity-v1.md](./identity-v1.md) | [openapi/identity-v1.yaml](./openapi/identity-v1.yaml) |
+| identity | TK, QT | BE-1 | 40 | [identity-v1.md](./identity-v1.md) | [openapi/identity-v1.yaml](./openapi/identity-v1.yaml) |
 | customer | KH | BE-2 | 21 | [customer-v1.md](./customer-v1.md) | [openapi/customer-v1.yaml](./openapi/customer-v1.yaml) |
 | catalog | SP (+ CK sản phẩm, dịch vụ) | BE-2 | 22 | [catalog-v1.md](./catalog-v1.md) | [openapi/catalog-v1.yaml](./openapi/catalog-v1.yaml) |
 | branch | CN (+ UC33, UC42) | BE-2 | 21 | [branch-v1.md](./branch-v1.md) | [openapi/branch-v1.yaml](./openapi/branch-v1.yaml) |
@@ -30,7 +30,7 @@
 | articlex | BV bài viết của bác sĩ, bình luận (UC80, 82; [08](../08-tang3-be2-spec.md) §F.3) | BE-2 | 14 | [articlex-v1.md](./articlex-v1.md) | [openapi/articlex-v1.yaml](./openapi/articlex-v1.yaml) |
 | inpatient | LT nội trú (UC55, 56; [09](../09-tang3-be1-spec.md) §C) | BE-1 | 10 | [inpatient-v1.md](./inpatient-v1.md) | [openapi/inpatient-v1.yaml](./openapi/inpatient-v1.yaml) |
 | materialuse | KB trừ vật tư tiêu hao (ST07; [09](../09-tang3-be1-spec.md) §E) | BE-1 | 3 | [materialuse-v1.md](./materialuse-v1.md) | [openapi/materialuse-v1.yaml](./openapi/materialuse-v1.yaml) |
-| **Tổng** | | | **346** (231 GĐ1 + 115 tầng 3). Tầng 3 sau khi bỏ khám tại nhà, bỏ khiếu nại ở ADR-0122, thêm 2 endpoint workforce ở ADR-0123, bỏ phẫu thuật `surgery-v1` (8 endpoint) ở ADR-0125 là 113; mốc 14/11/2026 đếm lại theo yaml: identity 38 → 39 (refresh #39, ADR-0091), ai 13 → 14 (import #14, ADR-0134), workforce 16 → 17 (`GET /me/shift-registrations/{weekStart}`, ADR-0148). Duyệt T54 5/11/2026; tầng 3 chưa cài đặt trừ `ai` và `workforce` #1–3 (ca làm việc, T58 bước 2, 17/11) | | |
+| **Tổng** | | | **347** (232 GĐ1 + 115 tầng 3). Tầng 3 sau khi bỏ khám tại nhà, bỏ khiếu nại ở ADR-0122, thêm 2 endpoint workforce ở ADR-0123, bỏ phẫu thuật `surgery-v1` (8 endpoint) ở ADR-0125 là 113; mốc 14/11/2026 đếm lại theo yaml: identity 38 → 39 (refresh #39, ADR-0091), ai 13 → 14 (import #14, ADR-0134), workforce 16 → 17 (`GET /me/shift-registrations/{weekStart}`, ADR-0148); 24/11/2026: identity 39 → 40 (Google #40, ADR-0152). Duyệt T54 5/11/2026; tầng 3 chưa cài đặt trừ `ai` và `workforce` #1–3 (ca làm việc, T58 bước 2, 17/11) | | |
 
 ## Tra nhanh theo use case
 

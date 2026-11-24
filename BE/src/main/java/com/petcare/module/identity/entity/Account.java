@@ -94,6 +94,13 @@ public class Account extends TimestampedEntity {
     private Instant pendingExpiresAt;
 
     /**
+     * {@code sub} của Google (V63, docs/adr/0152): định danh bất biến của tài khoản Google gắn với tài khoản này; chỉ
+     * khách có (CHECK {@code ck_accounts_google_customer_only}, BR-TK-17), duy nhất ({@code uq_accounts_google_sub}).
+     */
+    @Column(name = "google_sub")
+    private String googleSub;
+
+    /**
      * Tài khoản#1 — đăng ký: tài khoản khách {@code PENDING}. Không lưu SĐT: SĐT của khách nằm ở hồ sơ khách
      * (BR-TK-01, CHECK {@code ck_accounts_phone_by_role}). {@code email} đã chuẩn hóa chữ thường.
      * {@code pendingExpiresAt} = thời điểm đăng ký + {@code account.pending_ttl_hours} [CFG].
@@ -275,6 +282,7 @@ public class Account extends TimestampedEntity {
      * UC04 — đặt lại mật khẩu bằng OTP (BR-TK-13; docs/adr/0023): hash mới, gỡ bắt đổi mật khẩu lần đầu (BR-TK-17,
      * docs/adr/0019 *Hệ quả*), xóa bộ đếm sai và <b>gỡ khóa tạm</b> kể cả khi còn hạn (BR-TK-13). Mọi phiên
      * bị hủy cùng lúc nên tự offline (BR-TN-06, docs/adr/0091), như đăng xuất (docs/adr/0021). Caller giữ khóa dòng và hủy phiên sau lệnh này (thứ tự {@code accounts → sessions}).
+     * Gỡ luôn {@code googleSub} (ADR-0152), như {@link #changeEmail}.
      * Không đổi {@code status}: không phải chuyển trạng thái của SM #1.
      */
     public void resetPassword(String newPasswordHash) {
@@ -283,6 +291,8 @@ public class Account extends TimestampedEntity {
         this.failedLoginCount = 0;
         this.firstFailedLoginAt = null;
         this.lockedUntil = null;
+        // Chủ email đặt lại mật khẩu ⇒ cắt mọi liên kết Google cũ (ADR-0152): email không thẩm quyền có thể từng bị kẻ khác gắn trước.
+        this.googleSub = null;
     }
 
     /**
@@ -317,6 +327,8 @@ public class Account extends TimestampedEntity {
      * {@code email}: trạng thái, khóa, mật khẩu, phiên giữ nguyên (đổi email không phải chuyển trạng thái của 03 §1).
      * {@code newEmail} đã chuẩn hóa chữ thường; caller giữ khóa dòng, đã kiểm phân cấp, mã OTP và BR-TK-01
      * ({@code uq_accounts_email} là chốt cuối). Tài khoản {@code PENDING} chưa xác thực email nên không đổi được.
+     * Gỡ luôn {@code googleSub} (docs/adr/0152): đây là đường khôi phục khi khách mất quyền vào email cũ, nên cắt mọi
+     * cách đăng nhập gắn với danh tính cũ; nhân viên không có {@code googleSub} nên vô hại.
      */
     public void changeEmail(String newEmail) {
         if (newEmail == null || newEmail.isBlank()) {
@@ -326,5 +338,24 @@ public class Account extends TimestampedEntity {
             throw new IllegalStateException("Pending account " + id + " cannot change email");
         }
         this.email = newEmail;
+        this.googleSub = null;
+    }
+
+    /**
+     * Đăng nhập Google (docs/adr/0152): gắn {@code sub} của Google vào tài khoản khách. Gọi lại với đúng {@code sub}
+     * đã gắn thì không đổi gì; {@code sub} khác là lỗi lập trình (service đã tìm theo {@code sub} trước). Caller giữ
+     * khóa dòng; nhân viên không gắn Google (BR-TK-17, CHECK {@code ck_accounts_google_customer_only}).
+     */
+    public void bindGoogle(String sub) {
+        if (sub == null || sub.isBlank()) {
+            throw new IllegalArgumentException("Account " + id + " needs a non-blank Google sub");
+        }
+        if (role != Role.CUSTOMER) {
+            throw new IllegalStateException("Staff account " + id + " cannot bind Google (BR-TK-17)");
+        }
+        if (googleSub != null && !googleSub.equals(sub)) {
+            throw new IllegalStateException("Account " + id + " is already bound to another Google account");
+        }
+        this.googleSub = sub;
     }
 }

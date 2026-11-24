@@ -35,6 +35,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     Optional<Account> findByEmailForUpdate(@Param("email") String email);
 
     /**
+     * Đăng nhập Google (docs/adr/0152): {@code SELECT … FOR UPDATE} theo {@code sub} của Google, khóa trước
+     * {@link #findByEmailForUpdate}; mỗi request khóa một dòng.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Account a WHERE a.googleSub = :sub")
+    Optional<Account> findByGoogleSubForUpdate(@Param("sub") String sub);
+
+    /**
      * Đăng nhập, bước đọc không khóa (docs/adr/0019 mục 4): {@code (id, password_hash)} theo email đã chuẩn hóa chữ
      * thường. Projection, không nạp entity — xem {@link AccountCredential}.
      */

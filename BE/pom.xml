@@ -110,6 +110,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Đăng nhập Google: kiểm ID token qua JWKS (docs/adr/0152). Không dùng resource-server starter. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
+        </dependency>
+
         <!-- JSON structured log (docs/convention/backend/08-logging-and-audit.md §8.1) -->
         <dependency>
             <groupId>net.logstash.logback</groupId>

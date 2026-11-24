@@ -282,6 +282,27 @@ class CustomerEmailChangeServiceTest {
                 Map.entry("verificationMethod", "ID_CARD_IN_PERSON"));
     }
 
+    /** ADR-0152: đổi email hộ gỡ Google đã gắn và ghi dấu vào audit để truy vết đường khôi phục tài khoản. */
+    @Test
+    void emailChangeOfGoogleBoundAccountAuditsUnlink() {
+        Account account = linkedCustomer(Role.CUSTOMER, AccountStatus.ACTIVE);
+        account.bindGoogle("g-1");
+
+        service.applyEmailChange(CUSTOMER, new EmailChangeAttempt(41L, NEW_EMAIL, true));
+
+        assertThat(account.getGoogleSub()).isNull();
+        assertThat(snapshot(capturedAudit().after())).containsEntry("googleUnlinked", true);
+    }
+
+    @Test
+    void emailChangeOfUnboundAccountHasNoUnlinkKey() {
+        linkedCustomer(Role.CUSTOMER, AccountStatus.ACTIVE);
+
+        service.applyEmailChange(CUSTOMER, new EmailChangeAttempt(41L, NEW_EMAIL, true));
+
+        assertThat(snapshot(capturedAudit().after())).doesNotContainKey("googleUnlinked");
+    }
+
     /** Đổi email chỉ đổi {@code email}: trạng thái, khóa, mật khẩu giữ nguyên (docs/adr/0034 Q1, Q2). */
     @Test
     void applyKeepsStatusLockAndPassword() {

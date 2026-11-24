@@ -104,6 +104,12 @@ m.schema("RefreshResponse", {
     "refreshToken": "string|Refresh token mới; token vừa gửi không dùng lại được",
     "expiresAt": "datetime|Hạn tuyệt đối của phiên (không đổi)",
 })
+m.schema("GoogleLoginRequest", {
+    "credential": "string:4096|ID token Google (`credential` do Google Identity Services trả về)",
+    "isAdult": "bool?|Xác nhận từ 18 tuổi (BR-TK-02); chỉ dùng, và chỉ bắt buộc `true`, khi phải tạo tài khoản",
+    "termsAccepted": "bool?|Đồng ý điều khoản sử dụng (BR-TK-02); như `isAdult`",
+    "phone": "mobile?|Không bắt buộc; chỉ dùng khi tạo tài khoản, để gợi ý liên kết hồ sơ tại quầy (BR-TK-19). `0` + 9 chữ số như `phone` của đăng ký ở BE; chuỗi rỗng bị từ chối",
+})
 m.schema("ResetPasswordRequest", {"email": "email", "code": "string", "newPassword": "string"})
 m.schema("ChangePasswordRequest", {"currentPassword": "string", "newPassword": "string"})
 m.schema("StaffProfile", {
@@ -432,3 +438,14 @@ m.op("post", "/auth/refresh", "refreshAccessToken", "Làm mới access token", "
      err_desc={400: "`VALIDATION_FAILED` refreshToken trống hoặc quá 128 ký tự",
                401: "Refresh token không đúng, đã dùng, hết hạn, phiên đã bị hủy hoặc tài khoản bị khóa / vô hiệu hóa — một thông điệp chung. Dùng lại token đã dùng hủy cả phiên và ghi audit `REFRESH_TOKEN_REUSED` (ADR-0091)"},
      notes="Cấp cặp token mới cho cùng phiên: access token mới (hạn `session.access_ttl_minutes` [CFG], không vượt hạn phiên) và refresh token mới; access token cũ và refresh token vừa gửi hết hiệu lực ngay (request đang chạy với token cũ nhận 401, client gửi lại bằng token mới). Chỉ gọi khi người dùng có thao tác: refresh theo bộ đếm hoặc từ request poll làm nhân viên online mãi (D024). Hạn tuyệt đối của phiên không đổi. Không ghi audit khi thành công (ADR-0091).")
+
+# Số 40 = thứ tự khai báo: đăng nhập Google (ADR-0152), thêm sau refresh #39.
+m.op("post", "/auth/google", "loginWithGoogle", "Đăng nhập bằng Google", "Auth", "UC01, UC03",
+     "BR-TK-01, 02, 08, 09, 10, 11, 17, 19, BR-QT-15", "A01–A02", "Public", "—",
+     body="GoogleLoginRequest", resp="LoginResponse", public=True, errors=(400, 401, 409, 429, 503),
+     err_desc={400: "`MALFORMED_REQUEST` body sai JSON / sai kiểu · `VALIDATION_FAILED` `credential` trống hoặc quá 4096 ký tự, `phone` sai dạng hoặc chuỗi rỗng · theo thứ tự kiểm sau khi token hợp lệ: `BR-TK-17` email thuộc tài khoản nhân viên · `BR-TK-01` email không do Google bảo đảm (không `@gmail.com`, không claim `hd`) mà đã có tài khoản · `BR-TK-09` khách đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa · `BR-TK-02` phải tạo tài khoản nhưng chưa xác nhận đủ 18 tuổi / đồng ý điều khoản",
+               401: "Token không hợp lệ (chữ ký, `iss`, `aud`, hết hạn, thiếu `sub` / `email`, `email_verified` khác true) hoặc email đã gắn với tài khoản Google khác — một thông điệp chung \"Đăng nhập Google không thành công. Vui lòng thử lại\"",
+               409: "`CONCURRENCY_CONFLICT` hai request tạo cùng email / `sub` song song; gọi lại là đăng nhập được",
+               429: RATE_ERR,
+               503: "`SERVICE_UNAVAILABLE` BE chưa cấu hình `GOOGLE_CLIENT_ID` hoặc không lấy được khóa của Google (mạng, hết giờ); khách vẫn đăng nhập bằng email và mật khẩu"},
+     notes="Một endpoint cho cả đăng nhập và đăng ký: BE tự biết. Thứ tự lỗi: 429 → `MALFORMED_REQUEST` → `VALIDATION_FAILED` → 503 → 401 (token) → `BR-TK-17` → 401 (`google_sub` lệch) → `BR-TK-01` → `BR-TK-09` → `BR-TK-11` → `BR-TK-02` → 409. Tìm tài khoản theo `sub` trước, không thấy mới theo email; tài khoản khách ACTIVE chưa gắn Google và email do Google bảo đảm thì tự gắn `sub`, mật khẩu cũ vẫn dùng. Chưa có tài khoản, hoặc chỉ có PENDING: tạo tài khoản ACTIVE trong một giao dịch (— → PENDING → ACTIVE, Tài khoản#1 rồi #2), hồ sơ khách online, không OTP, không gửi email; PENDING của người khác bị xóa (OTP, hồ sơ, tài khoản) rồi tạo lại, không kích hoạt tại chỗ. Response y hệt `POST /auth/login`; `linkDecisionPending` bật khi `phone` trùng hồ sơ tại quầy (BR-TK-19). BR-TK-10: `BR-TK-17` và `BR-TK-02` cho biết email có tài khoản hay chưa, nhưng chỉ với người đã chứng minh sở hữu email qua Google. Audit `LOGIN_SUCCEEDED` kèm `method` = `GOOGLE` (và `accountCreated` khi tạo mới); thất bại ghi `LOGIN_FAILED` với reason `GOOGLE_STAFF` / `GOOGLE_SUB_MISMATCH` / `GOOGLE_EMAIL_NOT_AUTHORITATIVE` hoặc reason của khóa (ADR-0152).")

@@ -24,10 +24,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 /**
- * Giới hạn số request theo IP cho endpoint public của identity (docs/adr/0100, nợ D011): đăng nhập, đăng ký, quên /
- * đặt lại mật khẩu; và hai endpoint hỏi đáp của chatbot AI (docs/adr/0110, BR-AI-09). Mỗi nhóm một ngưỡng riêng. Chạy
- * trước {@link JwtAuthenticationFilter} và controller, nên request bị chặn không tới BCrypt, DB, {@code audit_logs} hay
- * nhà cung cấp LLM. Chỉ đếm {@code POST}; {@code OPTIONS} (preflight), {@code GET} và path khác đi thẳng.
+ * Giới hạn số request theo IP cho endpoint public của identity (docs/adr/0100, nợ D011): đăng nhập (mật khẩu và
+ * Google), đăng ký, quên / đặt lại mật khẩu; và hai endpoint hỏi đáp của chatbot AI (docs/adr/0110, BR-AI-09). Mỗi nhóm
+ * một ngưỡng riêng. Chạy trước {@link JwtAuthenticationFilter} và controller, nên request bị chặn không tới BCrypt, DB,
+ * {@code audit_logs} hay nhà cung cấp LLM. Chỉ đếm {@code POST}; {@code OPTIONS} (preflight), {@code GET} và path khác
+ * đi thẳng.
  *
  * <p>Nhóm AI có hai cửa sổ (phút rồi giờ) trên cùng một IP, kiểm theo thứ tự đó và dừng ở cửa sổ đầu tiên từ chối: request
  * bị chặn vì cửa sổ phút không tiêu hao hạn mức giờ. Ngược lại request qua cửa sổ phút rồi bị chặn vì giờ vẫn đã được tính
@@ -50,7 +51,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private record Window(String name, RateLimitProperties.Rule rule) {
     }
 
-    private static final RequestMatcher LOGIN = post("/api/auth/login");
+    /** Đăng nhập mật khẩu và đăng nhập Google (docs/adr/0152) dùng chung một cửa sổ {@code login}. */
+    private static final RequestMatcher LOGIN = new OrRequestMatcher(post("/api/auth/login"), post("/api/auth/google"));
     private static final RequestMatcher REGISTER = new OrRequestMatcher(
             post("/api/auth/register"), post("/api/auth/register/**"));
     private static final RequestMatcher PASSWORD = post("/api/auth/password/**");

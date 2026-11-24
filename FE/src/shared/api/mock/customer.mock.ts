@@ -124,6 +124,15 @@ export function createOnlineProfile(accountId: number, fullName: string, phone: 
   save(s);
 }
 
+/** ST02 / đăng nhập Google thay tài khoản PENDING: xóa hồ sơ online của tài khoản chưa xác thực email cùng sổ địa chỉ của nó (BE `CustomerApi.deleteOnlineProfileOfUnverifiedAccount`). */
+export function deleteOnlineProfileOfUnverifiedAccount(accountId: number) {
+  const s = load();
+  const gone = new Set(s.customers.filter((c) => c.accountId === accountId && c.createdChannel === 'ONLINE').map((c) => c.customerId));
+  s.customers = s.customers.filter((c) => !gone.has(c.customerId));
+  s.addresses = s.addresses.filter((a) => !gone.has(a.customerId));
+  save(s);
+}
+
 /** Hồ sơ tại quầy chưa liên kết có cùng SĐT, theo thứ tự id. */
 export const linkCandidates = (phone: string) =>
   load().customers.filter((c) => c.createdChannel === 'COUNTER' && c.accountId === null && c.phone === phone && c.mergedIntoId == null);

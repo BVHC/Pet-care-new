@@ -6,7 +6,10 @@ import { AuthShell } from './AuthShell';
 import { AuthField, GoogleButton, SubmitButton, OrDivider } from './AuthField';
 import { authApi } from '../../shared/api/auth.api';
 import { fieldErrorsOf, plainMessage, toApiError } from '../../shared/api/api-error';
+import { googleClientId } from '../../shared/hooks/useGoogleIdentity';
 import { passwordPolicyError } from '../../shared/utils/password';
+import { normalizePhone, phoneError } from './phone';
+import { useGoogleLogin } from './useGoogleLogin';
 
 const PERKS = [
   'Đặt phòng nghỉ dưỡng chỉ trong 30 giây',
@@ -35,8 +38,6 @@ const STRENGTH_META = [
 ];
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-/** SDT VN: 0 + 9 so, cho phep khoang trang/gach khi go */
-const PHONE_RE = /^0\d{9}$/;
 
 type Field = 'name' | 'email' | 'phone' | 'password' | 'confirmPassword';
 type Errors = Partial<Record<Field, string>>;
@@ -50,8 +51,7 @@ function validateField(field: Field, f: Record<Field, string>): string | undefin
       if (!f.email.trim()) return 'Vui lòng nhập email.';
       return EMAIL_RE.test(f.email.trim()) ? undefined : 'Email không hợp lệ (ví dụ: ban@email.com).';
     case 'phone':
-      if (!f.phone.trim()) return undefined; // khong bat buoc
-      return PHONE_RE.test(f.phone.replace(/[\s-]/g, '')) ? undefined : 'Số điện thoại phải gồm 10 số và bắt đầu bằng 0.';
+      return phoneError(f.phone); // khong bat buoc
     case 'password':
       if (!f.password) return 'Vui lòng nhập mật khẩu.';
       return passwordPolicyError(f.password) ?? undefined;
@@ -75,6 +75,7 @@ export function RegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { onCredential, dialog } = useGoogleLogin();
 
   /** Go chu thi xoa loi cua chinh o do — khong bat nguoi dung nhin loi cu. */
   const setField = (field: Field, value: string) => {
@@ -113,7 +114,7 @@ export function RegisterPage() {
         email,
         password: form.password,
         fullName: form.name.trim(),
-        phone: form.phone.replace(/[\s-]/g, '') || undefined,
+        phone: normalizePhone(form.phone),
         isAdult,
         termsAccepted: agreed,
       });
@@ -287,10 +288,16 @@ export function RegisterPage() {
         <SubmitButton loading={loading}>{loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}</SubmitButton>
       </form>
 
-      <div className="my-6">
-        <OrDivider />
-      </div>
-      <GoogleButton label="Đăng ký với Google" />
+      {googleClientId() !== '' && (
+        <>
+          <div className="my-6">
+            <OrDivider />
+          </div>
+          <GoogleButton text="signup_with" onCredential={onCredential} />
+        </>
+      )}
+      {/* Ngoài <form>: sự kiện submit của hộp thoại (portal) sẽ nổi bọt lên form đăng ký nếu đặt trong đó. */}
+      {dialog}
 
       <p className="mt-8 text-center text-[14.5px] text-[#7a6a5d]">
         Đã có tài khoản?{' '}

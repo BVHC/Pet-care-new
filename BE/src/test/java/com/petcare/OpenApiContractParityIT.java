@@ -136,9 +136,10 @@ class OpenApiContractParityIT {
         // + 1 workforce #15 (PUT /me/shift-registrations/{weekStart}, đăng ký ca theo tuần, N3-S7, docs/adr/0149).
         // + 1 workforce #16 (GET /shift-weekly-summaries, thống kê số ca mỗi nhân viên trong tuần, N3-S8, docs/adr/0149).
         // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V55, docs/adr/0122, 0131): content còn 21.
+        // + 1 identity #40 (POST /auth/google, đăng nhập / đăng ký bằng Google, T94, docs/adr/0152)
         assertThat(documentedOps())
                 .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop + workforce đã cài")
-                .hasSize(237);
+                .hasSize(238);
     }
 
     @Test

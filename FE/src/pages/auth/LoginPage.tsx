@@ -6,7 +6,9 @@ import { AuthShell } from './AuthShell';
 import { AuthField, GoogleButton, SubmitButton, OrDivider } from './AuthField';
 import { useSession } from '../../shared/stores/session.store';
 import { plainMessage, toApiError } from '../../shared/api/api-error';
-import { homePathFor } from '../../shared/constants/workspaces';
+import { googleClientId } from '../../shared/hooks/useGoogleIdentity';
+import { afterLoginPath } from './afterLogin';
+import { useGoogleLogin } from './useGoogleLogin';
 
 const STATS = [
   { value: '2.500+', label: 'Chủ nuôi' },
@@ -21,6 +23,7 @@ export function LoginPage() {
   const login = useSession((s) => s.login);
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
+  const { onCredential, dialog } = useGoogleLogin(from);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,8 +35,7 @@ export function LoginPage() {
     try {
       const account = await login({ email: form.email.trim(), password: form.password });
       toast.success('Đăng nhập thành công!');
-      // BR-TK-19: còn cờ chờ quyết định liên kết thì nhắc lại ở mỗi lần đăng nhập.
-      navigate(useSession.getState().linkDecisionPending ? '/account/link' : (from ?? homePathFor(account.role)));
+      navigate(afterLoginPath(account, from));
     } catch (error) {
       const err = toApiError(error);
       toast.error(plainMessage(err)); // bỏ đuôi mã rule BE nối vào message; `err.ruleId` vẫn dùng bên dưới
@@ -106,10 +108,16 @@ export function LoginPage() {
         <SubmitButton loading={loading}>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</SubmitButton>
       </form>
 
-      <div className="my-6">
-        <OrDivider />
-      </div>
-      <GoogleButton label="Tiếp tục với Google" />
+      {googleClientId() !== '' && (
+        <>
+          <div className="my-6">
+            <OrDivider />
+          </div>
+          <GoogleButton text="continue_with" onCredential={onCredential} />
+        </>
+      )}
+      {/* Ngoài <form>: sự kiện submit của hộp thoại (portal) sẽ nổi bọt lên form đăng nhập nếu đặt trong đó. */}
+      {dialog}
 
       <p className="mt-8 text-center text-[14.5px] text-[#7a6a5d]">
         Chưa có tài khoản?{' '}

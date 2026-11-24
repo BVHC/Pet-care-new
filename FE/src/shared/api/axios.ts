@@ -77,7 +77,7 @@ export function bindAuth(hooks: AuthHooks) {
 }
 
 /** Path public (identity-v1 §3.1, ADR-0005): luôn xử lý như chưa đăng nhập nên không làm mới và không thử lại; gồm chính /auth/refresh. */
-const PUBLIC_PATH = /^\/api\/(auth\/(register|login|refresh|password)|public)(\/|$)/
+const PUBLIC_PATH = /^\/api\/(auth\/(register|login|refresh|password|google)|public)(\/|$)/
 
 // Đường thường (không phải đợi gì) giữ đồng bộ như trước: thêm nhịp microtask làm lệch nhịp của các test kiểm tra ngay sau `await user.click`.
 apiClient.interceptors.request.use((config) => {
@@ -105,7 +105,13 @@ async function recoverFrom401(error: AxiosError, config: InternalAxiosRequestCon
 apiClient.interceptors.response.use(undefined, (error: AxiosError) => {
   const status = error.response?.status
   const config = error.config
-  if (status === 400 && ruleIdOf(String((error.response?.data as { message?: unknown } | undefined)?.message ?? '')) === 'BR-TK-17') {
+  // Path public không bao giờ là "phải đổi mật khẩu": BE chỉ trả BR-TK-17 đó từ request đã đăng nhập, còn /auth/google trả BR-TK-17 "tài khoản nhân viên" cho người chưa đăng nhập.
+  if (
+    status === 400 &&
+    config &&
+    !PUBLIC_PATH.test(config.url ?? '') &&
+    ruleIdOf(String((error.response?.data as { message?: unknown } | undefined)?.message ?? '')) === 'BR-TK-17'
+  ) {
     auth.onMustChangePassword()
   }
   if (status === 401 && config && !PUBLIC_PATH.test(config.url ?? '')) return recoverFrom401(error, config)

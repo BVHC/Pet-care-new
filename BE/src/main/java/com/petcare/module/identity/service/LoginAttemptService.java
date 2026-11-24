@@ -17,26 +17,33 @@ import org.springframework.transaction.annotation.Transactional;
 import com.petcare.module.care.api.NotificationApi;
 import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
+import com.petcare.module.customer.api.CustomerApi;
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.identity.dto.GoogleLoginRequest;
 import com.petcare.module.identity.dto.LoginResponse;
 import com.petcare.module.identity.entity.Account;
 import com.petcare.module.identity.entity.AccountStatus;
 import com.petcare.module.identity.exception.InvalidCredentialsException;
 import com.petcare.module.identity.exception.LoginRejectedException;
+import com.petcare.module.identity.fsm.AccountTransitionHandler;
+import com.petcare.module.identity.google.GoogleIdentity;
 import com.petcare.module.identity.mapper.LoginMapper;
 import com.petcare.module.identity.repository.AccountCredential;
 import com.petcare.module.identity.repository.AccountRepository;
+import com.petcare.module.identity.repository.OtpTokenRepository;
 import com.petcare.module.identity.service.SessionService.OpenedSession;
 import com.petcare.platform.audit.AuditEntry;
 import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.config.TimeConfig;
+import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.security.PasswordConfig;
 
+import jakarta.persistence.EntityManager;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -50,6 +57,9 @@ import lombok.extern.slf4j.Slf4j;
  * </ul>
  * Thứ tự kiểm tra (mục 1): tồn tại → khóa tạm → mật khẩu → trạng thái, nên BR-TK-08/09/11 chỉ lộ khi đúng mật khẩu
  * (BR-TK-10).
+ * <p>
+ * {@link #loginWithGoogle}: phần có transaction của đăng nhập Google (docs/adr/0152), gọi từ {@link GoogleLoginService}
+ * sau khi token đã kiểm ngoài transaction; cùng quy ước 401 / 400 như trên.
  */
 @Slf4j
 @Service
@@ -59,6 +69,12 @@ public class LoginAttemptService {
             "Tài khoản tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau %s";
     static final String MSG_PENDING = "Tài khoản chưa xác thực email. Vui lòng nhập mã OTP đã gửi tới email";
     static final String MSG_LOCKED = "Tài khoản đã bị khóa. Vui lòng liên hệ Pet Care để được hỗ trợ";
+    static final String MSG_GOOGLE_STAFF = "Tài khoản nhân viên đăng nhập bằng email và mật khẩu";
+    static final String MSG_GOOGLE_EMAIL_TAKEN =
+            "Email này đã có tài khoản. Vui lòng đăng nhập bằng email và mật khẩu";
+
+    /** {@code customers.full_name VARCHAR(100)}: Postgres đếm theo ký tự (code point), không theo char UTF-16. */
+    static final int FULL_NAME_MAX_CODE_POINTS = 100;
 
     /** Định dạng giờ mở khóa trong message BR-TK-09 và email {@code LOGIN_LOCKED_WARNING} (V8). */
     static final DateTimeFormatter UNLOCK_TIME_FORMAT =
@@ -80,10 +96,15 @@ public class LoginAttemptService {
     private final PasswordEncoder passwordEncoder;
     private final LoginMapper mapper;
     private final Clock clock;
+    private final CustomerApi customerProfiles;
+    private final OtpTokenRepository otpTokens;
+    private final AccountTransitionHandler transitions;
+    private final EntityManager entityManager;
 
     public LoginAttemptService(AccountRepository accounts, SessionService sessions, CustomerQueryApi customers,
             NotificationApi notifications, SystemConfigApi configs, AuditRecorder audit,
-            PasswordEncoder passwordEncoder, LoginMapper mapper, Clock clock) {
+            PasswordEncoder passwordEncoder, LoginMapper mapper, Clock clock, CustomerApi customerProfiles,
+            OtpTokenRepository otpTokens, AccountTransitionHandler transitions, EntityManager entityManager) {
         this.accounts = accounts;
         this.sessions = sessions;
         this.customers = customers;
@@ -93,6 +114,10 @@ public class LoginAttemptService {
         this.passwordEncoder = passwordEncoder;
         this.mapper = mapper;
         this.clock = clock;
+        this.customerProfiles = customerProfiles;
+        this.otpTokens = otpTokens;
+        this.transitions = transitions;
+        this.entityManager = entityManager;
     }
 
     /**
@@ -161,7 +186,113 @@ public class LoginAttemptService {
                     failedEntry(account, IdentityAuditActions.REASON_DISABLED));
         }
 
-        return succeed(account, now, ipAddress, userAgent);
+        return succeed(account, now, ipAddress, userAgent, Map.of());
+    }
+
+    /**
+     * Đăng nhập / tạo tài khoản bằng Google (docs/adr/0152, spec 2026-11-24 §6.2, §6.3). {@code identity} đã kiểm ở
+     * {@link GoogleLoginService} (ngoài transaction). Khóa {@code accounts} theo {@code sub} trước, không thấy mới theo
+     * email; mỗi request khóa đúng một dòng, đọc dưới khóa. Mọi nhánh 400 ném trước lệnh ghi đầu tiên; 401 lệch
+     * {@code sub} ghi audit rồi ném (commit nhờ {@code noRollbackFor}).
+     *
+     * @param unusableHash BCrypt không ai biết mật khẩu, tính sẵn ngoài transaction, lưu cho tài khoản tạo mới
+     */
+    @Transactional(noRollbackFor = InvalidCredentialsException.class)
+    public LoginResponse loginWithGoogle(GoogleIdentity identity, GoogleLoginRequest request, String unusableHash,
+            String ipAddress, String userAgent) {
+        Instant now = Instant.now(clock);
+        Optional<Account> bound = accounts.findByGoogleSubForUpdate(identity.sub());
+        if (bound.isPresent()) {
+            // sub thắng: email tài khoản giữ nguyên, tài khoản đang giữ email của token (nếu có) không bị đụng.
+            rejectIfBlocked(bound.get(), now);
+            return succeed(bound.get(), now, ipAddress, userAgent, Map.of("method", IdentityAuditActions.METHOD_GOOGLE));
+        }
+
+        Optional<Account> byEmail = accounts.findByEmailForUpdate(identity.email());
+        if (byEmail.isEmpty()) {
+            requireConsent(request);
+            return createGoogleCustomer(identity, request, unusableHash, now, ipAddress, userAgent);
+        }
+        Account account = byEmail.get();
+        if (account.getRole() != Role.CUSTOMER) {
+            throw new LoginRejectedException("BR-TK-17", MSG_GOOGLE_STAFF,
+                    failedEntry(account, IdentityAuditActions.REASON_GOOGLE_STAFF));
+        }
+        // So sánh, không chỉ kiểm null: request song song cùng token có thể vừa gắn đúng sub này rồi commit trước
+        // khi khóa theo email nhả (bước tìm theo sub ở trên đã chạy trước commit đó).
+        if (account.getGoogleSub() != null && !account.getGoogleSub().equals(identity.sub())) {
+            audit.record(failedEntry(account, IdentityAuditActions.REASON_GOOGLE_SUB_MISMATCH));
+            throw new InvalidCredentialsException(InvalidCredentialsException.GOOGLE_MESSAGE);
+        }
+        if (!identity.emailAuthoritative()) {
+            throw new LoginRejectedException("BR-TK-01", MSG_GOOGLE_EMAIL_TAKEN,
+                    failedEntry(account, IdentityAuditActions.REASON_GOOGLE_EMAIL_NOT_AUTHORITATIVE));
+        }
+        if (account.getStatus() != AccountStatus.PENDING) {
+            rejectIfBlocked(account, now);
+            account.bindGoogle(identity.sub());
+            return succeed(account, now, ipAddress, userAgent, Map.of("method", IdentityAuditActions.METHOD_GOOGLE));
+        }
+
+        // PENDING: không kích hoạt tại chỗ (mật khẩu có thể của người đăng ký trước). Không áp BR-TK-09/11: kẻ đăng ký
+        // trước gõ sai 5 lần là chặn được chủ thật. Xóa như ST02 rồi tạo lại.
+        requireConsent(request);
+        otpTokens.deleteByAccountId(account.getId());
+        customerProfiles.deleteOnlineProfileOfUnverifiedAccount(account.getId());
+        if (accounts.deletePendingById(account.getId()) != 1) {
+            throw new IllegalStateException("Tài khoản PENDING #" + account.getId() + " đã khóa nhưng không xóa được");
+        }
+        entityManager.detach(account);   // entity cũ không được dính vào flush của tài khoản mới cùng email
+        return createGoogleCustomer(identity, request, unusableHash, now, ipAddress, userAgent);
+    }
+
+    /** Tạo tài khoản khách bằng Google: cạnh FSM có sẵn #1 rồi #2, không OTP, không email (docs/adr/0152). */
+    private LoginResponse createGoogleCustomer(GoogleIdentity identity, GoogleLoginRequest request,
+            String unusableHash, Instant now, String ipAddress, String userAgent) {
+        transitions.validateInitial(AccountStatus.PENDING);
+        Account account = Account.registerCustomer(identity.email(), unusableHash,
+                now.plus(Duration.ofHours(configs.getInt(ConfigKey.ACCOUNT_PENDING_TTL_HOURS))));
+        transitions.validateTransition(AccountStatus.PENDING, AccountStatus.ACTIVE);
+        account.verify();
+        account.bindGoogle(identity.sub());
+        account = accounts.save(account);
+        customerProfiles.createOnlineProfile(account.getId(), googleFullName(identity), request.phone());
+        if (request.phone() != null) {
+            customerProfiles.flagLinkDecisionIfPhoneMatches(account.getId());
+        }
+        log.info("ACCOUNT_REGISTERED_WITH_GOOGLE accountId={}", account.getId());
+        return succeed(account, now, ipAddress, userAgent,
+                Map.of("method", IdentityAuditActions.METHOD_GOOGLE, "accountCreated", true));
+    }
+
+    /** BR-TK-09, 11 khi đăng nhập bằng Google: Google đã chứng minh danh tính, nên như mật khẩu đúng. */
+    private static void rejectIfBlocked(Account account, Instant now) {
+        if (account.isTemporarilyLocked(now)) {
+            throw new LoginRejectedException("BR-TK-09",
+                    MSG_TEMPORARILY_LOCKED.formatted(formatUnlockTime(account.getLockedUntil())),
+                    failedEntry(account, IdentityAuditActions.REASON_TEMPORARILY_LOCKED));
+        }
+        if (account.isLocked()) {
+            throw new LoginRejectedException("BR-TK-11", MSG_LOCKED,
+                    failedEntry(account, IdentityAuditActions.REASON_LOCKED));
+        }
+    }
+
+    private static void requireConsent(GoogleLoginRequest request) {
+        if (!Boolean.TRUE.equals(request.isAdult()) || !Boolean.TRUE.equals(request.termsAccepted())) {
+            throw new BusinessRuleViolationException("BR-TK-02", RegistrationService.MSG_CONSENT_REQUIRED);
+        }
+    }
+
+    /** Claim {@code name} (verifier đã ghép given + family), trống thì phần trước {@code @}; tối đa 100 code point. */
+    static String googleFullName(GoogleIdentity identity) {
+        String name = identity.name() == null || identity.name().isBlank()
+                ? identity.email().substring(0, identity.email().indexOf('@'))
+                : identity.name().strip();
+        if (name.codePointCount(0, name.length()) <= FULL_NAME_MAX_CODE_POINTS) {
+            return name;
+        }
+        return name.substring(0, name.offsetByCodePoints(0, FULL_NAME_MAX_CODE_POINTS)).strip();
     }
 
     /** Mật khẩu quá 72 byte không bao giờ khớp: BCrypt chỉ so 72 byte đầu (docs/adr/0019 mục 7). */
@@ -196,7 +327,9 @@ public class LoginAttemptService {
                 .before(before).after(LoginCounterSnapshot.of(account)));
     }
 
-    private LoginResponse succeed(Account account, Instant now, String ipAddress, String userAgent) {
+    /** @param extraAfter khóa thêm vào {@code LOGIN_SUCCEEDED.after} (Google: {@code method}, {@code accountCreated}) */
+    private LoginResponse succeed(Account account, Instant now, String ipAddress, String userAgent,
+            Map<String, Object> extraAfter) {
         LoginCounterSnapshot before = LoginCounterSnapshot.of(account);
         account.recordSuccessfulLogin(now);
         LoginCounterSnapshot after = LoginCounterSnapshot.of(account);
@@ -205,6 +338,7 @@ public class LoginAttemptService {
 
         Map<String, Object> afterData = new LinkedHashMap<>();
         afterData.put("sessionId", session.sessionId());
+        afterData.putAll(extraAfter);
         AuditEntry entry = AuditEntry.of(IdentityAuditActions.LOGIN_SUCCEEDED)
                 .entity("accounts", account.getId())
                 .actor(account.getId(), account.getEmail());

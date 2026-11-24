@@ -67,6 +67,7 @@ class RateLimitFilterTest {
     @ParameterizedTest
     @CsvSource({
             "/api/auth/login,                 login,    30, 60",
+            "/api/auth/google,                login,    30, 60",
             "/api/auth/register,              register, 10, 45",
             "/api/auth/register/verify,       register, 10, 45",
             "/api/auth/register/resend-otp,   register, 10, 45",
@@ -84,6 +85,7 @@ class RateLimitFilterTest {
     @ParameterizedTest
     @CsvSource({
             "GET,     /api/auth/login",
+            "GET,     /api/auth/google",
             "OPTIONS, /api/auth/login",
             "PUT,     /api/auth/login",
             "POST,    /api/auth/refresh",
@@ -103,6 +105,16 @@ class RateLimitFilterTest {
         assertThat(limiter.calls).isEmpty();
         assertThat(chain.getRequest()).isNotNull();
         verify(resolver, never()).resolveException(any(), any(), any(), any());
+    }
+
+    /** Đăng nhập Google (identity-v1 #40, ADR-0152) dùng chung cửa sổ {@code login} với đăng nhập mật khẩu: không thêm nhóm. */
+    @Test
+    void googleLoginSharesLoginWindow() throws Exception {
+        run("POST", "/api/auth/login", "203.0.113.9");
+        run("POST", "/api/auth/google", "203.0.113.9");
+
+        assertThat(limiter.calls).extracting(RecordingLimiter.Call::key)
+                .containsExactly("rl:login:203.0.113.9", "rl:login:203.0.113.9");
     }
 
     /** BR-AI-09: hai endpoint hỏi đáp dùng chung một nhóm; mỗi request đếm cửa sổ phút rồi cửa sổ giờ của cùng IP. */

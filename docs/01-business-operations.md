@@ -28,9 +28,9 @@
 
 | Mã | Use case | Actor |
 |---|---|---|
-| UC01 | Đăng ký tài khoản | A01 |
+| UC01 | Đăng ký tài khoản (luồng chính: email + mật khẩu + OTP; *luồng thay thế "bằng Google"*, ADR-0152: chọn tài khoản Google, tích xác nhận BR-TK-02, vào thẳng `ACTIVE`, không OTP; chỉ tài khoản khách) | A01 |
 | UC02 | Xác thực OTP (gồm gửi lại OTP) «include» | A01–A08 |
-| UC03 | Đăng nhập / đăng xuất | A02–A08 |
+| UC03 | Đăng nhập / đăng xuất (luồng chính: email + mật khẩu; *luồng thay thế "bằng Google"*, ADR-0152, **chỉ A02**: đăng nhập bằng `sub` Google, email có thẩm quyền trùng tài khoản khách thì tự gắn, nhân viên A03–A08 không dùng được, BR-TK-17) | A02–A08 |
 | UC04 | Quên mật khẩu | A02–A08 |
 | UC05 | Đổi mật khẩu | A02–A08 |
 | UC06 | Quản lý hồ sơ cá nhân (gồm SĐT; không gồm email — BR-TK-15; gồm sổ địa chỉ giao hàng; với A07 gồm thông tin giới thiệu hiển thị công khai: ảnh, chuyên môn, mô tả ngắn) | A02–A08 |
@@ -250,7 +250,7 @@ Các mục dưới đây do hệ thống tự chạy theo thời gian hoặc the
 
 | Use case gốc | Quan hệ | Use case liên quan |
 |---|---|---|
-| UC01 Đăng ký, UC04 Quên mật khẩu, UC07 Liên kết tài khoản | «include» | UC02 Xác thực OTP |
+| UC01 Đăng ký, UC04 Quên mật khẩu, UC07 Liên kết tài khoản | «include» | UC02 Xác thực OTP (riêng luồng thay thế "bằng Google" của UC01 không qua OTP, ADR-0152) |
 | UC08 Quản lý tài khoản nhân viên, UC22 Quản lý hồ sơ khách tại quầy (khi sửa email) | «extend» | UC02 Xác thực OTP |
 | UC44 Tiếp nhận khách (khách chưa có hồ sơ) | «extend» | UC22 Quản lý hồ sơ khách tại quầy |
 | UC48 Khám bệnh | «extend» | UC55 Nhập viện *(tầng 3)* (UC50 Phẫu thuật đã bỏ, ADR-0125) |

@@ -46,6 +46,9 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class RegistrationService {
 
+    /** BR-TK-02; đăng nhập Google tạo tài khoản dùng lại đúng chuỗi này (docs/adr/0152). */
+    static final String MSG_CONSENT_REQUIRED = "Bạn cần xác nhận đủ 18 tuổi và đồng ý điều khoản sử dụng";
+
     private final AccountRepository accounts;
     private final AccountTransitionHandler transitions;
     private final CustomerApi customers;
@@ -83,8 +86,7 @@ public class RegistrationService {
         String email = request.email().strip().toLowerCase(Locale.ROOT);
 
         if (!Boolean.TRUE.equals(request.isAdult()) || !Boolean.TRUE.equals(request.termsAccepted())) {
-            throw new BusinessRuleViolationException("BR-TK-02",
-                    "Bạn cần xác nhận đủ 18 tuổi và đồng ý điều khoản sử dụng");
+            throw new BusinessRuleViolationException("BR-TK-02", MSG_CONSENT_REQUIRED);
         }
         passwordPolicy.check(request.password());
         if (accounts.existsByEmail(email)) {

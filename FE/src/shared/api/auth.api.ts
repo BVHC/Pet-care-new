@@ -5,6 +5,7 @@
 import { apiClient } from './axios';
 import type {
   ChangePasswordRequest,
+  GoogleLoginRequest,
   LoginRequest,
   LoginResponse,
   OtpSentResponse,
@@ -29,6 +30,10 @@ export const authApi = {
   /** Token chi mang sub/sid/jti (ADR-0003): role, mustChangePassword doc tu `account`. */
   login: async (payload: LoginRequest): Promise<LoginResponse> =>
     (await apiClient.post('/api/auth/login', payload)).data.data,
+
+  /** Đăng nhập hoặc tạo tài khoản khách bằng ID token Google; trả y hệt `login` (identity-v1 #40, ADR-0152). Path public. */
+  google: async (payload: GoogleLoginRequest): Promise<LoginResponse> =>
+    (await apiClient.post('/api/auth/google', payload)).data.data,
 
   /** Token mới thay token cũ; token cũ dùng lại hủy cả phiên (ADR-0091). Path public: axios.ts không làm mới / thử lại quanh nó. */
   refresh: async (refreshToken: string): Promise<RefreshResponse> =>

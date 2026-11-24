@@ -98,7 +98,7 @@ function findRoute(method: string, path: string) {
 }
 
 /** Không cần đăng nhập (00-method §3.1). */
-const PUBLIC_PATH = /^\/api\/(auth\/(register(\/.*)?|login|refresh|password\/.*)|public\/.*)$/;
+const PUBLIC_PATH = /^\/api\/(auth\/(register(\/.*)?|login|google|refresh|password\/.*)|public\/.*)$/;
 /** Vẫn gọi được khi còn mustChangePassword (identity-v1 A4). */
 const ALLOWED_BEFORE_PASSWORD_CHANGE = new Set(['GET /api/me', 'POST /api/me/password', 'POST /api/auth/logout']);
 

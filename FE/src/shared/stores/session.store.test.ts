@@ -1,6 +1,8 @@
-import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fakeGoogleCredential } from '../../test/google';
 import { apiClient } from '../api/axios';
 import { toApiError } from '../api/api-error';
+import { authApi } from '../api/auth.api';
 import { MOCK_PASSWORD } from '../api/mock/identity.mock';
 import { installMockApi } from '../api/mock/mock-api';
 import { activeAccount, useSession } from './session.store';
@@ -76,5 +78,46 @@ describe('session', () => {
     const s = useSession.getState();
     expect(activeAccount(s, Date.parse(s.expiresAt!) - 1)).not.toBeNull();
     expect(activeAccount(s, Date.parse(s.expiresAt!))).toBeNull();
+  });
+});
+
+// Đăng nhập Google (identity-v1 #40): dùng chung đoạn lưu phiên với `login`; axios coi /api/auth/google là path public (không làm mới, không bật cờ BR-TK-17).
+describe('session, đăng nhập Google', () => {
+  beforeEach(() => {
+    localStorage.clear(); // state mock (tài khoản tạo qua Google) không dây sang ca khác
+    vi.stubEnv('VITE_GOOGLE_CLIENT_ID', 'test-client');
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  const newGmail = { credential: fakeGoogleCredential({ sub: 'g-lan', email: 'lan@gmail.com', name: 'Lan Anh' }), isAdult: true, termsAccepted: true };
+
+  it('loginWithGoogleStoresSessionLikeLogin', async () => {
+    const account = await useSession.getState().loginWithGoogle(newGmail);
+
+    const s = useSession.getState();
+    expect(account).toMatchObject({ email: 'lan@gmail.com', role: 'CUSTOMER', status: 'ACTIVE', mustChangePassword: false });
+    expect(s).toMatchObject({ account, linkDecisionPending: false, fullName: 'Lan Anh' });
+    expect(s.token).toBeTruthy();
+    expect(s.refreshToken).toBeTruthy();
+    expect(s.accessTokenExpiresAt).toBeTruthy();
+    expect(s.expiresAt).toBeTruthy();
+    expect((await apiClient.get('/api/me')).data.data.account.email).toBe('lan@gmail.com'); // token gửi kèm các request sau
+  });
+
+  it('googleBrTk17DoesNotFlagMustChangePassword', async () => {
+    await login('khach@petcare.vn');
+    const error = await authApi.google({ credential: fakeGoogleCredential({ sub: 'g-bs', email: 'doctor@store1.vn' }) }).catch((e: unknown) => e);
+
+    expect(toApiError(error)).toMatchObject({ statusCode: 400, ruleId: 'BR-TK-17' });
+    expect(useSession.getState().account?.mustChangePassword).toBe(false);
+  });
+
+  it('google401DoesNotEndExistingSession', async () => {
+    await login('khach@petcare.vn');
+    const error = await authApi.google({ credential: 'abc' }).catch((e: unknown) => e);
+
+    expect(toApiError(error)).toMatchObject({ statusCode: 401, message: 'Đăng nhập Google không thành công. Vui lòng thử lại' });
+    expect(useSession.getState().account).toMatchObject({ email: 'khach@petcare.vn' });
+    expect(useSession.getState().token).toBeTruthy();
   });
 });

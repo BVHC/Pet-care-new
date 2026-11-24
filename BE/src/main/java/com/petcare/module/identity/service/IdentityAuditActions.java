@@ -55,6 +55,18 @@ public final class IdentityAuditActions {
     public static final String REASON_LOCKED = "LOCKED";
     /** {@code LOGIN_FAILED.reason}: mật khẩu đúng, tài khoản {@code DISABLED} (BR-TK-11). */
     public static final String REASON_DISABLED = "DISABLED";
+    /** {@code LOGIN_FAILED.reason}: đăng nhập Google bằng email của tài khoản nhân viên (BR-TK-17, docs/adr/0152). */
+    public static final String REASON_GOOGLE_STAFF = "GOOGLE_STAFF";
+    /** {@code LOGIN_FAILED.reason}: tài khoản khách của email đã gắn {@code sub} Google khác (401, docs/adr/0152). */
+    public static final String REASON_GOOGLE_SUB_MISMATCH = "GOOGLE_SUB_MISMATCH";
+    /**
+     * {@code LOGIN_FAILED.reason}: email đã có tài khoản nhưng Google không có thẩm quyền về email đó (không
+     * {@code @gmail.com}, không {@code hd}) — BR-TK-01, docs/adr/0152.
+     */
+    public static final String REASON_GOOGLE_EMAIL_NOT_AUTHORITATIVE = "GOOGLE_EMAIL_NOT_AUTHORITATIVE";
+
+    /** {@code LOGIN_SUCCEEDED.after.method} của đăng nhập Google (docs/adr/0152); đăng nhập mật khẩu không ghi khóa này. */
+    public static final String METHOD_GOOGLE = "GOOGLE";
 
     private IdentityAuditActions() {
     }

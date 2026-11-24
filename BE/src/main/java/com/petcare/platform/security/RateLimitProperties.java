@@ -14,7 +14,8 @@ import jakarta.validation.constraints.NotNull;
  * mặc định nằm ở {@code application.yml}; profile {@code test} tắt hẳn.
  *
  * @param enabled        tắt thì không có bean bộ đếm, không gắn filter, không gọi Redis
- * @param login          {@code POST /api/auth/login}
+ * @param login          {@code POST /api/auth/login} và {@code POST /api/auth/google} (docs/adr/0152), dùng chung
+ *                       một bộ đếm theo IP
  * @param register       {@code POST /api/auth/register}, {@code /register/verify}, {@code /register/resend-otp}
  * @param password       {@code POST /api/auth/password/forgot}, {@code /password/reset}
  * @param ai             {@code POST /api/public/ai/chat} và {@code POST /api/me/ai/chat}, cửa sổ ngắn (mặc định 10 câu / phút,

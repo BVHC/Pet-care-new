@@ -1777,6 +1777,65 @@ paths:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
+  "/auth/google":
+    post:
+      tags: [Auth]
+      summary: "Đăng nhập bằng Google"
+      description: "UC01, UC03 · BR-TK-01, 02, 08, 09, 10, 11, 17, 19, BR-QT-15. Actor: A01–A02. Quyền: Public. Chuyển trạng thái: —. Một endpoint cho cả đăng nhập và đăng ký: BE tự biết. Thứ tự lỗi: 429 → `MALFORMED_REQUEST` → `VALIDATION_FAILED` → 503 → 401 (token) → `BR-TK-17` → 401 (`google_sub` lệch) → `BR-TK-01` → `BR-TK-09` → `BR-TK-11` → `BR-TK-02` → 409. Tìm tài khoản theo `sub` trước, không thấy mới theo email; tài khoản khách ACTIVE chưa gắn Google và email do Google bảo đảm thì tự gắn `sub`, mật khẩu cũ vẫn dùng. Chưa có tài khoản, hoặc chỉ có PENDING: tạo tài khoản ACTIVE trong một giao dịch (— → PENDING → ACTIVE, Tài khoản#1 rồi #2), hồ sơ khách online, không OTP, không gửi email; PENDING của người khác bị xóa (OTP, hồ sơ, tài khoản) rồi tạo lại, không kích hoạt tại chỗ. Response y hệt `POST /auth/login`; `linkDecisionPending` bật khi `phone` trùng hồ sơ tại quầy (BR-TK-19). BR-TK-10: `BR-TK-17` và `BR-TK-02` cho biết email có tài khoản hay chưa, nhưng chỉ với người đã chứng minh sở hữu email qua Google. Audit `LOGIN_SUCCEEDED` kèm `method` = `GOOGLE` (và `accountCreated` khi tạo mới); thất bại ghi `LOGIN_FAILED` với reason `GOOGLE_STAFF` / `GOOGLE_SUB_MISMATCH` / `GOOGLE_EMAIL_NOT_AUTHORITATIVE` hoặc reason của khóa (ADR-0152)."
+      operationId: loginWithGoogle
+      security: []
+      requestBody:
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: "#/components/schemas/GoogleLoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            "application/json":
+              schema:
+                type: object
+                required: [data, message, code]
+                properties:
+                  data:
+                    $ref: "#/components/schemas/LoginResponse"
+                  message:
+                    type: string
+                  code:
+                    type: integer
+                    description: "HTTP status của kết quả, ví dụ 200, 201"
+        "400":
+          description: "`MALFORMED_REQUEST` body sai JSON / sai kiểu · `VALIDATION_FAILED` `credential` trống hoặc quá 4096 ký tự, `phone` sai dạng hoặc chuỗi rỗng · theo thứ tự kiểm sau khi token hợp lệ: `BR-TK-17` email thuộc tài khoản nhân viên · `BR-TK-01` email không do Google bảo đảm (không `@gmail.com`, không claim `hd`) mà đã có tài khoản · `BR-TK-09` khách đang khóa tạm, message có giờ thử lại · `BR-TK-11` tài khoản bị khóa · `BR-TK-02` phải tạo tài khoản nhưng chưa xác nhận đủ 18 tuổi / đồng ý điều khoản"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: "Token không hợp lệ (chữ ký, `iss`, `aud`, hết hạn, thiếu `sub` / `email`, `email_verified` khác true) hoặc email đã gắn với tài khoản Google khác — một thông điệp chung \"Đăng nhập Google không thành công. Vui lòng thử lại\""
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: "`CONCURRENCY_CONFLICT` hai request tạo cùng email / `sub` song song; gọi lại là đăng nhập được"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "`TOO_MANY_REQUESTS` một IP gọi quá nhiều lần trong một cửa sổ thời gian (ADR-0100): header `Retry-After` là số giây nguyên phải chờ. Request bị chặn trước khi xử lý: không đếm vào khóa tạm BR-TK-09 hay quota OTP BR-TK-07, không ghi audit"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "`SERVICE_UNAVAILABLE` BE chưa cấu hình `GOOGLE_CLIENT_ID` hoặc không lấy được khóa của Google (mạng, hết giờ); khách vẫn đăng nhập bằng email và mật khẩu"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -1849,7 +1908,7 @@ components:
           enum: [false]
         errorCode:
           type: string
-          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, INTERNAL_ERROR]
+          enum: [BUSINESS_RULE_VIOLATION, INVALID_STATE_TRANSITION, RESOURCE_NOT_FOUND, ACCESS_DENIED_SCOPE_MISMATCH, CONCURRENCY_CONFLICT, VALIDATION_FAILED, MALFORMED_REQUEST, METHOD_NOT_ALLOWED, UNSUPPORTED_MEDIA_TYPE, UNAUTHENTICATED, ACCESS_DENIED, TOO_MANY_REQUESTS, SERVICE_UNAVAILABLE, INTERNAL_ERROR]
           description: platform/exception/ErrorCode
         message:
           type: string
@@ -2056,6 +2115,25 @@ components:
           type: string
           format: date-time
           description: "Hạn tuyệt đối của phiên (không đổi)"
+    GoogleLoginRequest:
+      type: object
+      required: [credential]
+      properties:
+        credential:
+          type: string
+          maxLength: 4096
+          description: "ID token Google (`credential` do Google Identity Services trả về)"
+        isAdult:
+          type: [boolean, "null"]
+          description: "Xác nhận từ 18 tuổi (BR-TK-02); chỉ dùng, và chỉ bắt buộc `true`, khi phải tạo tài khoản"
+        termsAccepted:
+          type: [boolean, "null"]
+          description: "Đồng ý điều khoản sử dụng (BR-TK-02); như `isAdult`"
+        phone:
+          type: [string, "null"]
+          pattern: "^0[0-9]{9}$"
+          maxLength: 15
+          description: "Không bắt buộc; chỉ dùng khi tạo tài khoản, để gợi ý liên kết hồ sơ tại quầy (BR-TK-19). `0` + 9 chữ số như `phone` của đăng ký ở BE; chuỗi rỗng bị từ chối"
     ResetPasswordRequest:
       type: object
       required: [email, code, newPassword]
