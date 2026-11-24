@@ -65,4 +65,46 @@ class PrescriptionApiServiceTest {
         assertThat(tx).isNotNull();
         assertThat(tx.propagation()).isEqualTo(Propagation.MANDATORY);
     }
+
+    // ================================================================ findItemOfVisitForKeyShare (docs/adr/0149 mục 28)
+
+    @Test
+    void keyShareLookupMapsTheLockedRowAndTreatsNullAsNotExternal() {
+        PrescriptionItemRepository.KeyShared row = mock(PrescriptionItemRepository.KeyShared.class);
+        doReturn(7001L).when(row).getId();
+        doReturn(Boolean.TRUE).when(row).getExternalPurchase();
+        doReturn(java.util.Optional.of(row)).when(items).lockItemInVisitForKeyShare(7001L, 9001L);
+
+        assertThat(service.findItemOfVisitForKeyShare(7001L, 9001L)).contains(
+                new com.petcare.module.visit.api.PrescriptionApi.PrescriptionItemRef(7001L, true));
+
+        doReturn(null).when(row).getExternalPurchase();
+        assertThat(service.findItemOfVisitForKeyShare(7001L, 9001L).orElseThrow().externalPurchase()).isFalse();
+    }
+
+    @Test
+    void keyShareLookupOfAnItemOfAnotherVisitIsEmpty() {
+        doReturn(java.util.Optional.empty()).when(items).lockItemInVisitForKeyShare(7001L, 9002L);
+
+        assertThat(service.findItemOfVisitForKeyShare(7001L, 9002L)).isEmpty();
+    }
+
+    @Test
+    void keyShareLookupRejectsNullsBeforeTouchingTheRepository() {
+        assertThatThrownBy(() -> service.findItemOfVisitForKeyShare(null, 9001L))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.findItemOfVisitForKeyShare(7001L, null))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(items);
+    }
+
+    @Test
+    void keyShareLookupJoinsTheCallersTransaction() throws NoSuchMethodException {
+        Transactional tx = PrescriptionApiService.class
+                .getMethod("findItemOfVisitForKeyShare", Long.class, Long.class).getAnnotation(Transactional.class);
+
+        assertThat(tx).isNotNull();
+        assertThat(tx.propagation()).isEqualTo(Propagation.MANDATORY);
+    }
 }

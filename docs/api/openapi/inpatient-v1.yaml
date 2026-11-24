@@ -23,7 +23,7 @@ paths:
     post:
       tags: [Admissions]
       summary: "Nhập viện"
-      description: "UC55 · BR-LT-13. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ADMITTED (Nhập viện#1). Từ lưu trú: tạo Visit điều trị gán VET gọi (Order không có dòng tự sinh), đặt chỗ giữ nguyên trạng thái (`CHECKED_IN` hoặc `OVERDUE`), thú ở nguyên chuồng (BR-LT-13, BR-LT-17). Visit điều trị là Visit#7, Order#14; chuồng điều trị là Chuồng#6, #7 (03)."
+      description: "UC55 · BR-LT-13. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ADMITTED (Nhập viện#1). Từ lưu trú: tạo Visit điều trị gán VET gọi (Order không có dòng tự sinh), đặt chỗ giữ nguyên trạng thái (`CHECKED_IN` hoặc `OVERDUE`), thú ở nguyên chuồng (BR-LT-13, BR-LT-17). Visit điều trị là Visit#7, Order#14; chuồng điều trị là Chuồng#6, #7 (03). Thứ tự lỗi: 400 hình thức → 403 vai trò → 400 `BR-LT-13` nguồn → 404 Visit / đặt chỗ → 403 chi nhánh → 409 → 400 `BR-LT-13` điều kiện → 404 / 400 dịch vụ → 404 / 400 chuồng (ADR-0149)."
       operationId: admitPet
       security:
         - bearerAuth: []
@@ -50,7 +50,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · Visit không `IN_PROGRESS` / không của mình · đặt chỗ không `CHECKED_IN` / `OVERDUE` · thú đang lưu trú mà nhập từ khám · dịch vụ không `INPATIENT` · chuồng không `AVAILABLE` · thiếu `kennelId` khi nhập từ khám / có `kennelId` khi nhập từ lưu trú · thú đã mất"
+          description: "`BR-LT-13` không đúng một trong `visitId` / `boardingBookingId` · thiếu `kennelId` khi nhập từ khám / có `kennelId` khi nhập từ lưu trú · Visit không `IN_PROGRESS` / không của mình / không thuộc nhóm Khám/Tiêm · đặt chỗ không `CHECKED_IN` / `OVERDUE` · thú đang lưu trú mà nhập từ khám · dịch vụ không `INPATIENT` / ngừng kinh doanh / chưa bật ở chi nhánh (A5) · chuồng không `AVAILABLE` / khác chi nhánh · thú đã mất; `VALIDATION_FAILED` thiếu `serviceId` hoặc id ≤ 0; `MALFORMED_REQUEST` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -58,7 +58,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Không phải VET · Visit / đặt chỗ của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "Không tìm thấy Visit / đặt chỗ / dịch vụ / chuồng"
           content:
@@ -66,7 +70,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "409":
-          description: "Thú đã có ca nội trú `ADMITTED`"
+          description: "Thú đã có ca nội trú `ADMITTED` (`INVALID_STATE_TRANSITION`; hai lần nhập viện đồng thời: bên thua `CONCURRENCY_CONFLICT`)"
           content:
             "application/json":
               schema:
@@ -74,7 +78,7 @@ paths:
     get:
       tags: [Admissions]
       summary: "Ca nội trú của chi nhánh"
-      description: "UC55 · BR-LT-17. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —. `status` vắng = `ADMITTED`. Nhập viện sớm nhất trước."
+      description: "UC55 · BR-LT-17. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —. `status` vắng = `ADMITTED`. Chỉ ca của chi nhánh người gọi. Nhập viện sớm nhất trước (trùng thì `admissionId` tăng dần). `kennelCode`: chuồng điều trị (nhập từ khám) hoặc chuồng của đặt chỗ (nhập từ lưu trú)."
       operationId: listAdmissions
       security:
         - bearerAuth: []
@@ -116,7 +120,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/admissions/{admissionId}":
     get:
       tags: [Admissions]
@@ -148,14 +156,22 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · ca của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy ca nội trú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/admissions/{admissionId}/discharge":
     post:
       tags: [Admissions]
       summary: "Xuất viện"
-      description: "UC55 · BR-LT-14. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ADMITTED → DISCHARGED (Nhập viện#2). Thêm **một** dòng dịch vụ nội trú (số lượng = ngày xuất − ngày nhập + 1, đơn giá = `unitPrice` đã chốt) vào Order của Visit trong cùng transaction; giải phóng chuồng nếu được cấp riêng. `DECEASED` không tự đánh dấu thú mất (BR-LT-14)."
+      description: "UC55 · BR-LT-14. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ADMITTED → DISCHARGED (Nhập viện#2). Thêm **một** dòng dịch vụ nội trú (số lượng = ngày xuất − ngày nhập + 1 theo ngày lịch giờ Việt Nam, đơn giá = `unitPrice` đã chốt, không phải giá danh mục hiện hành) vào Order của Visit trong cùng transaction; giải phóng chuồng nếu được cấp riêng. `DECEASED` không tự đánh dấu thú mất (BR-LT-14). Dòng này sau đó không sửa / xóa tay được (BR-LT-18). Thứ tự lỗi: 400 hình thức → 403 vai trò → 400 `BR-LT-14` tóm tắt rỗng → 404 → 403 chi nhánh → 403 người phụ trách → 409 → 400 `BR-LT-14` còn y lệnh."
       operationId: dischargeAdmission
       security:
         - bearerAuth: []
@@ -184,7 +200,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-14` còn y lệnh `ORDERED` · thiếu tóm tắt"
+          description: "`BR-LT-14` còn y lệnh `ORDERED` · thiếu tóm tắt (rỗng sau `strip()`); `VALIDATION_FAILED` thiếu kết cục / tóm tắt hoặc tóm tắt quá 2000 ký tự; `MALFORMED_REQUEST` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -192,11 +208,19 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Không phải VET · ca của chi nhánh khác · không phải VET phụ trách Visit"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy ca nội trú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "`INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25)"
+          description: "`INVALID_STATE_TRANSITION` ca không còn `ADMITTED` (03 #24); hai xuất viện đồng thời: bên sau 409"
           content:
             "application/json":
               schema:
@@ -205,7 +229,7 @@ paths:
     post:
       tags: ["Admission orders"]
       summary: "Ra y lệnh"
-      description: "UC56 · BR-LT-15. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ORDERED (Y lệnh nội trú#1)."
+      description: "UC56 · BR-LT-15. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: — → ORDERED (Y lệnh nội trú#1). Thứ tự lỗi: 400 hình thức → 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 409 → 400 `BR-LT-15`."
       operationId: createAdmissionOrder
       security:
         - bearerAuth: []
@@ -234,7 +258,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-15` `MEDICATION` thiếu dòng đơn thuốc · dòng đơn không thuộc Visit"
+          description: "`BR-LT-15` `MEDICATION` thiếu dòng đơn thuốc · dòng đơn không thuộc Visit của ca · dòng đơn mua ngoài · loại khác `MEDICATION` mà có dòng đơn · nội dung rỗng sau `strip()`; `VALIDATION_FAILED` thiếu `orderType` / `content` / `scheduledAt`, `content` quá 500 ký tự hoặc `prescriptionItemId` ≤ 0; `MALFORMED_REQUEST` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -242,11 +266,19 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Không phải VET · ca của chi nhánh khác · không phải VET phụ trách Visit"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy ca nội trú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "Ca không `ADMITTED`"
+          description: "`INVALID_STATE_TRANSITION` ca không còn `ADMITTED`"
           content:
             "application/json":
               schema:
@@ -289,14 +321,22 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · ca của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy ca nội trú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
   "/admission-orders/{admissionOrderId}/complete":
     post:
       tags: ["Admission orders"]
       summary: "Đánh dấu đã thực hiện y lệnh"
-      description: "UC56 · BR-LT-15. Actor: A07, A08. Quyền: A07; A08 chỉ việc không phải thuốc. Chuyển trạng thái: ORDERED → DONE (Y lệnh nội trú#2)."
+      description: "UC56 · BR-LT-15. Actor: A07, A08. Quyền: A07; A08 chỉ việc không phải thuốc. Chuyển trạng thái: ORDERED → DONE (Y lệnh nội trú#2). Thứ tự lỗi: 400 hình thức → 403 vai trò → 404 → 403 chi nhánh → 403 A08 với y lệnh thuốc → 409 → 400 `BR-LT-15`."
       operationId: completeAdmissionOrder
       security:
         - bearerAuth: []
@@ -325,7 +365,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-15` thiếu ghi chú"
+          description: "`BR-LT-15` ghi chú rỗng sau `strip()`; `VALIDATION_FAILED` thiếu hoặc quá 300 ký tự; `MALFORMED_REQUEST` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -333,13 +373,17 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          description: "A08 không thực hiện y lệnh thuốc"
+          description: "Sai vai trò · y lệnh của chi nhánh khác · A08 không thực hiện y lệnh thuốc"
           content:
             "application/json":
               schema:
                 $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy y lệnh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "`INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25)"
           content:
@@ -350,7 +394,7 @@ paths:
     post:
       tags: ["Admission orders"]
       summary: "Hủy y lệnh"
-      description: "UC56 · BR-LT-15. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ORDERED → CANCELLED (Y lệnh nội trú#3)."
+      description: "UC56 · BR-LT-15. Actor: A07. Quyền: VET của chi nhánh. Chuyển trạng thái: ORDERED → CANCELLED (Y lệnh nội trú#3). Thứ tự lỗi: 400 hình thức → 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 409 → 400 `BR-LT-15`."
       operationId: cancelAdmissionOrder
       security:
         - bearerAuth: []
@@ -361,7 +405,7 @@ paths:
         content:
           "application/json":
             schema:
-              $ref: "#/components/schemas/ReasonRequest"
+              $ref: "#/components/schemas/AdmissionOrderReasonRequest"
       responses:
         "200":
           description: OK
@@ -379,7 +423,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-15` thiếu lý do"
+          description: "`BR-LT-15` lý do rỗng sau `strip()`; `VALIDATION_FAILED` thiếu hoặc quá 300 ký tự; `MALFORMED_REQUEST` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -387,9 +431,17 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Không phải VET · y lệnh của chi nhánh khác · không phải VET phụ trách Visit"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy y lệnh"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: "`INVALID_STATE_TRANSITION` trạng thái không cho phép (03 #24, #25)"
           content:
@@ -400,7 +452,7 @@ paths:
     post:
       tags: [Observations]
       summary: "Ghi chỉ số theo dõi"
-      description: "UC56 · BR-LT-16. Actor: A07, A08. Quyền: A07, A08 của chi nhánh. Chuyển trạng thái: —. Chỉ thêm, không sửa / xóa. `abnormal = true` báo VET phụ trách (IN_APP) và khách bằng cặp mẫu `INPATIENT_OBSERVATION_ABNORMAL` / `_APP` (BR-LT-16, ADR-0148); cân nặng ghi vào hồ sơ cân (BR-KH-04)."
+      description: "UC56 · BR-LT-16. Actor: A07, A08. Quyền: A07, A08 của chi nhánh. Chuyển trạng thái: —. Chỉ thêm, không sửa / xóa. Mọi VET / CARETAKER của chi nhánh ghi được, không cần là người phụ trách Visit. Có `weightKg` thì ghi thêm vào hồ sơ cân của thú (BR-KH-04) với nguồn `VET` gắn Visit của ca. `abnormal = true` báo khách (kênh theo BR-TB-02) và VET phụ trách (IN_APP; không gửi cho chính VET đó nếu họ là người ghi) bằng cặp mẫu `INPATIENT_OBSERVATION_ABNORMAL` / `_APP` (BR-LT-16, ADR-0148). Thứ tự lỗi: 400 hình thức → 403 vai trò → 404 → 403 chi nhánh → 409 → 400 `BR-LT-16` (ADR-0149)."
       operationId: createObservation
       security:
         - bearerAuth: []
@@ -429,7 +481,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-16` không có chỉ số hay ghi chú nào · giá trị ngoài khoảng"
+          description: "`BR-LT-16` không có chỉ số hay ghi chú nào (rỗng sau `strip()`) · giá trị ngoài giới hạn lưu trữ (nhiệt độ, nhịp tim / nhịp thở 1…32767, cân nặng 0.01…9999.99 kg); `VALIDATION_FAILED` thiếu `abnormal` hoặc ghi chú quá 500 ký tự; `MALFORMED_REQUEST` sai kiểu; BR-TK-17"
           content:
             "application/json":
               schema:
@@ -437,11 +489,19 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Không phải VET / CARETAKER · ca của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy ca nội trú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
-          description: "Ca không `ADMITTED`"
+          description: "`INVALID_STATE_TRANSITION` ca không còn `ADMITTED`"
           content:
             "application/json":
               schema:
@@ -449,7 +509,7 @@ paths:
     get:
       tags: [Observations]
       summary: "Chỉ số theo dõi của ca nội trú"
-      description: "UC56 · BR-LT-16. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —. Mới nhất trước."
+      description: "UC56 · BR-LT-16. Actor: A06, A07, A08. Quyền: A06 chỉ xem; A07; A08 theo BR-LT-15. Chuyển trạng thái: —. Mới nhất trước (trùng thì `observationId` giảm dần). Đọc được cả ca đã xuất viện."
       operationId: listObservations
       security:
         - bearerAuth: []
@@ -486,9 +546,17 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
-          $ref: "#/components/responses/Forbidden"
+          description: "Sai vai trò · ca của chi nhánh khác"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
-          $ref: "#/components/responses/NotFound"
+          description: "Không tìm thấy ca nội trú"
+          content:
+            "application/json":
+              schema:
+                $ref: "#/components/schemas/Error"
 components:
   securitySchemes:
     bearerAuth:
@@ -696,7 +764,8 @@ components:
           $ref: "#/components/schemas/DischargeOutcome"
         summary:
           type: string
-          description: "Tóm tắt điều trị (BR-LT-14)"
+          maxLength: 2000
+          description: "Tóm tắt điều trị (BR-LT-14), tối đa 2000 ký tự; rỗng sau khi bỏ khoảng trắng đầu / cuối là `BR-LT-14`"
     AdmissionOrder:
       type: object
       required: [admissionOrderId, admissionId, orderType, content, scheduledAt, status]
@@ -749,13 +818,14 @@ components:
         note:
           type: string
           maxLength: 300
-    ReasonRequest:
+    AdmissionOrderReasonRequest:
       type: object
       required: [reason]
       properties:
         reason:
           type: string
           maxLength: 300
+          description: "Lý do hủy y lệnh (BR-LT-15); rỗng sau khi bỏ khoảng trắng đầu / cuối là `BR-LT-15`. Tên riêng vì `ReasonRequest` đã có ở identity và shop"
     Observation:
       type: object
       required: [observationId, admissionId, recordedByName, abnormal, createdAt]
@@ -818,18 +888,6 @@ components:
             $ref: "#/components/schemas/Error"
     Unauthorized:
       description: "UNAUTHENTICATED: chưa đăng nhập hoặc phiên đã hết hạn / bị hủy."
-      content:
-        "application/json":
-          schema:
-            $ref: "#/components/schemas/Error"
-    Forbidden:
-      description: "ACCESS_DENIED: sai vai trò · ACCESS_DENIED_SCOPE_MISMATCH: ngoài phạm vi (chi nhánh, chủ sở hữu). Message chung, không lộ cấu trúc phân quyền."
-      content:
-        "application/json":
-          schema:
-            $ref: "#/components/schemas/Error"
-    NotFound:
-      description: "Không tìm thấy (RESOURCE_NOT_FOUND)."
       content:
         "application/json":
           schema:

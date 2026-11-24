@@ -259,7 +259,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT`"
+          description: "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT` · sửa dòng nội trú do xuất viện thêm (dòng này không sửa tay, BR-LT-14)"
           content:
             "application/json":
               schema:
@@ -307,7 +307,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG xóa qua đơn thuốc"
+          description: "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG xóa qua đơn thuốc · `BR-LT-18` dòng nội trú do xuất viện thêm (không xóa tay)"
           content:
             "application/json":
               schema:

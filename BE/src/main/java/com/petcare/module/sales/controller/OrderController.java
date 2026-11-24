@@ -165,7 +165,8 @@ public class OrderController {
             parameters = {
                     @Parameter(name = "orderId", in = ParameterIn.PATH, example = "101"),
                     @Parameter(name = "lineId", in = ParameterIn.PATH, example = "31")})
-    @ApiErrorDoc(status = 400, description = "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT`")
+    @ApiErrorDoc(status = 400, description = "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT` · sửa dòng nội trú do xuất "
+            + "viện thêm (dòng này không sửa tay, BR-LT-14)")
     @ApiErrorDoc(status = 403, description = "`BR-BH-02` không phải chủ dòng, hoặc dòng dịch vụ / thuốc đã khóa khi "
             + "PENDING")
     @ApiErrorDoc(status = 404)
@@ -186,7 +187,7 @@ public class OrderController {
                     @Parameter(name = "orderId", in = ParameterIn.PATH, example = "101"),
                     @Parameter(name = "lineId", in = ParameterIn.PATH, example = "31")})
     @ApiErrorDoc(status = 400, description = "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG "
-            + "xóa qua đơn thuốc")
+            + "xóa qua đơn thuốc · `BR-LT-18` dòng nội trú do xuất viện thêm (không xóa tay)")
     @ApiErrorDoc(status = 403, description = "`BR-BH-02` không phải chủ dòng")
     @ApiErrorDoc(status = 404)
     @ApiErrorDoc(status = 409, description = "Order đã PAID / CANCELLED")

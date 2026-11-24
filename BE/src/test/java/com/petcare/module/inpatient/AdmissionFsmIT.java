@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
@@ -28,6 +29,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
+import com.petcare.module.inpatient.api.AdmissionQueryApi;
 import com.petcare.module.inpatient.entity.Admission;
 import com.petcare.module.inpatient.entity.AdmissionStatus;
 import com.petcare.module.inpatient.entity.DischargeOutcome;
@@ -42,7 +44,7 @@ import com.petcare.support.MutableClock;
  * và DB chấp nhận dòng kết quả ({@code ck_admissions_discharge_*} của V38, {@code ck_admissions_source} của V62); mọi
  * cặp không hợp lệ bị handler từ chối và dòng không đổi. Cũng chứng minh mã ca {@code NT-yyMM-xxxxx} sinh bằng
  * {@code DocumentCodeGenerator} và các ràng buộc DB mà entity không thay được ({@code ux_admissions_pet_admitted},
- * {@code ck_admissions_source}). Không đi qua endpoint vì chưa có (N2).
+ * {@code ck_admissions_source}) và câu đọc {@code AdmissionQueryApi} (N2). Không đi qua endpoint vì chưa có (N3).
  * <p>
  * Era <b>năm 2093</b> (không job quét {@code admissions} → era tương lai, docs/architecture/testing-notes.md).
  */
@@ -75,6 +77,8 @@ class AdmissionFsmIT {
     private DocumentCodeGenerator codes;
     @Autowired
     private MutableClock clock;
+    @Autowired
+    private AdmissionQueryApi query;
 
     private InpatientItSupport data;
     private TransactionTemplate tx;
@@ -294,6 +298,33 @@ class AdmissionFsmIT {
                 .isInstanceOf(DataIntegrityViolationException.class);
         assertThat(jdbc.queryForObject("SELECT status FROM admissions WHERE id = ?", String.class, id))
                 .isEqualTo("ADMITTED");
+    }
+
+    /** {@code AdmissionQueryApi} (N2, docs/adr/0149 mục 13): chỉ ca {@code ADMITTED} được tính, theo thú và theo lượt. */
+    @Test
+    void activeAdmissionQueriesCountOnlyAdmittedCases() {
+        long[] admitted = petAndVisit();
+        long[] other = petAndVisit();
+        long id = admitFromVisit(admitted[0], admitted[1]);
+
+        assertThat(inTx(() -> query.hasActiveAdmission(admitted[0]))).isTrue();
+        assertThat(inTx(() -> query.hasActiveAdmissionForVisit(admitted[1]))).isTrue();
+        assertThat(inTx(() -> query.hasActiveAdmission(other[0]))).isFalse();
+        assertThat(inTx(() -> query.hasActiveAdmissionForVisit(other[1]))).isFalse();
+
+        long line = data.orderLine(admitted[1], service, 1, 200_000L, vet);
+        tx.executeWithoutResult(status -> {
+            Admission loaded = admissions.findByIdForUpdate(id).orElseThrow();
+            loaded.discharge(DischargeOutcome.HOME, "Xong", vet, clock.instant(), line, 0);
+            admissions.saveAndFlush(loaded);
+        });
+
+        assertThat(inTx(() -> query.hasActiveAdmission(admitted[0]))).isFalse();
+        assertThat(inTx(() -> query.hasActiveAdmissionForVisit(admitted[1]))).isFalse();
+    }
+
+    private boolean inTx(BooleanSupplier call) {
+        return Boolean.TRUE.equals(tx.execute(status -> call.getAsBoolean()));
     }
 
     @Test

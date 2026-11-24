@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -228,6 +229,46 @@ class ServiceCatalogServiceTest {
                 new UpdateServiceRequest(null, MedicalType.VACCINE, null, null, null, null, null));
 
         assertThat(response.medicalType()).isEqualTo(MedicalType.VACCINE);
+    }
+
+    /** BR-LT-18 (docs/adr/0149 mục 40): không đổi loại sang nội trú. */
+    @Test
+    void cannotChangeMedicalTypeToInpatient_BR_LT_18() {
+        for (MedicalType from : List.of(MedicalType.EXAM, MedicalType.VACCINE)) {
+            Service s = existing(ServiceGroup.MEDICAL, from, 100_000);
+
+            assertThatThrownBy(() -> service.updateService(9L,
+                    new UpdateServiceRequest(null, MedicalType.INPATIENT, 500_000L, null, null, null, null)))
+                    .satisfies(t -> assertRule(t, "BR-LT-18"));
+
+            assertThat(s.getMedicalType()).isEqualTo(from);
+        }
+        verify(services, never()).saveAndFlush(any(Service.class));
+        verify(auditRecorder, never()).record(any());
+    }
+
+    /** BR-LT-18: không đổi loại khỏi nội trú (dòng nội trú của ca đã xuất viện sẽ sửa / xóa tay được). */
+    @Test
+    void cannotChangeMedicalTypeAwayFromInpatient_BR_LT_18() {
+        Service s = existing(ServiceGroup.MEDICAL, MedicalType.INPATIENT, 400_000);
+
+        assertThatThrownBy(() -> service.updateService(9L,
+                new UpdateServiceRequest(null, MedicalType.EXAM, null, null, null, null, null)))
+                .satisfies(t -> assertRule(t, "BR-LT-18"));
+
+        assertThat(s.getMedicalType()).isEqualTo(MedicalType.INPATIENT);
+        verify(services, never()).saveAndFlush(any(Service.class));
+    }
+
+    @Test
+    void resendingTheSameInpatientTypeAndEditingOtherFieldsStillWorks() {
+        existing(ServiceGroup.MEDICAL, MedicalType.INPATIENT, 400_000);
+
+        ServiceResponse response = service.updateService(9L,
+                new UpdateServiceRequest(null, MedicalType.INPATIENT, 450_000L, null, null, null, null));
+
+        assertThat(response.medicalType()).isEqualTo(MedicalType.INPATIENT);
+        assertThat(response.price()).isEqualTo(450_000L);
     }
 
     @Test

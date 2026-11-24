@@ -148,9 +148,9 @@ m.op("post", "/services", "createService", "Tạo dịch vụ / loại chuồng"
 m.op("get", "/services/{serviceId}", "getService", "Chi tiết dịch vụ", "Services", "UC30", "—", "A04–A08", STAFF_READ,
      resp="Service", path_params=["ServiceId"], errors=(401, 403, 404))
 m.op("patch", "/services/{serviceId}", "updateService", "Sửa dịch vụ / đổi giá / ngừng", "Services", "UC30",
-     "BR-SP-04, 06, BR-BH-03, BR-QT-15", "A04", A04, body="UpdateServiceRequest", resp="Service",
+     "BR-SP-04, 06, BR-BH-03, BR-QT-15, BR-LT-18", "A04", A04, body="UpdateServiceRequest", resp="Service",
      path_params=["ServiceId"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1)"},
+     err_desc={400: "`BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1) · `BR-LT-18` đổi loại dịch vụ sang hoặc khỏi nội trú (tạo dịch vụ mới)"},
      notes="Đổi giá ghi audit; giá đêm đã snapshot ở đặt chỗ lưu trú không đổi (BR-LT-02).")
 
 m.op("get", "/vaccine-types", "listVaccineTypes", "Danh sách loại vaccine", "Vaccines", "UC31, UC49", "BR-SP-07",

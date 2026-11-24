@@ -20,6 +20,7 @@ import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
 import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi.ServiceInfo;
+import com.petcare.module.catalog.api.MedicalType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
@@ -35,7 +36,8 @@ import com.petcare.platform.security.SecurityPrincipal;
  * dưới khóa (docs/adr/0045 §4).
  * <p>
  * Thứ tự: phạm vi lễ tân (trước mọi lần đọc DB) → chi nhánh tồn tại (khách: DRAFT cũng 404 cùng message, BR-CN-01) →
- * dịch vụ tồn tại → chi nhánh DRAFT (lễ tân, 400 BR-LH-01) → dịch vụ đặt được tại chi nhánh (400 BR-LH-01) → cửa sổ
+ * dịch vụ tồn tại → chi nhánh DRAFT (lễ tân, 400 BR-LH-01) → dịch vụ nội trú (400 BR-LT-18, docs/adr/0149 mục 40) →
+ * dịch vụ đặt được tại chi nhánh (400 BR-LH-01) → cửa sổ
  * BR-LH-04 → khung của ngày (BR-LH-02) → đếm + quota (BR-LH-03). Khách không đi qua {@code BranchScope} (docs/adr/0006
  * §4); không kiểm BR-TK-19, BR-LH-09 ở đây (chặn khi đặt lịch).
  */
@@ -83,6 +85,10 @@ public class AvailableSlotService {
                 .orElseThrow(() -> new ResourceNotFoundException("dịch vụ", serviceId));
         if (branch.status() != BranchStatus.ACTIVE) {
             throw new BusinessRuleViolationException("BR-LH-01", "Chi nhánh chưa nhận đặt lịch");
+        }
+        if (service.medicalType() == MedicalType.INPATIENT) {
+            // BR-LT-18 (docs/adr/0149 mục 40): không hiện khung trống cho dịch vụ mà bước đặt lịch sẽ từ chối.
+            throw new BusinessRuleViolationException("BR-LT-18", "Dịch vụ nội trú chỉ dùng qua nhập viện, không đặt lịch được");
         }
         if (!service.active() || service.group() == ServiceGroup.BOARDING
                 || !branches.isServiceEnabled(branchId, serviceId)) {

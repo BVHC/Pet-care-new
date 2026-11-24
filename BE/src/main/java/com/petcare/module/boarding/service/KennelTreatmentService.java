@@ -1,5 +1,10 @@
 package com.petcare.module.boarding.service;
 
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,6 +14,7 @@ import com.petcare.module.boarding.entity.Kennel;
 import com.petcare.module.boarding.entity.KennelStatus;
 import com.petcare.module.boarding.fsm.KennelTransitionHandler;
 import com.petcare.module.boarding.repository.KennelRepository;
+import com.petcare.module.boarding.repository.KennelRepository.IdCode;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
@@ -44,6 +50,23 @@ public class KennelTreatmentService implements KennelApi {
         transitions.validateTransition(kennel.getStatus(), KennelStatus.OCCUPIED);
         kennel.occupy();
         kennels.saveAndFlush(kennel);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, String> findCodesByKennelIds(Collection<Long> kennelIds) {
+        return kennelIds == null || kennelIds.isEmpty() ? Map.of() : toMap(kennels.findCodesByIdIn(kennelIds));
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Map<Long, String> findCodesByBookingIds(Collection<Long> bookingIds) {
+        return bookingIds == null || bookingIds.isEmpty() ? Map.of()
+                : toMap(kennels.findCodesByBookingIdIn(bookingIds));
+    }
+
+    private static Map<Long, String> toMap(List<IdCode> rows) {
+        return rows.stream().collect(Collectors.toMap(IdCode::getId, IdCode::getCode));
     }
 
     @Override

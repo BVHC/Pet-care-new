@@ -136,13 +136,13 @@ m.op("post", "/orders/{orderId}/lines", "addOrderLine", "Thêm dịch vụ / hà
 m.op("patch", "/orders/{orderId}/lines/{lineId}", "updateOrderLine", "Sửa dòng (giảm số lượng / đổi dịch vụ tự sinh)",
      "Orders", "UC66, UC67", "BR-BH-02, 03, 04, BR-TN-01", "A06, A07, A08", "Chủ dòng (ownerAccountId)",
      body="UpdateOrderLineRequest", resp="Order", path_params=["OrderId", "LineId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT`",
+     err_desc={400: "`BR-LT-18` đổi sang dịch vụ loại `INPATIENT` · sửa dòng nội trú do xuất viện thêm (dòng này không sửa tay, BR-LT-14)",
                403: "`BR-BH-02` không phải chủ dòng, hoặc dòng dịch vụ / thuốc đã khóa khi PENDING",
                409: "Order đã PAID / CANCELLED"})
 m.op("delete", "/orders/{orderId}/lines/{lineId}", "deleteOrderLine", "Xóa dòng", "Orders", "UC66, UC67",
      "BR-BH-02, BR-KB-04", "A06, A07, A08", "Chủ dòng (ownerAccountId)", resp="Order", path_params=["OrderId", "LineId"],
      errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG xóa qua đơn thuốc",
+     err_desc={400: "`BR-BH-02` dòng VACCINE không xóa trực tiếp (xóa mũi tiêm) · dòng DRUG xóa qua đơn thuốc · `BR-LT-18` dòng nội trú do xuất viện thêm (không xóa tay)",
                403: "`BR-BH-02` không phải chủ dòng", 409: "Order đã PAID / CANCELLED"})
 m.op("post", "/orders/{orderId}/close", "closeRetailOrder", "Chốt Order bán lẻ", "Orders", "UC66", "BR-BH-01", "A06",
      "Lễ tân", "OPEN → PENDING, RETAIL (Order#5)", resp="Order", path_params=["OrderId"], errors=(400, 401, 403, 404, 409),

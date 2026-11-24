@@ -600,7 +600,7 @@ paths:
     post:
       tags: [Stay]
       summary: "Nhận thú"
-      description: "UC59 · BR-LT-04, 05, 08, BR-KH-04. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. Chuyển trạng thái: BOOKED → CHECKED_IN (Đặt chỗ#3) · Chuồng#2 (→ OCCUPIED). Cân nặng ghi vào lịch sử (source INTAKE); nhận sớm được nếu còn chỗ."
+      description: "UC59 · BR-LT-04, 05, 08, BR-KH-04, BR-LT-17. Actor: A06, A08. Quyền: Lễ tân, CARETAKER chi nhánh. Chuyển trạng thái: BOOKED → CHECKED_IN (Đặt chỗ#3) · Chuồng#2 (→ OCCUPIED). Cân nặng ghi vào lịch sử (source INTAKE); nhận sớm được nếu còn chỗ."
       operationId: checkInBoarding
       security:
         - bearerAuth: []
@@ -641,7 +641,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Đặt chỗ không còn BOOKED"
+          description: "Đặt chỗ không còn BOOKED · `BR-LT-17` thú còn ca nội trú (xuất viện trước)"
           content:
             "application/json":
               schema:
@@ -694,7 +694,7 @@ paths:
     post:
       tags: [Stay]
       summary: "Bắt đầu trả thú"
-      description: "UC59 · BR-LT-04, 09, BR-BH-01. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#9) · Order#3 (BOARDING → PENDING). Đã có Order BOARDING PENDING thì dùng lại và tính lại số đêm. Tiếp theo: `POST /payments`."
+      description: "UC59 · BR-LT-04, 09, BR-BH-01, BR-LT-17. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE giữ nguyên (Đặt chỗ#9) · Order#3 (BOARDING → PENDING). Đã có Order BOARDING PENDING thì dùng lại và tính lại số đêm. Tiếp theo: `POST /payments`."
       operationId: startBoardingCheckout
       security:
         - bearerAuth: []
@@ -729,7 +729,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú)"
+          description: "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước) · đã thu tiền lưu trú (chỉ còn giao thú)"
           content:
             "application/json":
               schema:
@@ -738,7 +738,7 @@ paths:
     post:
       tags: [Stay]
       summary: "Giao thú (trả thú)"
-      description: "UC59 · BR-LT-09, BR-BH-06. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3."
+      description: "UC59 · BR-LT-09, BR-BH-06, BR-LT-17. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, RETURNED (Đặt chỗ#10) · Chuồng#3."
       operationId: handOverBoardingPet
       security:
         - bearerAuth: []
@@ -773,7 +773,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Thú không còn trong chuồng"
+          description: "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước)"
           content:
             "application/json":
               schema:
@@ -782,7 +782,7 @@ paths:
     post:
       tags: [Stay]
       summary: "Kết thúc lưu trú do thú mất"
-      description: "UC59 · BR-LT-12, BR-KH-05. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, PET_DECEASED (Đặt chỗ#11) · Chuồng#3 · Order#3 (tính đến ngày mất). Sau đó mới đánh dấu thú đã mất (`POST /pets/{petId}/mark-deceased`). Order xử lý như PENDING thường."
+      description: "UC59 · BR-LT-12, BR-KH-05, BR-LT-17. Actor: A06. Quyền: Chỉ lễ tân chi nhánh. Chuyển trạng thái: CHECKED_IN / OVERDUE → CHECKED_OUT, PET_DECEASED (Đặt chỗ#11) · Chuồng#3 · Order#3 (tính đến ngày mất). Sau đó mới đánh dấu thú đã mất (`POST /pets/{petId}/mark-deceased`). Order xử lý như PENDING thường."
       operationId: endBoardingDeceased
       security:
         - bearerAuth: []
@@ -819,7 +819,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
         "409":
-          description: "Thú không còn trong chuồng"
+          description: "Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước)"
           content:
             "application/json":
               schema:

@@ -273,6 +273,44 @@ class CatalogAdminIT {
         assertThat(boardingIds).contains(kennelId);
     }
 
+    /**
+     * BR-LT-18 (docs/adr/0149 mục 40): không đổi loại sang / khỏi nội trú (lượt đang khám sẽ hoàn tất không cần chẩn đoán,
+     * dòng nội trú của ca đã xuất viện sẽ sửa / xóa tay được); gửi lại đúng loại cũ và đổi Khám ⇄ Tiêm vẫn được.
+     */
+    @Test
+    void medicalTypeCannotMoveToOrFromInpatient_BR_LT_18() {
+        long exam = ((Number) data(createService(unique("Khám"), "MEDICAL", "EXAM", 100_000, null)).get("serviceId"))
+                .longValue();
+        long inpatient = ((Number) data(createService(unique("Nội trú"), "MEDICAL", "INPATIENT", 300_000, null))
+                .get("serviceId")).longValue();
+        try {
+            assertRule(call(HttpMethod.PATCH, "/api/services/" + exam, superManager, Map.of("medicalType", "INPATIENT")),
+                    "BR-LT-18");
+            assertRule(call(HttpMethod.PATCH, "/api/services/" + inpatient, superManager,
+                    Map.of("medicalType", "EXAM", "price", 1)), "BR-LT-18");
+            assertThat(typeOf(exam)).isEqualTo("EXAM");
+            assertThat(typeOf(inpatient)).isEqualTo("INPATIENT");
+            assertThat(priceOf(inpatient)).as("từ chối thì không đổi giá").isEqualTo(300_000L);
+
+            assertThat(call(HttpMethod.PATCH, "/api/services/" + inpatient, superManager,
+                    Map.of("medicalType", "INPATIENT", "price", 320_000)).getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(call(HttpMethod.PATCH, "/api/services/" + exam, superManager,
+                    Map.of("medicalType", "VACCINE")).getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(typeOf(exam)).isEqualTo("VACCINE");
+            assertThat(priceOf(inpatient)).isEqualTo(320_000L);
+        } finally {
+            jdbc.update("DELETE FROM services WHERE id IN (?, ?)", exam, inpatient);
+        }
+    }
+
+    private String typeOf(long serviceId) {
+        return jdbc.queryForObject("SELECT medical_type FROM services WHERE id = ?", String.class, serviceId);
+    }
+
+    private long priceOf(long serviceId) {
+        return jdbc.queryForObject("SELECT price FROM services WHERE id = ?", Long.class, serviceId);
+    }
+
     // ------------------------------------------------------------------ UC31 loại vaccine & phác đồ
 
     @Test

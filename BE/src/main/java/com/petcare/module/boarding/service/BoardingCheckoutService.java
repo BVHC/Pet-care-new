@@ -27,6 +27,7 @@ import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.inpatient.api.AdmissionQueryApi;
 import com.petcare.module.sales.api.BoardingOrderApi;
 import com.petcare.module.sales.api.BoardingOrderApi.BoardingCharge;
 import com.petcare.module.sales.api.BoardingOrderApi.BoardingOrderRef;
@@ -39,7 +40,8 @@ import com.petcare.platform.security.BranchScope;
  * docs/adr/0086). Chỉ lễ tân (controller). Khóa {@code boarding_bookings FOR NO KEY UPDATE → orders
  * (BoardingOrderApi) → document_counters}; giao thú và thú mất khóa thêm {@code kennels} sau đặt chỗ, rồi đóng task đón
  * thú quá hạn còn OPEN ({@code CareTaskApi.cancelPickupOverdue}, một câu UPDATE, docs/adr/0107). Thứ tự lỗi như
- * ADR-0049: 404 / 403 → 409 trạng thái → 400 rule.
+ * ADR-0049: 404 / 403 → 409 trạng thái → 409 {@code BR-LT-17} (thú còn ca nội trú, đọc {@code AdmissionQueryApi} sau khóa
+ * đặt chỗ, docs/adr/0149 mục 37) → 400 rule.
  */
 @Service
 public class BoardingCheckoutService {
@@ -52,6 +54,7 @@ public class BoardingCheckoutService {
     private final SystemConfigApi configs;
     private final BoardingOrderApi boardingOrders;
     private final CareTaskApi careTasks;
+    private final AdmissionQueryApi admissions;
     private final BoardingBookingRepository bookings;
     private final KennelRepository kennels;
     private final BoardingBookingTransitionHandler transitions;
@@ -60,8 +63,8 @@ public class BoardingCheckoutService {
     private final Clock clock;
 
     public BoardingCheckoutService(BranchScope branchScope, BranchQueryApi branches, CatalogQueryApi catalog,
-            SystemConfigApi configs, BoardingOrderApi boardingOrders, CareTaskApi careTasks, BoardingBookingRepository bookings,
-            KennelRepository kennels, BoardingBookingTransitionHandler transitions,
+            SystemConfigApi configs, BoardingOrderApi boardingOrders, CareTaskApi careTasks, AdmissionQueryApi admissions,
+            BoardingBookingRepository bookings, KennelRepository kennels, BoardingBookingTransitionHandler transitions,
             KennelTransitionHandler kennelTransitions, BoardingAssembler assembler, Clock clock) {
         this.branchScope = branchScope;
         this.branches = branches;
@@ -69,6 +72,7 @@ public class BoardingCheckoutService {
         this.configs = configs;
         this.boardingOrders = boardingOrders;
         this.careTasks = careTasks;
+        this.admissions = admissions;
         this.bookings = bookings;
         this.kennels = kennels;
         this.transitions = transitions;
@@ -86,6 +90,7 @@ public class BoardingCheckoutService {
         LocalDate today = LocalDate.now(clock);
 
         requireInKennel(booking);
+        requireNotAdmitted(booking, "bắt đầu trả thú");
         if (!BoardingRules.withinOpeningHours(now, branches.openingRangesOn(booking.getBranchId(), today))) {
             throw new BusinessRuleViolationException("BR-LT-04", "Chỉ trả thú trong giờ mở cửa của chi nhánh");
         }
@@ -107,6 +112,7 @@ public class BoardingCheckoutService {
         Instant now = clock.instant();
 
         transitions.validateTransition(booking.getStatus(), BoardingBookingStatus.CHECKED_OUT);
+        requireNotAdmitted(booking, "giao thú");
         if (!boardingOrders.hasPaidOrder(bookingId)) {
             throw new BusinessRuleViolationException("BR-LT-09", "Order lưu trú chưa thanh toán, chưa giao thú được");
         }
@@ -128,6 +134,7 @@ public class BoardingCheckoutService {
         LocalDate today = LocalDate.now(clock);
 
         transitions.validateTransition(booking.getStatus(), BoardingBookingStatus.CHECKED_OUT);
+        requireNotAdmitted(booking, "kết thúc lưu trú do thú mất");
         Kennel kennel = lockKennel(booking);
         booking.checkOut(BookingEndReason.PET_DECEASED, request.note().strip(), now);
         release(kennel);
@@ -161,6 +168,18 @@ public class BoardingCheckoutService {
     private void release(Kennel kennel) {
         kennelTransitions.validateTransition(kennel.getStatus(), KennelStatus.AVAILABLE);
         kennel.release();
+    }
+
+    /**
+     * BR-LT-17 (docs/adr/0149 mục 37–38): thú còn ca nội trú {@code ADMITTED} thì chưa trả thú / kết thúc lưu trú được.
+     * Đọc không khóa, sau khóa đặt chỗ: nhập viện từ lưu trú giữ {@code FOR SHARE} đặt chỗ nên không chen được; nhập từ
+     * khám (không đặt chỗ) vẫn đúng vì ca gắn theo thú.
+     */
+    private void requireNotAdmitted(BoardingBooking booking, String action) {
+        if (admissions.hasActiveAdmission(booking.getPetId())) {
+            throw new BoardingConflictException(
+                    "Thú đang điều trị nội trú, xuất viện trước khi " + action + " (BR-LT-17)");
+        }
     }
 
     private static void requireInKennel(BoardingBooking booking) {

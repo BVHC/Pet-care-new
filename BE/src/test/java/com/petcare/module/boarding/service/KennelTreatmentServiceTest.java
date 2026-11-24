@@ -7,9 +7,12 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +31,10 @@ import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 
-/** Chuồng#6, #7 (docs/09 §C, docs/adr/0148): chuồng điều trị của nội trú. */
+/**
+ * Chuồng#6, #7 (docs/09 §C, docs/adr/0148): chuồng điều trị của nội trú. Mã chuồng theo lô cho danh sách ca nội trú
+ * (docs/adr/0149 mục 19): tập rỗng không chạy SQL, id vắng thì vắng trong map.
+ */
 class KennelTreatmentServiceTest {
 
     private static final long KENNEL = 9L;
@@ -134,5 +140,47 @@ class KennelTreatmentServiceTest {
             assertThat(tx).as(method.getName()).isNotNull();
             assertThat(tx.propagation()).as(method.getName()).isEqualTo(Propagation.MANDATORY);
         }
+    }
+
+    // ================================================================ mã chuồng theo lô (inpatient-v1 #2)
+
+    private static KennelRepository.IdCode row(long id, String code) {
+        return new KennelRepository.IdCode() {
+            @Override
+            public Long getId() {
+                return id;
+            }
+
+            @Override
+            public String getCode() {
+                return code;
+            }
+        };
+    }
+
+    @Test
+    void codesByKennelIdsMapEachFoundKennelAndSkipMissingOnes() {
+        when(kennels.findCodesByIdIn(List.of(9L, 10L))).thenReturn(List.of(row(9L, "C-01")));
+
+        assertThat(service.findCodesByKennelIds(List.of(9L, 10L))).isEqualTo(Map.of(9L, "C-01"));
+    }
+
+    @Test
+    void codesByBookingIdsMapEachBookingToItsKennelCode() {
+        when(kennels.findCodesByBookingIdIn(List.of(301L, 302L)))
+                .thenReturn(List.of(row(301L, "C-01"), row(302L, "M-02")));
+
+        assertThat(service.findCodesByBookingIds(List.of(301L, 302L)))
+                .isEqualTo(Map.of(301L, "C-01", 302L, "M-02"));
+    }
+
+    @Test
+    void anEmptyOrNullIdSetRunsNoSql() {
+        assertThat(service.findCodesByKennelIds(List.of())).isEmpty();
+        assertThat(service.findCodesByBookingIds(List.of())).isEmpty();
+        assertThat(service.findCodesByKennelIds(null)).isEmpty();
+        assertThat(service.findCodesByBookingIds(null)).isEmpty();
+
+        verifyNoInteractions(kennels);
     }
 }

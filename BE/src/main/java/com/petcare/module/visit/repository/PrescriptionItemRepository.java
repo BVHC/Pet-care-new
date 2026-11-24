@@ -68,6 +68,29 @@ public interface PrescriptionItemRepository extends JpaRepository<PrescriptionIt
     @Query(value = "DELETE FROM prescription_items WHERE id = :id", nativeQuery = true)
     int deleteItem(@Param("id") Long id);
 
+    /**
+     * Khóa dòng đơn thuốc của lượt {@code FOR KEY SHARE} để y lệnh nội trú trỏ vào nó (BR-LT-15, docs/adr/0149 mục 28).
+     * Cùng sức khóa với kiểm tra khóa ngoại nên không thêm xung đột; xung đột với {@code FOR UPDATE} của xóa dòng đơn
+     * (visit-v1 #17): bên ra y lệnh chờ rồi thấy "không có" → 400 rõ ràng thay vì 409 chung chung. Lọc cả
+     * {@code medical_record_id}: dòng của lượt khác là "không có". Chỉ projection, không nạp entity.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Query(value = """
+            SELECT id AS id, is_external_purchase AS externalPurchase
+            FROM prescription_items
+            WHERE id = :id AND medical_record_id = :visitId
+            FOR KEY SHARE
+            """, nativeQuery = true)
+    Optional<KeyShared> lockItemInVisitForKeyShare(@Param("id") Long id, @Param("visitId") Long visitId);
+
+    /** Projection của {@link #lockItemInVisitForKeyShare}. */
+    interface KeyShared {
+
+        Long getId();
+
+        Boolean getExternalPurchase();
+    }
+
     /** Projection của {@link #lockItemInVisit}: {@code orderLineId} đi thẳng vào {@code removeDrugLine}, null = mua ngoài. */
     interface LockedItem {
 

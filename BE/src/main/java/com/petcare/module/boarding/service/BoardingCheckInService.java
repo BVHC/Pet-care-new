@@ -37,6 +37,7 @@ import com.petcare.module.customer.api.PetQueryApi;
 import com.petcare.module.customer.api.PetQueryApi.PetSummary;
 import com.petcare.module.customer.api.RecordedWeight;
 import com.petcare.module.customer.api.WeightSource;
+import com.petcare.module.inpatient.api.AdmissionQueryApi;
 import com.petcare.module.visit.api.VaccinationQueryApi;
 import com.petcare.module.visit.api.VaccinationQueryApi.BoardingVaccineGap;
 import com.petcare.platform.exception.BusinessRuleViolationException;
@@ -48,7 +49,8 @@ import com.petcare.platform.security.SecurityPrincipal;
  * Nhận thú và hủy vì hết chuồng (UC59, boarding-v1 #13–15; Đặt chỗ#3, #5; Chuồng#2; docs/adr/0085). Nhận thú khóa
  * {@code pets FOR SHARE → branches → boarding_bookings → kennels} rồi INSERT {@code weight_records} và
  * {@code boarding_check_ins}; hủy vì hết chuồng khóa {@code branches → boarding_bookings}. Thứ tự lỗi như ADR-0049:
- * 404 / 403 → 409 trạng thái → 400 rule. Lễ tân và CARETAKER nhận thú; chỉ lễ tân hủy (controller).
+ * 404 / 403 → 409 trạng thái → 409 {@code BR-LT-17} (nhận thú: thú còn ca nội trú, docs/adr/0149 mục 39) → 400 rule. Lễ
+ * tân và CARETAKER nhận thú; chỉ lễ tân hủy (controller).
  */
 @Service
 public class BoardingCheckInService {
@@ -60,6 +62,7 @@ public class BoardingCheckInService {
     private final BranchApi branchLocks;
     private final BranchQueryApi branches;
     private final VaccinationQueryApi vaccinations;
+    private final AdmissionQueryApi admissions;
     private final BoardingCapacity capacity;
     private final BoardingAvailabilityService availability;
     private final BoardingBookingRepository bookings;
@@ -74,7 +77,7 @@ public class BoardingCheckInService {
 
     public BoardingCheckInService(BranchScope branchScope, PetQueryApi pets, PetApi petWeights,
             CatalogQueryApi catalog, BranchApi branchLocks, BranchQueryApi branches, VaccinationQueryApi vaccinations,
-            BoardingCapacity capacity, BoardingAvailabilityService availability, BoardingBookingRepository bookings,
+            AdmissionQueryApi admissions, BoardingCapacity capacity, BoardingAvailabilityService availability, BoardingBookingRepository bookings,
             KennelRepository kennels, BoardingCheckInRepository checkIns,
             BoardingBookingTransitionHandler transitions, KennelTransitionHandler kennelTransitions,
             BoardingAssembler assembler, BoardingClinicCancellationNotices customerNotices,
@@ -86,6 +89,7 @@ public class BoardingCheckInService {
         this.branchLocks = branchLocks;
         this.branches = branches;
         this.vaccinations = vaccinations;
+        this.admissions = admissions;
         this.capacity = capacity;
         this.availability = availability;
         this.bookings = bookings;
@@ -135,6 +139,11 @@ public class BoardingCheckInService {
         LocalDate today = LocalDate.now(clock);
 
         transitions.validateTransition(booking.getStatus(), BoardingBookingStatus.CHECKED_IN);
+        if (admissions.hasActiveAdmission(pet.petId())) {
+            // BR-LT-17 (docs/adr/0149 mục 39): thú đang nằm chuồng điều trị (nhập từ lượt khám) không nhận thêm chuồng lưu trú.
+            throw new BoardingConflictException(
+                    "Thú đang điều trị nội trú, xuất viện trước khi nhận vào lưu trú (BR-LT-17)");
+        }
         if (today.isAfter(booking.getCheckInDate())) {
             throw new BusinessRuleViolationException("BR-LT-06", "Đã quá ngày nhận, đặt chỗ không nhận được nữa");
         }

@@ -2,6 +2,7 @@ package com.petcare.module.visit.service;
 
 import java.time.Clock;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -26,6 +27,16 @@ public class PrescriptionApiService implements PrescriptionApi {
     public PrescriptionApiService(PrescriptionItemRepository items, Clock clock) {
         this.items = items;
         this.clock = clock;
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<PrescriptionItemRef> findItemOfVisitForKeyShare(Long itemId, Long visitId) {
+        if (itemId == null || visitId == null) {
+            throw new IllegalArgumentException("itemId và visitId là bắt buộc");
+        }
+        return items.lockItemInVisitForKeyShare(itemId, visitId)
+                .map(row -> new PrescriptionItemRef(row.getId(), Boolean.TRUE.equals(row.getExternalPurchase())));
     }
 
     @Override

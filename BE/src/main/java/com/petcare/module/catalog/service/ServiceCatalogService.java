@@ -10,6 +10,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.petcare.module.catalog.api.MedicalType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.catalog.dto.CreateServiceRequest;
 import com.petcare.module.catalog.dto.KennelTypeSpec;
@@ -118,6 +119,12 @@ public class ServiceCatalogService {
         if (request.medicalType() != null) {
             if (group != ServiceGroup.MEDICAL) {
                 throw new BusinessRuleViolationException("BR-SP-06", "Chỉ dịch vụ nhóm Khám/Tiêm mới có loại");
+            }
+            // BR-LT-18 (docs/adr/0149 mục 40): đổi sang / khỏi nội trú làm lượt đang khám hoàn tất không cần chẩn đoán và
+            // làm dòng nội trú của ca đã xuất viện sửa / xóa tay được; muốn đổi thì tạo dịch vụ mới. Gửi lại đúng loại cũ thì qua.
+            if ((service.getMedicalType() == MedicalType.INPATIENT) != (request.medicalType() == MedicalType.INPATIENT)) {
+                throw new BusinessRuleViolationException("BR-LT-18",
+                        "Không đổi được loại dịch vụ sang hoặc khỏi nội trú; hãy tạo dịch vụ mới");
             }
             service.setMedicalType(request.medicalType());
         }

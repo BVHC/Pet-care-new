@@ -28,7 +28,7 @@
 | 8 | `GET /services` | Danh sách dịch vụ | UC30 | BR-SP-04, 06 |
 | 9 | `POST /services` | Tạo dịch vụ / loại chuồng | UC30 | BR-SP-04, 06 |
 | 10 | `GET /services/{serviceId}` | Chi tiết dịch vụ | UC30 | — |
-| 11 | `PATCH /services/{serviceId}` | Sửa dịch vụ / đổi giá / ngừng | UC30 | BR-SP-04, 06, BR-BH-03, BR-QT-15 |
+| 11 | `PATCH /services/{serviceId}` | Sửa dịch vụ / đổi giá / ngừng | UC30 | BR-SP-04, 06, BR-BH-03, BR-QT-15, BR-LT-18 |
 | 12 | `GET /vaccine-types` | Danh sách loại vaccine | UC31, UC49 | BR-SP-07 |
 | 13 | `POST /vaccine-types` | Tạo loại vaccine | UC31 | BR-SP-07 |
 | 14 | `PATCH /vaccine-types/{vaccineTypeId}` | Sửa / ngừng loại vaccine | UC31 | BR-SP-07 |
@@ -90,7 +90,7 @@
 - **`GET /services`** — Danh sách dịch vụ. Query: `group?`, `isActive?`. Response `200` mảng `Service`. Lỗi: `401` · `403`.
 - **`POST /services`** — Tạo dịch vụ / loại chuồng. Request `CreateServiceRequest`. Response `201` `Service`. Lỗi: `400` `BR-SP-06` nhóm MEDICAL chưa chọn loại · `BR-SP-04` loại chuồng thiếu loài hoặc giá ≤ 0 · tên trùng · `401` · `403`.
 - **`GET /services/{serviceId}`** — Chi tiết dịch vụ. Response `200` `Service`. Lỗi: `401` · `403` · `404`.
-- **`PATCH /services/{serviceId}`** — Sửa dịch vụ / đổi giá / ngừng. Request `UpdateServiceRequest`. Response `200` `Service`. Lỗi: `400` `BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1) · `401` · `403` · `404`.
+- **`PATCH /services/{serviceId}`** — Sửa dịch vụ / đổi giá / ngừng. Request `UpdateServiceRequest`. Response `200` `Service`. Lỗi: `400` `BR-SP-06`, `BR-SP-04` như khi tạo · đổi nhóm (A1) · `BR-LT-18` đổi loại dịch vụ sang hoặc khỏi nội trú (tạo dịch vụ mới) · `401` · `403` · `404`.
 ### Vaccines
 
 - **`GET /vaccine-types`** — Danh sách loại vaccine. Query: `species?`, `isActive?`. Response `200` mảng `VaccineType`. Lỗi: `401` · `403`.

@@ -56,8 +56,7 @@ public interface VisitOrderApi {
     void removeVaccineLine(Long orderLineId);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Nội trú (docs/09 §C, ADR-0124, ADR-0148; T69): dạng default để không làm gãy các stand-in {@code new VisitOrderApi() {…}}
-    // trong test của BE-2; VisitOrderService ghi đè cả hai, nên default chỉ là lưới an toàn.
+    // Nội trú (docs/09 §C, ADR-0124, ADR-0148; T69). Bản thật ở VisitOrderService từ N0; N8 (ADR-0149 mục 42) bỏ `default`.
     // ------------------------------------------------------------------------------------------------------------
 
     /**
@@ -66,9 +65,7 @@ public interface VisitOrderApi {
      *
      * @return {@code orders.id}
      */
-    default Long openTreatmentOrder(Long visitId, Long branchId, Long customerId, Long actorId) {
-        throw new UnsupportedOperationException("VisitOrderApi.openTreatmentOrder chưa cài (docs/09 §C, T69)");
-    }
+    Long openTreatmentOrder(Long visitId, Long branchId, Long customerId, Long actorId);
 
     /**
      * BR-LT-14: xuất viện thêm <b>một</b> dòng dịch vụ nội trú vào Order {@code OPEN} của Visit. Nhận <b>đơn giá đã
@@ -78,7 +75,5 @@ public interface VisitOrderApi {
      *
      * @throws com.petcare.platform.exception.InvalidStateTransitionException Order không {@code OPEN}
      */
-    default LineRef addServiceLine(Long visitId, Long serviceId, int quantity, long unitPrice, Long actorId) {
-        throw new UnsupportedOperationException("VisitOrderApi.addServiceLine chưa cài (docs/09 §C, T69)");
-    }
+    LineRef addServiceLine(Long visitId, Long serviceId, int quantity, long unitPrice, Long actorId);
 }

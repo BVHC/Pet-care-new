@@ -4,6 +4,7 @@ import static java.util.Objects.requireNonNull;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Optional;
 
 import com.petcare.platform.model.CreatedAtEntity;
 
@@ -30,10 +31,14 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class AdmissionObservation extends CreatedAtEntity {
 
-    /** {@code temperature_c NUMERIC(4,1)}: giá trị tuyệt đối dưới 1000 (3 chữ số nguyên, 1 chữ số lẻ). */
-    private static final BigDecimal TEMPERATURE_LIMIT = new BigDecimal("1000");
-    /** {@code weight_kg NUMERIC(6,2)}: giá trị dưới 10000 (4 chữ số nguyên, 2 chữ số lẻ). */
-    private static final BigDecimal WEIGHT_LIMIT = new BigDecimal("10000");
+    /** {@code temperature_c NUMERIC(4,1)}: sau làm tròn một chữ số lẻ, giá trị tuyệt đối dưới 1000, tức {@code |t| < 999.95}. */
+    private static final BigDecimal TEMPERATURE_BOUND = new BigDecimal("999.95");
+    /** {@code |t| < 0.05} làm tròn về 0.0. */
+    private static final BigDecimal TEMPERATURE_ZERO_BOUND = new BigDecimal("0.05");
+    /** Nhỏ hơn 0.005 làm tròn về 0.00 (BR-KH-04: cân phải dương). */
+    private static final BigDecimal WEIGHT_MIN = new BigDecimal("0.005");
+    /** {@code weight_kg NUMERIC(6,2)}: sau làm tròn tối đa 9999.99, tức {@code w < 9999.995}. */
+    private static final BigDecimal WEIGHT_BOUND = new BigDecimal("9999.995");
     /** {@code heart_rate}, {@code respiratory_rate} là {@code SMALLINT}. */
     private static final int SMALLINT_MAX = Short.MAX_VALUE;
 
@@ -78,44 +83,72 @@ public class AdmissionObservation extends CreatedAtEntity {
             Integer heartRate, Integer respiratoryRate, BigDecimal weightKg, Appetite appetite, String note,
             boolean abnormal) {
         requireNonNull(admission, "admission").requireAdmitted();
-        String text = InpatientText.optional(note, InpatientText.CONTENT_MAX_LENGTH, "note");
-        if (temperatureC == null && heartRate == null && respiratoryRate == null && weightKg == null
-                && appetite == null && text == null) {
-            throw new IllegalArgumentException("Mục theo dõi cần ít nhất một chỉ số hoặc ghi chú");
-        }
-        BigDecimal weight = weightKg == null ? null : weightKg.setScale(2, RoundingMode.HALF_UP);
-        if (weight != null && weight.signum() <= 0) {
-            // kiểm sau khi làm tròn: 0.001 thành 0.00 thì không còn dương (BR-KH-04)
-            throw new IllegalArgumentException("Cân nặng phải lớn hơn 0");
-        }
+        invalidReason(temperatureC, heartRate, respiratoryRate, weightKg, appetite, note).ifPresent(reason -> {
+            throw new IllegalArgumentException(reason);
+        });
         AdmissionObservation entity = new AdmissionObservation();
         entity.admissionId = requireNonNull(admission.getId(), "admission.id");
         entity.recordedBy = requireNonNull(recordedBy, "recordedBy");
-        entity.temperatureC = temperatureC == null ? null
-                : fit(temperatureC.setScale(1, RoundingMode.HALF_UP), TEMPERATURE_LIMIT, "temperatureC");
-        entity.heartRate = positiveShort(heartRate, "heartRate");
-        entity.respiratoryRate = positiveShort(respiratoryRate, "respiratoryRate");
-        entity.weightKg = weight == null ? null : fit(weight, WEIGHT_LIMIT, "weightKg");
+        entity.temperatureC = temperatureC == null ? null : roundTemperature(temperatureC);
+        entity.heartRate = heartRate == null ? null : heartRate.shortValue();
+        entity.respiratoryRate = respiratoryRate == null ? null : respiratoryRate.shortValue();
+        entity.weightKg = weightKg == null ? null : weightKg.setScale(2, RoundingMode.HALF_UP);
         entity.appetite = appetite;
-        entity.note = text;
+        entity.note = InpatientText.optional(note, InpatientText.CONTENT_MAX_LENGTH, "note");
         entity.abnormal = abnormal;
         return entity;
     }
 
-    private static BigDecimal fit(BigDecimal value, BigDecimal limit, String field) {
-        if (value.abs().compareTo(limit) >= 0) {
-            throw new IllegalArgumentException(field + " vượt giới hạn lưu trữ");
+    /**
+     * Một nguồn cho mọi giới hạn của một mục theo dõi (BR-LT-16; docs/adr/0149 mục 35): service ném 400 {@code BR-LT-16}
+     * với câu trả về, {@link #record} ném {@link IllegalArgumentException}. Trả rỗng khi hợp lệ. Giới hạn chỉ là giới hạn
+     * lưu trữ của cột V38 và BR-KH-04; khoảng lâm sàng chưa chốt (inpatient-v1 A4).
+     * <p>
+     * <b>So biên bằng {@code compareTo} trước, không {@code setScale} trước:</b> {@code 1e-999999999} là một JSON ngắn nhưng
+     * {@code setScale(2)} của nó phải dựng một số hàng tỷ chữ số. Biên làm tròn {@code HALF_UP}: cân hợp lệ khi
+     * {@code 0.005 ≤ w < 9999.995} (khớp {@code PetWeightApiService}: sau làm tròn trong 0.01…9999.99), nhiệt độ khi
+     * {@code |t| < 999.95} (sau làm tròn không chạm 1000.0).
+     */
+    public static Optional<String> invalidReason(BigDecimal temperatureC, Integer heartRate, Integer respiratoryRate,
+            BigDecimal weightKg, Appetite appetite, String note) {
+        String text = note == null ? null : note.strip();
+        if (text != null && text.length() > InpatientText.CONTENT_MAX_LENGTH) {
+            return Optional.of("Ghi chú tối đa " + InpatientText.CONTENT_MAX_LENGTH + " ký tự");
         }
-        return value;
+        if (temperatureC == null && heartRate == null && respiratoryRate == null && weightKg == null
+                && appetite == null && (text == null || text.isEmpty())) {
+            return Optional.of("Vui lòng nhập ít nhất một chỉ số hoặc ghi chú theo dõi");
+        }
+        if (temperatureC != null && temperatureC.abs().compareTo(TEMPERATURE_BOUND) >= 0) {
+            return Optional.of("Nhiệt độ vượt giới hạn lưu trữ");
+        }
+        if (isOutOfRange(heartRate)) {
+            return Optional.of("Nhịp tim phải từ 1 đến " + SMALLINT_MAX);
+        }
+        if (isOutOfRange(respiratoryRate)) {
+            return Optional.of("Nhịp thở phải từ 1 đến " + SMALLINT_MAX);
+        }
+        if (weightKg != null) {
+            if (weightKg.compareTo(WEIGHT_MIN) < 0) {
+                // gồm ≤ 0 (BR-KH-04) và 0.001 → 0.00 sau làm tròn
+                return Optional.of("Cân nặng phải lớn hơn 0");
+            }
+            if (weightKg.compareTo(WEIGHT_BOUND) >= 0) {
+                return Optional.of("Cân nặng vượt giới hạn lưu trữ");
+            }
+        }
+        return Optional.empty();
     }
 
-    private static Short positiveShort(Integer value, String field) {
-        if (value == null) {
-            return null;
+    /** {@code |t| < 0.05} làm tròn về 0.0 mà không {@code setScale} một số có scale cực lớn. */
+    private static BigDecimal roundTemperature(BigDecimal temperatureC) {
+        if (temperatureC.abs().compareTo(TEMPERATURE_ZERO_BOUND) < 0) {
+            return new BigDecimal("0.0");
         }
-        if (value < 1 || value > SMALLINT_MAX) {
-            throw new IllegalArgumentException(field + " phải từ 1 đến " + SMALLINT_MAX);
-        }
-        return value.shortValue();
+        return temperatureC.setScale(1, RoundingMode.HALF_UP);
+    }
+
+    private static boolean isOutOfRange(Integer rate) {
+        return rate != null && (rate < 1 || rate > SMALLINT_MAX);
     }
 }

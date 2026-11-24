@@ -13,6 +13,8 @@ import java.util.Set;
 
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.boarding.api.BoardingQueryApi;
 import com.petcare.module.customer.api.PetQueryApi;
@@ -59,6 +61,17 @@ public class BoardingQueryService implements BoardingQueryApi {
     public Optional<StaySummary> findCurrentStay(Long petId) {
         return jdbc.query(STAY_SELECT + " WHERE b.pet_id = ? AND b.status IN ('CHECKED_IN', 'OVERDUE')",
                 (rs, n) -> toSummary(rs), petId).stream().findFirst();
+    }
+
+    /** {@code FOR SHARE OF b}: chỉ khóa dòng đặt chỗ, không khóa {@code boarding_check_ins} (docs/adr/0149 mục 16). */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<StaySummary> findBookingForShare(Long bookingId) {
+        if (bookingId == null) {
+            throw new IllegalArgumentException("bookingId là bắt buộc");
+        }
+        return jdbc.query(STAY_SELECT + " WHERE b.id = ? FOR SHARE OF b", (rs, n) -> toSummary(rs), bookingId)
+                .stream().findFirst();
     }
 
     @Override

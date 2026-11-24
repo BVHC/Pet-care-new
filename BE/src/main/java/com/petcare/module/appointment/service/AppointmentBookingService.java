@@ -25,6 +25,7 @@ import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.catalog.api.CatalogQueryApi;
 import com.petcare.module.catalog.api.CatalogQueryApi.ServiceInfo;
+import com.petcare.module.catalog.api.MedicalType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.customer.api.CustomerQueryApi;
 import com.petcare.module.customer.api.CustomerQueryApi.CustomerContact;
@@ -45,8 +46,8 @@ import com.petcare.platform.security.SecurityPrincipal;
  * <p>
  * Thứ tự (docs/adr/0047): phạm vi (lễ tân: chi nhánh của mình, trước mọi lần đọc DB; khách: hồ sơ của tài khoản) →
  * {@code lockPet} → đọc thú <b>một lần</b> (404, chủ — thú của khách khác cùng 404 —, đã mất cùng một snapshot) → dịch vụ
- * (404) → {@code lockForBooking} (404; khách + chi nhánh DRAFT cũng 404) → {@code now} → BR-LH-01 → BR-TK-19, BR-LH-09
- * (chỉ khách) → BR-KH-05 → BR-LH-04 → BR-LH-02 → BR-LH-05 → BR-LH-03 → mã → INSERT. Mọi lần đọc lịch chi nhánh
+ * (404) → {@code lockForBooking} (404; khách + chi nhánh DRAFT cũng 404) → {@code now} → BR-LH-01 (chi nhánh DRAFT) →
+ * BR-LT-18 (dịch vụ nội trú, docs/adr/0149 mục 40) → BR-LH-01 (dịch vụ) → BR-TK-19, BR-LH-09 (chỉ khách) → BR-KH-05 → BR-LH-04 → BR-LH-02 → BR-LH-05 → BR-LH-03 → mã → INSERT. Mọi lần đọc lịch chi nhánh
  * ({@code BranchQueryApi.*}), mọi phép đếm và {@code now} đều sau hai khóa. Nhóm {@code MEDICAL}: sau INSERT gọi
  * {@code FollowUpApi.cancelPendingFollowUps} (Care Task#6, BR-TB-06; docs/adr/0084, trả D029) — khóa thêm
  * {@code medical_records → care_tasks}, luôn sau {@code advisory → branches → appointments}. Không audit, không thông báo.
@@ -134,6 +135,10 @@ public class AppointmentBookingService {
         LocalTime start = request.slotStart();
         if (branchStatus != BranchStatus.ACTIVE) {
             throw new BusinessRuleViolationException("BR-LH-01", "Chi nhánh chưa nhận đặt lịch");
+        }
+        if (service.medicalType() == MedicalType.INPATIENT) {
+            // BR-LT-18 (docs/adr/0148, 0149 mục 40): dịch vụ nội trú chỉ bắt đầu bằng nhập viện.
+            throw new BusinessRuleViolationException("BR-LT-18", "Dịch vụ nội trú chỉ dùng qua nhập viện, không đặt lịch được");
         }
         if (!service.active() || !BOOKABLE.contains(service.group())
                 || !branches.isServiceEnabled(branchId, service.serviceId())) {
