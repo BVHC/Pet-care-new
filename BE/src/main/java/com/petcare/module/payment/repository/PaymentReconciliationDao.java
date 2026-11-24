@@ -1,5 +1,7 @@
 package com.petcare.module.payment.repository;
 
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.time.Instant;
@@ -12,6 +14,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import com.petcare.module.payment.dto.ReconciliationItem;
 import com.petcare.module.payment.dto.ReconciliationSummary;
 import com.petcare.module.payment.dto.ReconciliationSummary.ReconciliationStatus;
 
@@ -104,5 +107,41 @@ public class PaymentReconciliationDao {
 
     private static MapSqlParameterSource runFilter(ReconciliationStatus status) {
         return new MapSqlParameterSource().addValue("status", status == null ? null : status.name(), Types.VARCHAR);
+    }
+
+    public boolean runExists(long reconciliationId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM payment_reconciliations WHERE id = :id)
+                """, new MapSqlParameterSource("id", reconciliationId), Boolean.class));
+    }
+
+    public long countItems(long reconciliationId, Boolean resolved) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM reconciliation_items
+                WHERE reconciliation_id = :id AND (:resolved IS NULL OR (resolved_at IS NOT NULL) = :resolved)
+                """, itemFilter(reconciliationId, resolved), Long.class);
+    }
+
+    public List<ReconciliationItem> listItems(long reconciliationId, Boolean resolved, Pageable page) {
+        return jdbc.query("""
+                SELECT id, kind, transaction_id, gateway_ref, our_amount, gateway_amount, resolved_note, resolved_at
+                FROM reconciliation_items
+                WHERE reconciliation_id = :id AND (:resolved IS NULL OR (resolved_at IS NOT NULL) = :resolved)
+                ORDER BY id
+                LIMIT :limit OFFSET :offset
+                """, itemFilter(reconciliationId, resolved).addValue("limit", page.getPageSize())
+                .addValue("offset", page.getOffset()), PaymentReconciliationDao::mapItem);
+    }
+
+    private static MapSqlParameterSource itemFilter(long reconciliationId, Boolean resolved) {
+        return new MapSqlParameterSource("id", reconciliationId).addValue("resolved", resolved, Types.BOOLEAN);
+    }
+
+    private static ReconciliationItem mapItem(ResultSet rs, int row) throws SQLException {
+        Timestamp resolved = rs.getTimestamp("resolved_at");
+        return new ReconciliationItem(rs.getLong("id"), rs.getString("kind"),
+                rs.getObject("transaction_id", Long.class), rs.getString("gateway_ref"),
+                rs.getObject("our_amount", Long.class), rs.getObject("gateway_amount", Long.class),
+                resolved != null, rs.getString("resolved_note"), resolved == null ? null : resolved.toInstant());
     }
 }
