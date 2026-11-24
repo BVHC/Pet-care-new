@@ -144,4 +144,20 @@ public class PaymentReconciliationDao {
                 rs.getObject("our_amount", Long.class), rs.getObject("gateway_amount", Long.class),
                 resolved != null, rs.getString("resolved_note"), resolved == null ? null : resolved.toInstant());
     }
+
+    public Optional<ReconciliationItem> resolveItem(long itemId, long actorId, String note, Instant now) {
+        return jdbc.query("""
+                UPDATE reconciliation_items
+                SET resolved_by = :actor, resolved_note = :note, resolved_at = :now, updated_at = :now
+                WHERE id = :id AND resolved_at IS NULL
+                RETURNING id, kind, transaction_id, gateway_ref, our_amount, gateway_amount, resolved_note, resolved_at
+                """, new MapSqlParameterSource("id", itemId).addValue("actor", actorId).addValue("note", note)
+                .addValue("now", Timestamp.from(now)), PaymentReconciliationDao::mapItem).stream().findFirst();
+    }
+
+    public boolean itemExists(long itemId) {
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (SELECT 1 FROM reconciliation_items WHERE id = :id)
+                """, new MapSqlParameterSource("id", itemId), Boolean.class));
+    }
 }

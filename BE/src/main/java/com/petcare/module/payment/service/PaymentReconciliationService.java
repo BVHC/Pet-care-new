@@ -27,6 +27,7 @@ import com.petcare.module.payment.repository.PaymentReconciliationDao;
 import com.petcare.module.payment.repository.PaymentReconciliationDao.LocalTransaction;
 import com.petcare.module.payment.repository.PaymentReconciliationDao.Mismatch;
 import com.petcare.module.payment.repository.PaymentReconciliationDao.MismatchKind;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.model.PageResponse;
 
@@ -118,5 +119,20 @@ public class PaymentReconciliationService {
         long total = reconciliations.countItems(reconciliationId, resolved);
         return PageResponse.of(new PageImpl<>(reconciliations.listItems(reconciliationId, resolved, pagination),
                 pagination, total));
+    }
+
+    @Transactional
+    public ReconciliationItem resolve(long itemId, long actorId, String note) {
+        return reconciliations.resolveItem(itemId, actorId, note.strip(), Instant.now(clock)).orElseThrow(() -> {
+            if (!reconciliations.itemExists(itemId)) {
+                return new ResourceNotFoundException("mục lệch đối soát", itemId);
+            }
+            return new InvalidStateTransitionException("mục lệch đối soát", "đã xử lý", "đã xử lý") {
+                @Override
+                public String clientMessage() {
+                    return "Mục đã được xử lý";
+                }
+            };
+        });
     }
 }
