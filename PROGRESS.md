@@ -30,3 +30,43 @@
 ```powershell
 & 'C:/Program Files/Git/bin/bash.exe' ./verify.sh ReturnRequestCreateIT,ReturnRequestRejectIT,RefundConfirmIT,CashierShiftIT,PaymentReconciliationJobIT,PaymentReconciliationListIT,PaymentReconciliationItemsIT,PaymentReconciliationResolveIT,GatewayRefundJobIT,ReturnRefundFsmIT
 ```
+
+- L12 committed as `25cc8398`.
+
+## Phase C
+
+`python -B BE/target/be2-smoke.py refund recon` exited 0. The harness launched the packaged Java API on loopback with new PostgreSQL and Redis containers, logged in fixture accounts and used `curl.exe` for each request. It created and collected payment on a real retail Order. It seeded the approved return and reconciliation items for the later routes, then stopped the server and removed its temporary containers.
+
+| curl request | Actual response sequence |
+| --- | --- |
+| `GET /actuator/health` | 200 |
+| `POST /api/return-requests` | 400 VALIDATION_FAILED, 403 ACCESS_DENIED, 401 UNAUTHENTICATED, 201 |
+| `POST /api/return-requests/1/reject` | 400 BUSINESS_RULE_VIOLATION, 403 ACCESS_DENIED, 200, 409 INVALID_STATE_TRANSITION |
+| `POST /api/refunds/1/confirm` | 400 VALIDATION_FAILED, 403 ACCESS_DENIED_SCOPE_MISMATCH, 200, 409 INVALID_STATE_TRANSITION |
+| `POST /api/cashier-shifts/1/close` | 200 with `expectedCash=0` after refunding the cash collection |
+| `GET /api/payment-reconciliations` | 403 ACCESS_DENIED, 400 VALIDATION_FAILED for `size=0`, 200 |
+| `GET /api/payment-reconciliations/1/items` | 403 ACCESS_DENIED, 400 VALIDATION_FAILED for `size=0`, 200 |
+| `POST /api/payment-reconciliation-items/1/resolve` | 400 VALIDATION_FAILED, 403 ACCESS_DENIED, 200, 409 INVALID_STATE_TRANSITION |
+
+The exact command and HTTP output were captured in `BE/target/be2-smoke.log`. No unexpected API result required a regression change.
+
+### Review corrections
+
+- The first verification of the four review fixes exited 0 with 6,835 unit tests and 95 integration tests. The rerun included `RefundConfirmScopeIT` and all cases from the combined gate.
+- Follow-up review found a separate ST21 worker path that needed the same source-branch check. The next implementer and patch reviewer were started with `gpt-6.1-terra`. The implementer brief requires the TDD procedure from `.claude/agents/implementer.md`, including observing the regression test fail before applying production code.
+- The Terra implementer ran `mvn -B -f BE/pom.xml '-Dit.test=GatewayRefundScopeIT' '-Dtest=none' '-Dsurefire.failIfNoSpecifiedTests=false' verify` before applying the source patch. It exited 1 with two errors at the gateway result because the old worker called the fake provider in both mismatched scopes. After the patch, changing the selector to `-Dit.test=GatewayRefundScopeIT,GatewayRefundJobIT` exited 0 with eight integration tests and zero failures, errors or skips.
+- The Terra patch review confirmed that the online Order, sales Order, refund and linked return checks precede provider calls. The existing lock order stays in place. Inconsistent sources fail with no notification.
+- The second localhost smoke run used the packaged jar from the ST21 green build. It exited 0 for all six endpoints and the cashier close. Each of the four escaped-NUL requests returned HTTP 400 `VALIDATION_FAILED`. The success, forbidden and replay probes retained their prior statuses.
+
+```powershell
+$env:BE2_SMOKE_JAR = 'C:/Workspace/Pet-care-new/BE/target/be2-smoke-final.jar'
+python -B BE/target/be2-smoke.py refund recon
+```
+
+Full curl output is in `BE/target/be2-smoke-final.log`.
+
+The final `verify.sh` command exited 0 after checking 24 contract files and 346 operations. Maven compiled and packaged the API and ran 6,835 unit tests and 97 integration tests with zero failures, errors or skips. The temporary server and containers were removed after smoke testing. The unresolved criteria are recorded in BLOCKED.md.
+
+```powershell
+& 'C:/Program Files/Git/bin/bash.exe' ./verify.sh ReturnRequestCreateIT,ReturnRequestRejectIT,RefundConfirmIT,CashierShiftIT,PaymentReconciliationJobIT,PaymentReconciliationListIT,PaymentReconciliationItemsIT,PaymentReconciliationResolveIT,GatewayRefundJobIT,ReturnRefundFsmIT,RefundConfirmScopeIT,GatewayRefundScopeIT
+```

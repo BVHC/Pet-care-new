@@ -88,11 +88,12 @@ public class FakeGatewayClient implements PaymentGatewayClient {
 
     @Override
     public RefundResult refund(RefundRequest request) {
-        return refunds.computeIfAbsent(request.refundCode(), code -> switch (refundOutcome) {
+        RefundResult terminal = refunds.computeIfAbsent(request.refundCode(), code -> switch (refundOutcome) {
             case SUCCEEDED -> new RefundResult(RefundOutcome.SUCCEEDED, "FAKE-REFUND-" + code, null);
             case REJECTED -> new RefundResult(RefundOutcome.REJECTED, null, "Fake: từ chối hoàn tiền");
-            case TEMPORARY_ERROR -> new RefundResult(RefundOutcome.TEMPORARY_ERROR, null, "Fake: lỗi tạm");
+            case TEMPORARY_ERROR -> null;
         });
+        return terminal == null ? new RefundResult(RefundOutcome.TEMPORARY_ERROR, null, "Fake: lỗi tạm") : terminal;
     }
 
     @Override
@@ -126,7 +127,7 @@ public class FakeGatewayClient implements PaymentGatewayClient {
         settlements.computeIfAbsent(date, d -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(transaction);
     }
 
-    /** Kết quả cho các {@code refundCode} mới (mã đã hoàn giữ kết quả cũ). */
+    /** Kết quả cho mã hoàn tiền chưa có kết quả cuối. */
     public void setRefundOutcome(RefundOutcome outcome) {
         this.refundOutcome = outcome;
     }

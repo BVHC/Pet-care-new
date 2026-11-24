@@ -20,13 +20,23 @@ public class RefundDao {
 
     private final NamedParameterJdbcTemplate jdbc;
 
-    public record RefundScope(long branchId, CollectMethod method) {}
+    public record RefundScope(long branchId, CollectMethod method, boolean consistentBranch) {}
 
     public Optional<RefundScope> findScope(long refundId) {
         return jdbc.query("""
-                SELECT branch_id, method FROM refunds WHERE id = :id
+                SELECT orders.branch_id, refund.method,
+                       orders.branch_id = refund.branch_id
+                           AND (request.id IS NULL OR request.branch_id = orders.branch_id)
+                           AND (online_order.id IS NULL OR online_order.branch_id = orders.branch_id)
+                           AS consistent_branch
+                FROM refunds refund
+                LEFT JOIN return_requests request ON request.id = refund.return_request_id
+                LEFT JOIN online_orders online_order ON online_order.id = refund.online_order_id
+                JOIN orders ON orders.id = COALESCE(request.order_id, online_order.order_id)
+                WHERE refund.id = :id
                 """, new MapSqlParameterSource("id", refundId), (row, index) ->
-                new RefundScope(row.getLong("branch_id"), CollectMethod.valueOf(row.getString("method"))))
+                new RefundScope(row.getLong("branch_id"), CollectMethod.valueOf(row.getString("method")),
+                        row.getBoolean("consistent_branch")))
                 .stream().findFirst();
     }
 

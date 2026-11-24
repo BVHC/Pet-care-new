@@ -46,10 +46,13 @@ public class RefundConfirmService {
     public RefundResponse confirm(long refundId, ConfirmRefundRequest request) {
         RefundScope access = refunds.findScope(refundId)
                 .orElseThrow(() -> new ResourceNotFoundException("khoản hoàn tiền", refundId));
+        long actorId = scope.current().accountId();
+        if (!access.consistentBranch()) {
+            throw new AccessDeniedScopeException("refund:" + refundId, "account:" + actorId);
+        }
         scope.check(access.branchId());
         boolean gateway = access.method() == CollectMethod.GATEWAY;
         Role expectedRole = gateway ? Role.BRANCH_MANAGER : Role.RECEPTIONIST;
-        long actorId = scope.current().accountId();
         if (!expectedRole.name().equals(scope.current().role())
                 || staff.findStaffForShare(actorId).filter(actor -> actor.active() && actor.role() == expectedRole
                         && Long.valueOf(access.branchId()).equals(actor.branchId())).isEmpty()) {

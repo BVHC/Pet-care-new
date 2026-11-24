@@ -16,5 +16,6 @@ Use one checkout and a separate `codex/be2-<slice>` branch for each API or job. 
 | L10 | gateway-refund-job | Returns worker/service/repository and existing payment gateway interface, new `GatewayRefundJobIT`. | L2 and T127 for reachable flow; scripted adapter and fixture rows for worker tests | Verified locally; sandbox blocked |
 | L11 | paid-online-cancel | Existing shop cancellation routes/services and returns refund creation, new `PaidOnlineOrderCancelIT`. | T127, schema compatibility and immutable shop parity | Blocked |
 | L12 | return-refund-fsm | New `ReturnRefundFsmIT` using PostgreSQL and fixed clock. | L1–L4, L10 for documented edges | Verified for reachable edges; full coverage blocked by L2 |
+| L13 | review-fixes | Correct refund source-branch checks, fake gateway retry caching, free-text validation and signed shift totals contract. Add new focused regressions. | Phase C review of L1–L12 | Verified |
 
 Run each slice command from SPEC.md, check tracked and untracked paths against the brief and inspect the diff for audit, transaction boundaries and branch permissions. Record command output in PROGRESS.md. If a slice remains blocked, record the exact failing dependency and continue with independent slices. Phase C runs local HTTP probes against a disposable database and an independent review.

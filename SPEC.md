@@ -28,3 +28,5 @@ For a disposable local environment using the fake adapter, enable the ST21 sched
 Write workflow files in the repo root, Java backend code under the assigned module paths, new tests, and a new Flyway migration if needed. In each brief narrow the write scope to named files. Preserve existing tests and migrations, dependency manifests, frontend, `app/auth/`, `app/payments/`, `app/core/config.py`, `.env*`, `.github/`, and all Dockerfiles. Preserve existing local edits. No worktree, push, merge, deployment, or skipped commit hooks.
 
 Additional returns read APIs, new payment providers, live account setup, and the remainder of UC63 are outside this batch.
+
+Phase C may correct a checked-in API contract where a required behavior changes the response. The cashier shift contract uses signed totals after refunds. Review regressions must pass through `verify.sh` alongside the existing checks.

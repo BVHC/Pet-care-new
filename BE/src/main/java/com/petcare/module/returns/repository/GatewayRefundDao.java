@@ -38,13 +38,17 @@ public class GatewayRefundDao {
                 """, (row, index) -> row.getLong("online_order_id"), refundId).stream().findFirst();
     }
 
-    public record OnlineOrder(long branchId, String code) {}
+    public record OnlineOrder(long orderId, long branchId, long salesBranchId, String code) {}
 
     public Optional<OnlineOrder> lockOnlineOrder(long onlineOrderId) {
         return jdbc.query("""
-                SELECT branch_id, code FROM online_orders WHERE id = ? FOR NO KEY UPDATE
-                """, (row, index) -> new OnlineOrder(row.getLong("branch_id"), row.getString("code")), onlineOrderId)
-                .stream().findFirst();
+                SELECT online_order.order_id, online_order.branch_id, orders.branch_id AS sales_branch_id,
+                       online_order.code
+                FROM online_orders online_order
+                JOIN orders ON orders.id = online_order.order_id
+                WHERE online_order.id = ? FOR NO KEY UPDATE OF online_order
+                """, (row, index) -> new OnlineOrder(row.getLong("order_id"), row.getLong("branch_id"),
+                        row.getLong("sales_branch_id"), row.getString("code")), onlineOrderId).stream().findFirst();
     }
 
     public record DueRefund(long id, String code, Long returnRequestId, long branchId, long amount, int attempts) {}
@@ -60,10 +64,13 @@ public class GatewayRefundDao {
                 .stream().findFirst();
     }
 
-    public boolean lockApprovedReturn(long requestId) {
-        return !jdbc.queryForList("""
-                SELECT id FROM return_requests WHERE id = ? AND status = 'APPROVED' FOR NO KEY UPDATE
-                """, Long.class, requestId).isEmpty();
+    public record LinkedReturn(long orderId, long branchId, String status) {}
+
+    public Optional<LinkedReturn> lockReturn(long requestId) {
+        return jdbc.query("""
+                SELECT order_id, branch_id, status FROM return_requests WHERE id = ? FOR NO KEY UPDATE
+                """, (row, index) -> new LinkedReturn(row.getLong("order_id"), row.getLong("branch_id"),
+                        row.getString("status")), requestId).stream().findFirst();
     }
 
     public record OriginalPayment(String code, String gateway, String gatewayTxnId, long amount, Instant createdAt) {}

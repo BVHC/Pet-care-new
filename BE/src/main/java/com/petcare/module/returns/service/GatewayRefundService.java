@@ -28,6 +28,7 @@ import com.petcare.module.payment.api.PaymentGatewayClient.RefundResult;
 import com.petcare.module.payment.api.PaymentGatewayException;
 import com.petcare.module.returns.repository.GatewayRefundDao;
 import com.petcare.module.returns.repository.GatewayRefundDao.DueRefund;
+import com.petcare.module.returns.repository.GatewayRefundDao.LinkedReturn;
 import com.petcare.module.returns.repository.GatewayRefundDao.OnlineOrder;
 import com.petcare.module.returns.repository.GatewayRefundDao.OriginalPayment;
 
@@ -59,13 +60,20 @@ public class GatewayRefundService {
         if (refund == null) {
             return;
         }
-        if (order == null || order.branchId() != refund.branchId()) {
-            fail(refund, refund.attempts(), "Không xác định được đơn online gốc", null, now);
+        if (order == null || order.branchId() != refund.branchId() || order.salesBranchId() != refund.branchId()) {
+            failInconsistentSource(refund, now);
             return;
         }
-        if (refund.returnRequestId() != null && !refunds.lockApprovedReturn(refund.returnRequestId())) {
-            fail(refund, refund.attempts(), "Yêu cầu trả hàng không ở trạng thái đã duyệt", order, now);
-            return;
+        if (refund.returnRequestId() != null) {
+            LinkedReturn request = refunds.lockReturn(refund.returnRequestId()).orElse(null);
+            if (request == null || request.orderId() != order.orderId() || request.branchId() != refund.branchId()) {
+                failInconsistentSource(refund, now);
+                return;
+            }
+            if (!"APPROVED".equals(request.status())) {
+                fail(refund, refund.attempts(), "Yêu cầu trả hàng không ở trạng thái đã duyệt", order, now);
+                return;
+            }
         }
 
         List<OriginalPayment> payments = refunds.findSuccessfulPayments(onlineOrderId);
@@ -109,6 +117,11 @@ public class GatewayRefundService {
         }
     }
 
+    private void failInconsistentSource(DueRefund refund, Instant now) {
+        // Chưa xác định được phạm vi chi nhánh, không gửi mã đơn hoặc số tiền cho bất kỳ người nhận nào.
+        refunds.fail(refund.id(), refund.attempts(), "Không xác định được phạm vi của nguồn hoàn tiền", now);
+    }
+
     private void fail(DueRefund refund, int attempts, String reason, OnlineOrder order, Instant now) {
         refunds.fail(refund.id(), attempts, reason, now);
         List<Long> managers = staff.findActiveStaffIds(refund.branchId(), Role.BRANCH_MANAGER);
@@ -117,7 +130,7 @@ public class GatewayRefundService {
         }
         String branchName = branches.findBranch(refund.branchId()).orElseThrow().name();
         Map<String, Object> payload = Map.of("ma_hoan_tien", refund.code(), "so_tien_hoan", refund.amount(),
-                "ma_don", order == null ? "Không xác định" : order.code(), "chi_nhanh", branchName);
+                "ma_don", order.code(), "chi_nhanh", branchName);
         for (Long manager : managers) {
             notifications.enqueue(new NotificationRequest(NotificationTemplateCode.REFUND_FAILED_APP, Channel.IN_APP,
                     manager, null, payload, null));
