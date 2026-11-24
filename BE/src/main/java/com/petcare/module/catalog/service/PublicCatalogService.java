@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
+import com.petcare.module.catalog.api.ProductType;
 import com.petcare.module.catalog.api.ServiceGroup;
 import com.petcare.module.catalog.dto.KennelTypeSpec;
 import com.petcare.module.catalog.dto.ProductCategoryResponse;
@@ -167,7 +168,8 @@ public class PublicCatalogService {
 
     private static PublicProductResponse toPublic(Product p, String categoryName, List<Long> inStockBranchIds) {
         return new PublicProductResponse(p.getId(), p.getName(), p.getCategoryId(), categoryName, p.getPrice(),
-                p.getUnit(), p.getDescription(), p.getImageUrl(), p.getGalleryUrls(), inStockBranchIds);
+                p.getUnit(), p.getDescription(), p.getImageUrl(), p.getGalleryUrls(),
+                p.getProductType() == ProductType.GOODS, inStockBranchIds);
     }
 
     private static String escapeLike(String text) {

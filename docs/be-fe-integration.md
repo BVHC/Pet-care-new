@@ -366,3 +366,27 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 - `galleryUrls` luôn là mảng, không bao giờ `null`, ở cả admin và công khai; sản phẩm có sẵn sau V62 là `[]`; `imageUrl` không đổi và không tự vào gallery.
 
 **Chưa kiểm:** chạy FE (Vite) và các ca tay `SP-GAL` trên BE thật; BE 8082 (DB 5433, Flyway 61) vẫn là mã cũ không có trường. Khi BE 8082 lên V62: `PublicProduct` / `Product` mới tự có trường, FE không cần đổi; ghi ảnh phụ qua hộp sửa sản phẩm rồi mở `/shop/<id>` là phép thử đầu tiên.
+
+## 10. Cờ `purchasableOnline` của sản phẩm công khai (catalog-v1, 24/11/2026)
+
+> **Trạng thái ghép:** FE xong trên mock (kiểu, mock, thẻ ở `/shop`, trang chi tiết `/shop/:id`, test tự động); phần BE (`PublicProductResponse`) làm theo hợp đồng `D:/Do-an/.c2-tmp/final2/ONLINE-HOP-DONG.md` bởi agent khác, **FE chưa chạy với BE thật**. **BE 8082 chưa có cờ** (đo 24/11/2026: `GET /api/public/products?size=1` trả các khóa `productId` … `galleryUrls`, `inStockBranchIds`, không có `purchasableOnline`): trên BE đó mọi sản phẩm vẫn hiện nút "Thêm vào giỏ" (vắng trường = `true`, theo thiết kế), vaccine bấm vào vẫn bị 400 BR-BH-07 như trước, cho tới khi BE 8082 được triển khai lại. Ca tay `SP-ONL-01` đến `SP-ONL-08` ở `docs/testcases/T57-fe.md`, cột J để trống.
+
+**Vấn đề.** Giỏ online chỉ nhận hàng thường (BR-BH-07) nhưng thuốc không kê đơn và vaccine vẫn hiện ở cửa hàng với nút "Thêm vào giỏ", bấm là báo lỗi.
+
+**Trường mới (không đổi đường dẫn, không thêm endpoint, không migration):**
+
+| Schema | Trường | Ghi chú |
+|---|---|---|
+| `PublicProduct` (`GET /api/public/products`, `/{id}`) | `purchasableOnline: boolean` | BE: `true` khi loại sản phẩm là GOODS, ngược lại `false`; KHÔNG lộ `productType`. FE: `PublicProduct.purchasableOnline?` tùy chọn, **vắng = `true`** |
+
+**Quy tắc FE.**
+
+- Chỉ `purchasableOnline === false` đổi giao diện; `true` hoặc vắng giữ nguyên như cũ.
+- Thẻ ở `/shop` (`ShopPage`): thẻ còn hàng và `false` thì bỏ nút, thay bằng dòng "Mua trực tiếp tại quầy" kèm icon cửa hàng (`FE/src/components/customer/shop/CounterOnlyNote.tsx`). Hết hàng ở mọi chi nhánh thì không hiện gì thêm (đã có "Tạm hết hàng", cùng điều kiện với nút cũ).
+- Trang chi tiết (`ProductDetailPage`): `false` thì bỏ ô "Số lượng đặt" và nút, còn hàng thì hiện dòng "Mua trực tiếp tại quầy"; đoạn cuối đổi thành "Sản phẩm này chỉ bán trực tiếp tại quầy các chi nhánh." (kể cả khi hết hàng). Giá, chi nhánh còn hàng và nút "Xem chi nhánh & số điện thoại" giữ nguyên.
+- Dòng "Mua trực tiếp tại quầy" là thông tin nên mọi vai trò đều thấy (nhân viên không có nút giỏ ở bất kỳ thẻ nào, như trước).
+- Không đổi: `AddToCartButton`, giỏ hàng, đặt hàng, `shop.mock.ts` (đưa thuốc / vaccine vào giỏ vẫn 400 BR-BH-07), trang chủ (thẻ sản phẩm chỉ là liên kết, không có nút giỏ), trang gợi ý `RecommendPage` (không hiện sản phẩm có giá), `shared/components/ui/ProductCard.tsx` (không nơi nào import).
+
+**Mock (`public.mock.ts`):** `purchasableOnline = (productType === 'GOODS')`, suy ra theo loại như BE nên sản phẩm tạo ở màn quản trị cũng đúng; mẫu: sản phẩm 1, 2 `true`; 4 (thuốc), 5, 6 (vaccine) `false`. Mock không lộ `productType`.
+
+**Chưa kiểm:** chạy FE (Vite) và các ca tay `SP-ONL` trên BE thật. Khi BE 8082 được triển khai lại có cờ, FE không cần đổi; mở `/shop` rồi `/shop/<id vaccine>` là phép thử đầu tiên.

@@ -132,7 +132,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`CreateProtocolRequest`** — {`species`: Species, `vaccineTypeId`: int64, `doseNumber`: int32, `intervalDays`: int32, `minAgeWeeks`: int32, `requiredForBoarding`: boolean}
 - **`UpdateProtocolRequest`** — {`intervalDays?`: int32, `minAgeWeeks?`: int32, `requiredForBoarding?`: boolean, `isActive?`: boolean} — Chỉ áp dụng cho mũi tiêm sau thời điểm sửa (BR-SP-03)
 - **`PublicService`** — {`serviceId`: int64, `name`: string, `group`: ServiceGroup, `price`: int64, `priceIsFrom`: boolean, `description?`: string, `kennelType?`: KennelTypeSpec, `branchIds`: [integer]}
-- **`PublicProduct`** — {`productId`: int64, `name`: string, `categoryId`: int64, `categoryName`: string, `price`: int64, `unit`: string, `description?`: string, `imageUrl?`: string, `galleryUrls`: [string], `inStockBranchIds`: [integer]}
+- **`PublicProduct`** — {`productId`: int64, `name`: string, `categoryId`: int64, `categoryName`: string, `price`: int64, `unit`: string, `description?`: string, `imageUrl?`: string, `galleryUrls`: [string], `purchasableOnline`: boolean, `inStockBranchIds`: [integer]}
 
 ---
 
@@ -153,6 +153,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A3 | Phác đồ: sửa `intervalDays`, `minAgeWeeks`, `requiredForBoarding`, `isActive`; loài, loại vaccine, mũi thứ không đổi | Bộ ba này là khóa duy nhất (05 `vaccination_protocols`); BR-SP-03 |
 | A4 | Danh sách sản phẩm cho nhân viên có bộ lọc `retailOnly` (bỏ thuốc kê đơn) để dùng ở POS | BR-SP-01: thuốc kê đơn không bán lẻ |
 | A5 | Ảnh phụ của sản phẩm là `galleryUrls`: danh sách URL có thứ tự, tối đa 8, lưu JSONB `products.gallery_urls` (V62); `imageUrl` vẫn là ảnh bìa; PATCH `galleryUrls` thay cả danh sách (null = không đổi); BE trim và bỏ trùng giữ lần đầu; không kiểm giao thức URL | Trang chi tiết cần nhiều ảnh; chưa có kho tệp nên chỉ nhận URL (Q1); docs/adr/0151 |
+| A6 | `PublicProduct.purchasableOnline` là cờ suy ra: `true` khi loại sản phẩm là GOODS, ngược lại `false` (thuốc không kê đơn, vaccine); không lộ `productType`. Không đổi bộ lọc: thuốc không kê đơn và vaccine vẫn hiện ở danh sách và chi tiết công khai, thuốc kê đơn và hàng ngừng bán vẫn không hiện | Giỏ online chỉ nhận hàng GOODS (BR-BH-07) nên FE cần biết sản phẩm nào bỏ vào giỏ được để thay nút giỏ bằng "Mua tại quầy"; chỉ lộ cờ suy ra theo luật, không lộ loại nội bộ (BR-CK-01) |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

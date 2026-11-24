@@ -1376,7 +1376,7 @@ components:
           description: "Chi nhánh ACTIVE đang bật dịch vụ (BR-CK-01)"
     PublicProduct:
       type: object
-      required: [productId, name, categoryId, categoryName, price, unit, galleryUrls, inStockBranchIds]
+      required: [productId, name, categoryId, categoryName, price, unit, galleryUrls, purchasableOnline, inStockBranchIds]
       properties:
         productId:
           type: integer
@@ -1407,6 +1407,9 @@ components:
             type: string
             maxLength: 500
           description: "Ảnh phụ có thứ tự (tối đa 8); ảnh hiển thị ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Cùng một DTO cho danh sách và chi tiết; chưa có ảnh phụ trả `[]`"
+        purchasableOnline:
+          type: boolean
+          description: "`true` khi sản phẩm bỏ vào giỏ online được: chỉ hàng hóa GOODS (BR-BH-07); thuốc không kê đơn và vaccine là `false` (chỉ bán tại quầy). Cờ suy ra, không lộ loại sản phẩm (A6). Cùng một DTO cho danh sách và chi tiết"
         inStockBranchIds:
           type: array
           items:

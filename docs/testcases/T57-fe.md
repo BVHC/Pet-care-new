@@ -1,7 +1,7 @@
 # T57 (FE): Màn hình tầng 3 và AI: ma trận test tay (22 UC tầng 3, 5 UC AI, ST07)
 
 > Phạm vi: màn hình của 12 module tầng 3 (`workforce`, `inpatient`, `shop`, `payment`, `returns`, `stockops`, `materialuse`, `fees`, `branchlife`, `custmerge`, `articlex`, `ai`) theo danh mục `docs/10-t54-t57-checklists.md` §2.1. Mỗi mục có bảng màn hình, dữ liệu mẫu, cách đặt lại và bảng ca.
-> **Trạng thái BE:** BE chưa có controller nào của 12 module này (chỉ có migration V34–V48 và interface chéo), nên **mọi ca chạy trên mock** (`FE/src/shared/api/mock/<module>.mock.ts`). Hợp đồng: `docs/api/<module>-v1.md`; đặc tả `docs/07` đến `docs/09`. Từ 17–18/11/2026 `shop` #1–#18 đã có BE thật và FE ghép (T67 phía khách, T68 phía lễ tân; đầu mục TM và DH nói rõ ca nào chạy được với BE thật); riêng `shop` #19 (hủy đơn sau giao thất bại) BE chưa có (task 138). Từ 23/11/2026 `workforce` #1–#17 đã có BE thật và FE ghép (T66; đầu mục NS nói rõ ca nào chạy được với BE thật). Từ 24/11/2026 mục SP-GAL (ảnh phụ của sản phẩm, catalog-v1 `galleryUrls`) đã có mock và test tự động, BE thật chờ tích hợp; mục này thuộc module `catalog` của giai đoạn 1 nên không nằm trong 12 module nói trên.
+> **Trạng thái BE:** BE chưa có controller nào của 12 module này (chỉ có migration V34–V48 và interface chéo), nên **mọi ca chạy trên mock** (`FE/src/shared/api/mock/<module>.mock.ts`). Hợp đồng: `docs/api/<module>-v1.md`; đặc tả `docs/07` đến `docs/09`. Từ 17–18/11/2026 `shop` #1–#18 đã có BE thật và FE ghép (T67 phía khách, T68 phía lễ tân; đầu mục TM và DH nói rõ ca nào chạy được với BE thật); riêng `shop` #19 (hủy đơn sau giao thất bại) BE chưa có (task 138). Từ 23/11/2026 `workforce` #1–#17 đã có BE thật và FE ghép (T66; đầu mục NS nói rõ ca nào chạy được với BE thật). Từ 24/11/2026 mục SP-GAL (ảnh phụ của sản phẩm, catalog-v1 `galleryUrls`) đã có mock và test tự động, BE thật chờ tích hợp; mục này thuộc module `catalog` của giai đoạn 1 nên không nằm trong 12 module nói trên. Cùng ngày, mục SP-ONL (cờ `purchasableOnline`: thuốc và vaccine chỉ bán tại quầy, không có nút giỏ) đã có mock và test tự động; BE 8082 chưa có cờ (đo 24/11/2026: danh sách sản phẩm công khai chưa có trường này), nên các ca SP-ONL-01, 02, 04, 06, 07 cần mock hoặc BE đã triển khai lại có cờ; SP-ONL-03 giống hệt trước; SP-ONL-08 mô tả đúng BE 8082 hiện tại.
 > **Không có kết quả nào trong file này đã được chạy.** Cột J để Hiến tự điền sau khi chạy tay; tất cả bắt đầu ở "Chưa test".
 
 ## 0. Khung chung
@@ -89,7 +89,7 @@ Chuỗi này chọn tự động theo mẫu "Mong đợi bắt đầu bằng th�
 
 **Kiểm nhãn khi soạn (bằng chương trình, không phải chạy giao diện).** Trong 581 nhãn đi sau "Bấm", "nút", "tab", "Mở", "Chọn" ở cột Bước, 565 có nguyên văn trong `FE/src`; 16 còn lại là nhãn ghép từ dữ liệu (tùy chọn của ô chọn, `aria-label` có tên sản phẩm hoặc tên chi nhánh). Ở các chuỗi trong ngoặc kép khác (giá trị người chạy gõ vào, thông báo có biến) khoảng 14% không có nguyên văn vì là giá trị gõ vào hoặc thông báo ghép biến; chưa đối chiếu từng chuỗi.
 
-**Mã ca.** Tiền tố theo module: `NS` nhân sự, `NT` nội trú, `TM` cửa hàng online của khách, `DH` xử lý đơn online, `TH` trả hàng, `KH` kho mở rộng, `VT` vật tư tiêu hao, `PH` phí và định mức, `SP-GAL` ảnh sản phẩm (gallery), `CN` vòng đời chi nhánh, `GH` gộp hồ sơ khách, `BV` bài viết và bình luận, `AI` phân hệ AI.
+**Mã ca.** Tiền tố theo module: `NS` nhân sự, `NT` nội trú, `TM` cửa hàng online của khách, `DH` xử lý đơn online, `TH` trả hàng, `KH` kho mở rộng, `VT` vật tư tiêu hao, `PH` phí và định mức, `SP-GAL` ảnh sản phẩm (gallery), `SP-ONL` mua online được (thuốc, vaccine chỉ bán tại quầy), `CN` vòng đời chi nhánh, `GH` gộp hồ sơ khách, `BV` bài viết và bình luận, `AI` phân hệ AI.
 
 ## Bản đồ mã ca
 
@@ -104,11 +104,12 @@ Chuỗi này chọn tự động theo mẫu "Mong đợi bắt đầu bằng th�
 | VT | Vật tư tiêu hao | 13 |
 | PH | Phí và định mức | 16 |
 | SP-GAL | Ảnh sản phẩm (gallery ảnh phụ) | 17 |
+| SP-ONL | Mua online được (cờ `purchasableOnline`) | 8 |
 | CN | Vòng đời chi nhánh | 16 |
 | GH | Gộp hồ sơ | 19 |
 | BV | Bài viết và bình luận | 26 |
 | AI | AI | 37 |
-| | Tổng | 361 |
+| | Tổng | 369 |
 
 ## NS. Nhân sự (UC34–38)
 
@@ -662,6 +663,43 @@ Xóa khóa localStorage `petcare-mock-catalog` (sản phẩm, ảnh phụ). Dữ
 | SP-GAL-17 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Hạt Royal Canin Mini Adult 2kg"; 2) đổi "Đường dẫn ảnh phụ 1" thành `/imgs/khong-co.jpg` (tệp không tồn tại); 3) bấm "Lưu thay đổi"; 4) mở `/shop/1` | Bước 2: ảnh xem trước của dòng đó thành khung trống có biểu tượng ảnh gạch chéo (không hiện ảnh vỡ). Bước 3: lưu được (hệ thống không kiểm ảnh có tồn tại, chỉ kiểm không rỗng và tối đa 500 ký tự). Bước 4: dải chỉ còn 2 ảnh nhỏ ("Xem ảnh 1 trên 2", "Xem ảnh 2 trên 2": bìa và `prod3`), ảnh hỏng không hiện, nút "Ảnh sau" chuyển thẳng giữa hai ảnh còn lại (lúc mới mở, dải có thể thoáng hiện 3 ảnh rồi mất ảnh hỏng khi trình duyệt tải lỗi) | Mock + BE | Chưa test |
 
 Không đưa vào ca vì giao diện không tới được: 400 "Tối đa 8 ảnh phụ" (hộp chặn ở 8 dòng), phần tử rỗng (dòng trống bị bỏ khi lưu) và quá 500 ký tự (ô nhập chặn ở 500); các luật này, thứ tự lỗi và thân lỗi được kiểm bằng test tự động của mock (`catalog.mock.test.ts`), khớp số đo BE thật 24/11/2026 (thân lỗi, thứ tự 400 trước 403 trước 404; xem `docs/be-fe-integration.md` mục 9). Ảnh bìa hỏng (cần đổi `imageUrl`, hộp quản trị chưa có ô này) và ảnh lớn đang xem bị lỗi tải cũng chỉ có test tự động (`ProductGallery.test.tsx`).
+
+## SP-ONL. Mua online được: thuốc và vaccine chỉ bán tại quầy (UC16, UC61)
+
+Nguồn: `FE/src/pages/customer/ShopPage.tsx` (thẻ sản phẩm), `FE/src/pages/customer/ProductDetailPage.tsx`, `FE/src/components/customer/shop/CounterOnlyNote.tsx` (dòng "Mua trực tiếp tại quầy"); mock `FE/src/shared/api/mock/public.mock.ts`; hợp đồng catalog-v1 thêm trường `purchasableOnline` vào `PublicProduct` (không thêm endpoint; ghi chú ở `docs/be-fe-integration.md` mục 10). Giỏ online chỉ nhận hàng thường (BR-BH-07), nên thuốc không kê đơn và vaccine (vẫn hiện ở cửa hàng) không có nút "Thêm vào giỏ" nữa: thay bằng dòng "Mua trực tiếp tại quầy" kèm icon cửa hàng. **Trạng thái (24/11/2026): mock và FE đã xong, có test tự động; BE thật có cờ khi BE 8082 được triển khai lại** (đo 24/11/2026: BE 8082 chưa có cờ, xem SP-ONL-08), nên các ca còn lại chạy trên mock. Chỉ `purchasableOnline === false` đổi giao diện; vắng trường coi như `true`. Không đổi: giỏ hàng, đặt hàng, trang chủ, `AddToCartButton`.
+
+### Màn hình
+
+| UC | Route | Vai trò thấy | `<h1>` / tiêu đề | Vào từ đâu |
+|---|---|---|---|---|
+| UC16 | `/shop` | Mọi người, kể cả chưa đăng nhập | "Cửa hàng của boss" | Menu "Cửa hàng" |
+| UC16 | `/shop/:id` | Mọi người, kể cả chưa đăng nhập | Tên sản phẩm | Bấm thẻ sản phẩm ở `/shop` |
+| UC61 | `/cart` | CUSTOMER | "Giỏ hàng của bạn" | Biểu tượng giỏ ở đầu trang, hoặc nút "Xem giỏ hàng" trên thanh thông báo |
+
+### Dữ liệu mẫu
+
+- Hàng thường (có nút): "Hạt Royal Canin Mini Adult 2kg" (id 1), "Pate Whiskas 85g" (id 2), còn hàng ở PetCare Cầu Giấy.
+- Không bán online (dòng "Mua trực tiếp tại quầy"): hai vaccine "Vaccine 5 bệnh Vanguard" (id 6, 180.000 đ) và "Vaccine Dại Rabisin" (id 5, 150.000 đ), còn hàng ở PetCare Cầu Giấy; thuốc "Vitamin tổng hợp PetCare" (id 4) hết hàng ở mọi chi nhánh. Thuốc kê đơn "Amoxicillin 250mg" (id 3) không hiện ở cửa hàng.
+- **Khi chạy trên BE thật (cột Áp dụng "Mock + BE"):** tên và giá là của dữ liệu MOCK; trên BE thật có thêm nhiều hàng, 6 thuốc không kê đơn và 8 vaccine, nên đối chiếu theo CẤU TRÚC: hàng thường có nút, thuốc và vaccine còn hàng có dòng "Mua trực tiếp tại quầy" và không có nút, hết hàng thì chỉ có "Tạm hết hàng".
+
+### Đặt lại
+
+Xóa các khóa localStorage `petcare-mock-catalog` (sản phẩm; SP-ONL-07 là ca duy nhất tạo sản phẩm) và `petcare-mock-commerce` (giỏ; SP-ONL-05 thêm pate nên giỏ mẫu của `khach@petcare.vn` trở về hạt × 1 + pate × 2 sau khi xóa khóa này).
+
+### Ca kiểm thử
+
+| Mã | Vai trò · tài khoản | Bước | Mong đợi | Áp dụng | J |
+|---|---|---|---|---|---|
+| SP-ONL-01 | Khách vãng lai (chưa đăng nhập) | [UC16] 1) Mở `/shop` | 5 thẻ theo tên. "Hạt Royal Canin Mini Adult 2kg" và "Pate Whiskas 85g": có nút "Thêm vào giỏ", không có dòng "Mua trực tiếp tại quầy". "Vaccine 5 bệnh Vanguard" và "Vaccine Dại Rabisin": KHÔNG có nút; ở chỗ nút là dòng chữ nhỏ "Mua trực tiếp tại quầy" có biểu tượng cửa hàng (không emoji); vẫn hiện giá (180.000 đ, 150.000 đ) và "Còn hàng tại: PetCare Cầu Giấy". "Vitamin tổng hợp PetCare" (hết hàng): chỉ có "Tạm hết hàng tại các chi nhánh", không nút, không dòng mua tại quầy | Mock + BE | Chưa test |
+| SP-ONL-02 | Khách vãng lai | [UC16] 1) Mở `/shop/5` ("Vaccine Dại Rabisin") | h1 "Vaccine Dại Rabisin", giá 150.000 đ / liều, mục "Mua hàng" ghi "Còn hàng tại" kèm chi nhánh PetCare Cầu Giấy (link `/branches`). KHÔNG có ô "Số lượng đặt", KHÔNG có nút "Thêm vào giỏ"; thay vào đó là dòng "Mua trực tiếp tại quầy" kèm biểu tượng cửa hàng. Đoạn cuối mục ghi "Sản phẩm này chỉ bán trực tiếp tại quầy các chi nhánh." (không còn câu "Đặt online giao tận nơi…"); nút "Xem chi nhánh & số điện thoại" vẫn có, dẫn tới `/branches` | Mock + BE | Chưa test |
+| SP-ONL-03 | Khách vãng lai | [UC16] 1) Mở `/shop/1` ("Hạt Royal Canin Mini Adult 2kg") | Giữ nguyên như trước: có ô "Số lượng đặt" (giá trị 1) và nút "Thêm vào giỏ"; đoạn cuối ghi "Đặt online giao tận nơi (thanh toán trước qua cổng), hoặc mua trực tiếp tại quầy các chi nhánh."; KHÔNG có dòng riêng "Mua trực tiếp tại quầy" kèm biểu tượng | Mock + BE | Chưa test |
+| SP-ONL-04 | Khách vãng lai | [UC16] 1) Mở `/shop/4` ("Vitamin tổng hợp PetCare", thuốc, hết hàng) | Mục "Mua hàng" ghi "Tạm hết hàng tại các chi nhánh"; không ô số lượng, không nút, KHÔNG có dòng riêng "Mua trực tiếp tại quầy"; đoạn cuối vẫn ghi "Sản phẩm này chỉ bán trực tiếp tại quầy các chi nhánh." | Mock + BE | Chưa test |
+| SP-ONL-05 | CUSTOMER · khach@petcare.vn | [UC16][UC61] 1) Mở `/shop`, bấm "Thêm vào giỏ" ở thẻ "Pate Whiskas 85g"; 2) tìm thẻ "Vaccine Dại Rabisin"; 3) mở `/cart` | Bước 1: thanh thông báo "Đã thêm vào giỏ hàng" (kèm "Xem giỏ hàng"), pate trong giỏ từ 2 lên 3. Bước 2: thẻ vaccine không có nút (giao diện không có đường nào thêm vaccine vào giỏ). Bước 3: giỏ chỉ có hạt × 1 và pate × 3, không có vaccine | Mock + BE | Chưa test |
+| SP-ONL-06 | RECEPTIONIST · reception@store1.vn | [UC16] 1) Mở `/shop`; 2) mở `/shop/5`; 3) mở `/shop/1` | Bước 1: thẻ vaccine vẫn ghi "Mua trực tiếp tại quầy" (đây là thông tin, nhân viên cũng thấy); không thẻ nào có nút "Thêm vào giỏ" (nhân viên không mua online). Bước 2: có dòng "Mua trực tiếp tại quầy", không ô số lượng, không nút. Bước 3: không ô số lượng, không nút, không dòng "Mua trực tiếp tại quầy" | Mock + BE | Chưa test |
+| SP-ONL-07 | SUPER_MANAGER · chuoi@petcare.vn, rồi khách vãng lai | [UC29][UC16] 1) Menu "Sản phẩm & dịch vụ", tab "Sản phẩm", bấm "Thêm sản phẩm"; 2) chọn "Danh mục" = "Thuốc", SKU `THU-ONL-1`, "Tên sản phẩm" = "Thuốc thử mua tại quầy", "Loại sản phẩm" = "Thuốc" (không tick "Thuốc kê đơn"), "Đơn vị tính" = "viên", "Giá (đ)" = 20000, bấm "Tạo sản phẩm"; 3) thêm tiếp "Danh mục" = "Phụ kiện", SKU `HANG-ONL-1`, "Tên sản phẩm" = "Hàng thử mua online", "Loại sản phẩm" = "Hàng hóa", "Đơn vị tính" = "cái", "Giá (đ)" = 20000, bấm "Tạo sản phẩm"; 4) đăng xuất, mở `/shop?q=thử`, bấm tên từng thẻ | Bước 2, 3: thanh thông báo xanh "Đã thêm sản phẩm …". Bước 4: cả hai sản phẩm đều hiện ở `/shop` và đều "Tạm hết hàng" (mới tạo chưa có tồn) nên không thẻ nào có nút. Trang chi tiết "Thuốc thử mua tại quầy": đoạn cuối "Sản phẩm này chỉ bán trực tiếp tại quầy các chi nhánh."; trang "Hàng thử mua online": "Đặt online giao tận nơi (thanh toán trước qua cổng), hoặc mua trực tiếp tại quầy các chi nhánh." (cờ suy ra theo loại sản phẩm, không theo mã) | Mock + BE | Chưa test |
+| SP-ONL-08 | CUSTOMER · khach@petcare.vn | [UC61] Điều kiện: BE CHƯA có cờ (BE 8082 lúc 24/11/2026 chưa có). 1) Mở `/shop`, tìm thẻ của một vaccine còn hàng; 2) bấm "Thêm vào giỏ" ở thẻ đó; 3) mở `/cart` | Bước 1: thẻ vaccine vẫn có nút "Thêm vào giỏ" và không có dòng "Mua trực tiếp tại quầy" (FE coi trường vắng là `true`, không lỗi, không trang trắng). Bước 2: thanh thông báo lỗi (BE từ chối 400 BR-BH-07: chỉ bán online hàng hóa thường, không bán thuốc hay vaccine); trang không hỏng, nút bật lại. Bước 3: giỏ không có vaccine. Khi BE đã có cờ thì ca này không còn áp dụng (thẻ vaccine không có nút, xem SP-ONL-01) | BE | Chưa test |
+
+Không đưa vào ca vì giao diện không tới được: nút "Thêm vào giỏ" của sản phẩm có cờ `false` (bị ẩn), và thân lỗi 400 BR-BH-07 khi PUT thẳng `/api/me/cart/items/{id}` với thuốc hoặc vaccine (không có đường bấm; kiểm bằng `shop.mock.test.ts`). Việc FE coi trường vắng là `true`, `true` giống vắng và `false` đổi giao diện được kiểm bằng test tự động (`ShopPage.test.tsx`, `ProductDetailPage.test.tsx`, `public.mock.test.ts`).
 
 ## CN. Tạm ngừng, mở lại, đóng cửa chi nhánh (UC13)
 

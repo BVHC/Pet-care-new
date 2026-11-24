@@ -66,11 +66,39 @@ describe('sản phẩm công khai (public, UC16; BR-CK-01, BR-CK-03)', () => {
   it('mỗi sản phẩm chỉ có đúng các trường của PublicProduct: không lộ số lượng tồn, SKU, cờ kê đơn (BR-CK-03)', async () => {
     const first = (await products()).content[0];
     expect(Object.keys(first).sort()).toEqual(
-      ['categoryId', 'categoryName', 'description', 'galleryUrls', 'imageUrl', 'inStockBranchIds', 'name', 'price', 'productId', 'unit'].sort(),
+      ['categoryId', 'categoryName', 'description', 'galleryUrls', 'imageUrl', 'inStockBranchIds', 'name', 'price', 'productId', 'purchasableOnline', 'unit'].sort(),
     );
     expect(first).toMatchObject({ productId: 1, name: 'Hạt Royal Canin Mini Adult 2kg', categoryName: 'Thức ăn', price: 450_000, unit: 'túi' });
     const detail = (await client.get('/api/public/products/1')).data.data;
     expect(JSON.stringify(detail)).not.toMatch(/quantity|sku|isPrescription|isActive|productType/i);
+  });
+
+  // BR-BH-07: giỏ online chỉ nhận GOODS. Cờ suy ra từ loại sản phẩm, không lộ chính loại đó; thuốc / vaccine vẫn hiện ở cửa hàng.
+  describe('mua online được (purchasableOnline)', () => {
+    const detail = async (productId: number) => (await client.get(`/api/public/products/${productId}`)).data.data as PublicProduct;
+
+    it('danh sách: hàng thường (1, 2) true; thuốc không kê đơn (4) và vaccine (5, 6) false; luôn là boolean, không bao giờ vắng', async () => {
+      const list = (await products()).content;
+      expect(list.map((p) => [p.productId, p.purchasableOnline])).toEqual([
+        [1, true],
+        [2, true],
+        [6, false],
+        [5, false],
+        [4, false],
+      ]);
+    });
+
+    it('chi tiết cùng một DTO với danh sách', async () => {
+      expect(await Promise.all([1, 2, 4, 5, 6].map(async (id) => (await detail(id)).purchasableOnline))).toEqual([true, true, false, false, false]);
+    });
+
+    it('sản phẩm mới tạo ở quản trị theo loại: GOODS true, thuốc không kê đơn false (suy ra, không gán cứng theo id)', async () => {
+      const auth = await chain();
+      const base = { categoryId: 1, unit: 'cái', price: 10_000, isPrescription: false };
+      const goods = (await client.post('/api/products', { ...base, sku: 'ONL-G', name: 'Hàng thử online', productType: 'GOODS', tracksExpiry: false }, auth)).data.data;
+      const drug = (await client.post('/api/products', { ...base, sku: 'ONL-D', name: 'Thuốc thử online', productType: 'DRUG', tracksExpiry: true }, auth)).data.data;
+      expect([(await detail(goods.productId)).purchasableOnline, (await detail(drug.productId)).purchasableOnline]).toEqual([true, false]);
+    });
   });
 
   describe('ảnh phụ (galleryUrls)', () => {

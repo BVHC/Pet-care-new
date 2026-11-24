@@ -89,11 +89,70 @@ describe('ProductDetailPage (UC16)', () => {
     expect(box).toHaveValue(99);
   });
 
-  it('vaccine không bán online (400 BR-BH-07 của BE): trang không hỏng và giỏ không có vaccine', async () => {
+  // Cờ purchasableOnline (BR-BH-07: giỏ online chỉ nhận hàng thường). Chỉ `=== false` mới bỏ ô số lượng và nút. Dùng khớp chữ CHÍNH XÁC:
+  // câu mô tả của hàng thường cũng chứa "mua trực tiếp tại quầy" nên khớp mờ sẽ không phân biệt được.
+  const COUNTER_NOTE = 'Mua trực tiếp tại quầy';
+  const COUNTER_ONLY_TEXT = 'Sản phẩm này chỉ bán trực tiếp tại quầy các chi nhánh.';
+  const ONLINE_TEXT = 'Đặt online giao tận nơi (thanh toán trước qua cổng), hoặc mua trực tiếp tại quầy các chi nhánh.';
+
+  it('vaccine (purchasableOnline = false) còn hàng: không ô số lượng, không "Thêm vào giỏ"; có "Mua trực tiếp tại quầy"; giá, chi nhánh còn hàng, câu mô tả chỉ bán tại quầy', async () => {
+    await loginAs();
+    renderPage('5');
+    await screen.findByRole('heading', { level: 1, name: 'Vaccine Dại Rabisin' });
+    expect(screen.queryByLabelText('Số lượng đặt')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+    expect(screen.getByText(COUNTER_NOTE)).toBeInTheDocument();
+    expect(screen.getByText(COUNTER_ONLY_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(ONLINE_TEXT)).not.toBeInTheDocument();
+    const main = screen.getByRole('article');
+    expect(main).toHaveTextContent('150.000 đ');
+    expect(within(screen.getByRole('list', { name: 'Chi nhánh còn hàng' })).getByRole('link', { name: 'PetCare Cầu Giấy' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Xem chi nhánh/ })).toHaveAttribute('href', '/branches');
+  });
+
+  it('hàng thường (true): có ô số lượng và nút, câu mô tả đặt online, không có dòng "Mua trực tiếp tại quầy"', async () => {
+    renderPage('1');
+    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    expect(screen.getByLabelText('Số lượng đặt')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Thêm vào giỏ' })).toBeInTheDocument();
+    expect(screen.getByText(ONLINE_TEXT)).toBeInTheDocument();
+    expect(screen.queryByText(COUNTER_NOTE)).not.toBeInTheDocument();
+    expect(screen.queryByText(COUNTER_ONLY_TEXT)).not.toBeInTheDocument();
+  });
+
+  it('nhân viên (lễ tân) xem vaccine: vẫn thấy "Mua trực tiếp tại quầy" (thông tin, không phụ thuộc vai trò), không ô số lượng, không nút', async () => {
+    await loginAs('reception@store1.vn');
+    renderPage('5');
+    await screen.findByRole('heading', { level: 1, name: 'Vaccine Dại Rabisin' });
+    expect(screen.getByText(COUNTER_NOTE)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Số lượng đặt')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+  });
+
+  it('thuốc (false) hết hàng ở mọi chi nhánh: chỉ "Tạm hết hàng", không dòng mua tại quầy; câu mô tả vẫn đổi thành chỉ bán tại quầy', async () => {
+    renderPage('4');
+    await screen.findByRole('heading', { level: 1, name: 'Vitamin tổng hợp PetCare' });
+    expect(screen.getByText('Tạm hết hàng tại các chi nhánh')).toBeInTheDocument();
+    expect(screen.queryByText(COUNTER_NOTE)).not.toBeInTheDocument();
+    expect(screen.getByText(COUNTER_ONLY_TEXT)).toBeInTheDocument();
+  });
+
+  it('BE cũ chưa gửi trường (vắng = true): vaccine vẫn có nút; bấm thì BE từ chối 400 BR-BH-07, trang không hỏng và giỏ không có vaccine', async () => {
     await loginAs();
     const spy = vi.spyOn(shopApi, 'setCartItem');
+    vi.spyOn(catalogApi, 'getPublicProduct').mockResolvedValue({
+      productId: 5,
+      name: 'Vaccine Dại Rabisin',
+      categoryId: 3,
+      categoryName: 'Vaccine',
+      price: 150_000,
+      unit: 'liều',
+      inStockBranchIds: [1],
+    });
     const user = renderPage('5');
     await screen.findByRole('heading', { level: 1, name: 'Vaccine Dại Rabisin' });
+    expect(screen.queryByText(COUNTER_NOTE)).not.toBeInTheDocument();
+    expect(screen.getByText(ONLINE_TEXT)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
     await waitFor(() => expect(spy).toHaveBeenCalledWith(5, { quantity: 1 }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Thêm vào giỏ' })).toBeEnabled());

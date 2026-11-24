@@ -300,7 +300,7 @@ class PublicCatalogIT extends InventoryItSupport {
 
         assertThat(number(page.get("size"))).isEqualTo(100);
         assertThat(found).containsOnlyKeys("productId", "name", "categoryId", "categoryName", "price", "unit",
-                "description", "imageUrl", "galleryUrls", "inStockBranchIds");
+                "description", "imageUrl", "galleryUrls", "purchasableOnline", "inStockBranchIds");
     }
 
     /** docs/adr/0151: cùng một DTO cho danh sách và chi tiết; sản phẩm chưa có ảnh phụ trả {@code []}, không bao giờ null. */
@@ -323,5 +323,26 @@ class PublicCatalogIT extends InventoryItSupport {
                 .containsEntry("galleryUrls", List.of("/imgs/b.jpg", "/imgs/a.jpg", "/imgs/c.jpg"));
         assertThat(data(call(HttpMethod.GET, "/api/public/products/" + plain, null, null), HttpStatus.OK))
                 .containsEntry("galleryUrls", List.of());
+    }
+
+    /**
+     * BR-BH-07: giỏ online chỉ nhận GOODS, nên cờ {@code purchasableOnline} là true với GOODS, false với thuốc không kê
+     * đơn và vaccine (vẫn hiện ở cửa hàng). Cùng một DTO cho danh sách và chi tiết; không lộ {@code productType}.
+     */
+    @Test
+    void purchasableOnlineIsTrueOnlyForGoodsInListAndDetail() {
+        long goods = named(newProduct("GOODS", false), "goods");
+        long otcDrug = named(newProduct("DRUG", false), "otc");
+        long vaccine = named(newProduct("VACCINE", false), "vac");
+        Map<Long, Boolean> expected = Map.of(goods, true, otcDrug, false, vaccine, false);
+
+        List<Map<String, Object>> page = productPage("?size=100&q=pub-" + tag);
+
+        expected.forEach((id, online) -> {
+            assertThat(page).filteredOn(p -> number(p.get("productId")) == id)
+                    .singleElement().satisfies(p -> assertThat(p).containsEntry("purchasableOnline", online));
+            assertThat(data(call(HttpMethod.GET, "/api/public/products/" + id, null, null), HttpStatus.OK))
+                    .containsEntry("purchasableOnline", online);
+        });
     }
 }

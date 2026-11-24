@@ -99,6 +99,59 @@ describe('ShopPage (UC16)', () => {
     expect(within(await card('Vitamin tổng hợp PetCare')).queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
   });
 
+  // Cờ purchasableOnline (BR-BH-07: giỏ online chỉ nhận hàng thường). Chỉ `=== false` mới đổi nút thành dòng "Mua trực tiếp tại quầy".
+  it('vaccine (purchasableOnline = false) còn hàng: không có "Thêm vào giỏ", thay bằng "Mua trực tiếp tại quầy"; giá và chi nhánh còn hàng vẫn hiện; hàng thường thì ngược lại', async () => {
+    renderPage();
+    const vaccine = await card('Vaccine Dại Rabisin');
+    expect(within(vaccine).queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+    expect(within(vaccine).getByText('Mua trực tiếp tại quầy')).toBeInTheDocument();
+    expect(vaccine).toHaveTextContent('150.000 đ');
+    expect(vaccine).toHaveTextContent(/Còn hàng tại:\s*PetCare Cầu Giấy/);
+
+    const pate = await card('Pate Whiskas 85g');
+    expect(within(pate).getByRole('button', { name: 'Thêm vào giỏ' })).toBeInTheDocument();
+    expect(within(pate).queryByText('Mua trực tiếp tại quầy')).not.toBeInTheDocument();
+  });
+
+  it('thuốc (false) hết hàng ở mọi chi nhánh: không nút, không dòng "Mua trực tiếp tại quầy", chỉ "Tạm hết hàng"', async () => {
+    renderPage();
+    const vitamin = await card('Vitamin tổng hợp PetCare');
+    expect(within(vitamin).queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+    expect(within(vitamin).queryByText('Mua trực tiếp tại quầy')).not.toBeInTheDocument();
+    expect(vitamin).toHaveTextContent('Tạm hết hàng tại các chi nhánh');
+  });
+
+  it('BE cũ chưa gửi trường (vắng = true): vẫn có "Thêm vào giỏ", không có dòng mua tại quầy; `true` giống vắng, `false` thì đổi', async () => {
+    vi.spyOn(catalogApi, 'listPublicProducts').mockResolvedValue({
+      content: [
+        { ...fake(1), name: 'Món vắng cờ' },
+        { ...fake(2), name: 'Món cờ true', purchasableOnline: true },
+        { ...fake(3), name: 'Món cờ false', purchasableOnline: false },
+      ],
+      page: 0,
+      size: 24,
+      totalElements: 3,
+      totalPages: 1,
+    });
+    renderPage();
+    for (const name of ['Món vắng cờ', 'Món cờ true']) {
+      const hang = await card(name);
+      expect(within(hang).getByRole('button', { name: 'Thêm vào giỏ' })).toBeInTheDocument();
+      expect(within(hang).queryByText('Mua trực tiếp tại quầy')).not.toBeInTheDocument();
+    }
+    const quay = await card('Món cờ false');
+    expect(within(quay).queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+    expect(within(quay).getByText('Mua trực tiếp tại quầy')).toBeInTheDocument();
+  });
+
+  it('nhân viên (lễ tân): thẻ vaccine vẫn ghi "Mua trực tiếp tại quầy" (thông tin, không phụ thuộc vai trò), không nút ở thẻ nào', async () => {
+    await loginAs('reception@store1.vn');
+    renderPage();
+    expect(within(await card('Vaccine Dại Rabisin')).getByText('Mua trực tiếp tại quầy')).toBeInTheDocument();
+    expect(within(await card('Pate Whiskas 85g')).queryByText('Mua trực tiếp tại quầy')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Thêm vào giỏ' })).not.toBeInTheDocument();
+  });
+
   it('khách vãng lai bấm "Thêm vào giỏ": chuyển sang đăng nhập, giỏ không bị ghi', async () => {
     const setItem = vi.spyOn(shopApi, 'setCartItem');
     const user = renderPage();

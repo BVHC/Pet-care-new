@@ -27,6 +27,11 @@ export interface PublicProduct {
   galleryUrls?: string[];
   /** Chi nhánh ACTIVE còn tồn khả dụng; ghép tên bằng `branchNamesByIds`. */
   inStockBranchIds: number[];
+  /**
+   * Bỏ vào giỏ online được không (BR-BH-07: chỉ hàng thường; thuốc và vaccine chỉ bán tại quầy). BE luôn gửi; để `?` cho BE cũ chưa có
+   * trường: vắng = `true` (nút vẫn hiện, bấm thì BE từ chối 400). Chỉ `=== false` mới thay nút bằng "Mua trực tiếp tại quầy".
+   */
+  purchasableOnline?: boolean;
 }
 
 /** `q` tối đa 100 ký tự; `page` từ 0, `size` 1–100 (mặc định 20), ngoài khoảng thì BE kẹp lại. */

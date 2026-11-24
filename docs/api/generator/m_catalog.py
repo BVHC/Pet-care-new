@@ -28,6 +28,7 @@ m = Module(
         ("A3", "Phác đồ: sửa `intervalDays`, `minAgeWeeks`, `requiredForBoarding`, `isActive`; loài, loại vaccine, mũi thứ không đổi", "Bộ ba này là khóa duy nhất (05 `vaccination_protocols`); BR-SP-03"),
         ("A4", "Danh sách sản phẩm cho nhân viên có bộ lọc `retailOnly` (bỏ thuốc kê đơn) để dùng ở POS", "BR-SP-01: thuốc kê đơn không bán lẻ"),
         ("A5", "Ảnh phụ của sản phẩm là `galleryUrls`: danh sách URL có thứ tự, tối đa 8, lưu JSONB `products.gallery_urls` (V62); `imageUrl` vẫn là ảnh bìa; PATCH `galleryUrls` thay cả danh sách (null = không đổi); BE trim và bỏ trùng giữ lần đầu; không kiểm giao thức URL", "Trang chi tiết cần nhiều ảnh; chưa có kho tệp nên chỉ nhận URL (Q1); docs/adr/0151"),
+        ("A6", "`PublicProduct.purchasableOnline` là cờ suy ra: `true` khi loại sản phẩm là GOODS, ngược lại `false` (thuốc không kê đơn, vaccine); không lộ `productType`. Không đổi bộ lọc: thuốc không kê đơn và vaccine vẫn hiện ở danh sách và chi tiết công khai, thuốc kê đơn và hàng ngừng bán vẫn không hiện", "Giỏ online chỉ nhận hàng GOODS (BR-BH-07) nên FE cần biết sản phẩm nào bỏ vào giỏ được để thay nút giỏ bằng \"Mua tại quầy\"; chỉ lộ cờ suy ra theo luật, không lộ loại nội bộ (BR-CK-01)"),
     ],
     questions=[
         ("Q1", "Ảnh sản phẩm tải lên bằng cơ chế nào? Contract chỉ nhận URL.", "TBD (BE + FE)", "05 `products.image_url`"),
@@ -110,6 +111,7 @@ m.schema("PublicProduct", {
     "productId": "int64", "name": "string", "categoryId": "int64", "categoryName": "string", "price": "money",
     "unit": "string", "description": "string?", "imageUrl": "url?",
     "galleryUrls": "array<=8:url|Ảnh phụ có thứ tự (tối đa 8); ảnh hiển thị ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Cùng một DTO cho danh sách và chi tiết; chưa có ảnh phụ trả `[]`",
+    "purchasableOnline": "bool|`true` khi sản phẩm bỏ vào giỏ online được: chỉ hàng hóa GOODS (BR-BH-07); thuốc không kê đơn và vaccine là `false` (chỉ bán tại quầy). Cờ suy ra, không lộ loại sản phẩm (A6). Cùng một DTO cho danh sách và chi tiết",
     "inStockBranchIds": "array:int64|Chi nhánh có tồn khả dụng > 0, không kèm số lượng (BR-CK-03)",
 })
 

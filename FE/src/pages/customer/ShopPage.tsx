@@ -4,6 +4,7 @@ import gsap from 'gsap'
 import { ChevronLeft, ChevronRight, MapPin, PawPrint, RotateCw, Search, SlidersHorizontal, Store, WifiOff, X } from 'lucide-react'
 import { usePublicBranches, usePublicProductCategories, usePublicProducts } from '@/shared/hooks/usePublicSite'
 import { AddToCartButton } from '@/components/customer/shop/AddToCartButton'
+import { CounterOnlyNote } from '@/components/customer/shop/CounterOnlyNote'
 import type { PublicBranch } from '@/shared/types/branch'
 import type { PublicProduct, PublicProductQuery } from '@/shared/types/public-site'
 import { branchNamesByIds, productPriceLabel } from '@/shared/utils/public-format'
@@ -637,11 +638,9 @@ function ProductCard({
           <span className="text-[11.5px] text-(--color-text-secondary)">/ {p.unit}</span>
         </div>
 
-        {/* Hết hàng ở mọi chi nhánh thì không có nút (xem StockLine). */}
+        {/* Hết hàng ở mọi chi nhánh thì không có nút (xem StockLine). Thuốc / vaccine (purchasableOnline = false) không vào giỏ online. */}
         {p.inStockBranchIds.length > 0 && (
-          <div className="pt-2.5">
-            <AddToCartButton productId={p.productId} />
-          </div>
+          <div className="pt-2.5">{p.purchasableOnline === false ? <CounterOnlyNote /> : <AddToCartButton productId={p.productId} />}</div>
         )}
       </div>
     </article>

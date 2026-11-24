@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { MapPin, PawPrint, RotateCw, Store, WifiOff } from 'lucide-react'
 import { AddToCartButton } from '@/components/customer/shop/AddToCartButton'
+import { CounterOnlyNote } from '@/components/customer/shop/CounterOnlyNote'
 import { ProductGallery } from '@/components/customer/shop/ProductGallery'
 import { toApiError } from '@/shared/api/api-error'
 import { usePublicBranches, usePublicProduct } from '@/shared/hooks/usePublicSite'
@@ -122,6 +123,8 @@ function ProductView({
   const canBuy = !account || account.role === 'CUSTOMER'
   const stockedAt = branches ? branchNamesByIds(p.inStockBranchIds, branches) : []
   const outOfStock = p.inStockBranchIds.length === 0 || (branches !== undefined && stockedAt.length === 0)
+  // Thuốc / vaccine (purchasableOnline = false) không vào giỏ online (BR-BH-07); vắng trường = true để BE cũ vẫn chạy.
+  const counterOnly = p.purchasableOnline === false
 
   return (
     <>
@@ -189,7 +192,9 @@ function ProductView({
               <p className="mt-3 text-[14px] text-(--color-dark-gray)/70">Còn hàng tại chi nhánh PetCare.</p>
             )}
 
-            {!outOfStock && canBuy && (
+            {!outOfStock && counterOnly && <CounterOnlyNote className="mt-5 inline-flex items-center gap-2 text-[14px] font-semibold text-(--color-surface-dark)" />}
+
+            {!outOfStock && !counterOnly && canBuy && (
               <div className="mt-5 flex flex-wrap items-end gap-3">
                 <div>
                   <label htmlFor="product-quantity" className="mb-1 block text-[13px] font-semibold text-(--color-dark-gray)/70">
@@ -212,7 +217,9 @@ function ProductView({
             )}
 
             <p className="mt-4 text-[13.5px] leading-relaxed text-(--color-dark-gray)/70">
-              Đặt online giao tận nơi (thanh toán trước qua cổng), hoặc mua trực tiếp tại quầy các chi nhánh.
+              {counterOnly
+                ? 'Sản phẩm này chỉ bán trực tiếp tại quầy các chi nhánh.'
+                : 'Đặt online giao tận nơi (thanh toán trước qua cổng), hoặc mua trực tiếp tại quầy các chi nhánh.'}
             </p>
             <Link to="/branches" className={`${BUTTON} mt-4`}>
               Xem chi nhánh &amp; số điện thoại
