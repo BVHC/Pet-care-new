@@ -32,11 +32,11 @@
 | 11 | `POST /boarding-bookings/{bookingId}/extend` | Gia hạn ngày trả | UC58 | BR-LT-02, 03, 06 |
 | 12 | `POST /boarding-bookings/{bookingId}/cancel` | Hủy đặt chỗ | UC58 | BR-LT-06, BR-LH-09 |
 | 13 | `GET /boarding-bookings/{bookingId}/check-in-readiness` | Kiểm tra điều kiện nhận thú | UC59 | BR-LT-04, 05, 08 |
-| 14 | `POST /boarding-bookings/{bookingId}/check-in` | Nhận thú | UC59 | BR-LT-04, 05, 08, BR-KH-04 |
+| 14 | `POST /boarding-bookings/{bookingId}/check-in` | Nhận thú | UC59 | BR-LT-04, 05, 08, BR-KH-04, BR-LT-17 |
 | 15 | `POST /boarding-bookings/{bookingId}/cancel-no-kennel` | Hủy vì không còn chuồng đúng loại lúc nhận | UC59 | BR-LT-08, BR-LH-09 |
-| 16 | `POST /boarding-bookings/{bookingId}/start-checkout` | Bắt đầu trả thú | UC59 | BR-LT-04, 09, BR-BH-01 |
-| 17 | `POST /boarding-bookings/{bookingId}/hand-over` | Giao thú (trả thú) | UC59 | BR-LT-09, BR-BH-06 |
-| 18 | `POST /boarding-bookings/{bookingId}/end-deceased` | Kết thúc lưu trú do thú mất | UC59 | BR-LT-12, BR-KH-05 |
+| 16 | `POST /boarding-bookings/{bookingId}/start-checkout` | Bắt đầu trả thú | UC59 | BR-LT-04, 09, BR-BH-01, BR-LT-17 |
+| 17 | `POST /boarding-bookings/{bookingId}/hand-over` | Giao thú (trả thú) | UC59 | BR-LT-09, BR-BH-06, BR-LT-17 |
+| 18 | `POST /boarding-bookings/{bookingId}/end-deceased` | Kết thúc lưu trú do thú mất | UC59 | BR-LT-12, BR-KH-05, BR-LT-17 |
 | 19 | `GET /boarding-bookings/{bookingId}/care-logs` | Xem nhật ký chăm sóc | UC57, UC60 | BR-LT-11 |
 | 20 | `POST /boarding-bookings/{bookingId}/care-logs` | Ghi nhật ký chăm sóc | UC57 | BR-LT-11, 12 |
 | 21 | `PATCH /care-logs/{careLogId}` | Sửa nhật ký trong 1 giờ | UC57 | BR-LT-11 |
@@ -96,11 +96,11 @@
 ### Stay
 
 - **`GET /boarding-bookings/{bookingId}/check-in-readiness`** — Kiểm tra điều kiện nhận thú. Response `200` `CheckInReadiness`. Lỗi: `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED.
-- **`POST /boarding-bookings/{bookingId}/check-in`** — Nhận thú. Request `CheckInRequest`. Response `200` `Booking`. Lỗi: `400` `BR-LT-05` thiếu / quá hạn mũi bắt buộc (lễ tân tiếp nhận walk-in để tiêm trước) · `BR-LT-08` chuồng không AVAILABLE hoặc sai loại, thiếu cân nặng · `BR-LT-04` ngoài giờ mở cửa · `BR-LT-03` nhận sớm khi hết chỗ · `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED.
+- **`POST /boarding-bookings/{bookingId}/check-in`** — Nhận thú. Request `CheckInRequest`. Response `200` `Booking`. Lỗi: `400` `BR-LT-05` thiếu / quá hạn mũi bắt buộc (lễ tân tiếp nhận walk-in để tiêm trước) · `BR-LT-08` chuồng không AVAILABLE hoặc sai loại, thiếu cân nặng · `BR-LT-04` ngoài giờ mở cửa · `BR-LT-03` nhận sớm khi hết chỗ · `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED · `BR-LT-17` thú còn ca nội trú (xuất viện trước).
 - **`POST /boarding-bookings/{bookingId}/cancel-no-kennel`** — Hủy vì không còn chuồng đúng loại lúc nhận. Response `200` `Booking`. Lỗi: `400` Vẫn còn chuồng AVAILABLE đúng loại · `401` · `403` · `404` · `409` Đặt chỗ không còn BOOKED.
-- **`POST /boarding-bookings/{bookingId}/start-checkout`** — Bắt đầu trả thú. Response `200` `CheckoutStarted`. Lỗi: `400` `BR-LT-04` ngoài giờ mở cửa · `401` · `403` · `404` · `409` Thú không còn trong chuồng · đã thu tiền lưu trú (chỉ còn giao thú).
-- **`POST /boarding-bookings/{bookingId}/hand-over`** — Giao thú (trả thú). Response `200` `Booking`. Lỗi: `400` `BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ · `401` · `403` · `404` · `409` Thú không còn trong chuồng.
-- **`POST /boarding-bookings/{bookingId}/end-deceased`** — Kết thúc lưu trú do thú mất. Request `DeceasedEndRequest`. Response `200` `CheckoutStarted`. Lỗi: `400` · `401` · `403` · `404` · `409` Thú không còn trong chuồng.
+- **`POST /boarding-bookings/{bookingId}/start-checkout`** — Bắt đầu trả thú. Response `200` `CheckoutStarted`. Lỗi: `400` `BR-LT-04` ngoài giờ mở cửa · `401` · `403` · `404` · `409` Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước) · đã thu tiền lưu trú (chỉ còn giao thú).
+- **`POST /boarding-bookings/{bookingId}/hand-over`** — Giao thú (trả thú). Response `200` `Booking`. Lỗi: `400` `BR-LT-09` Order lưu trú chưa PAID — không có ngoại lệ · `401` · `403` · `404` · `409` Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước).
+- **`POST /boarding-bookings/{bookingId}/end-deceased`** — Kết thúc lưu trú do thú mất. Request `DeceasedEndRequest`. Response `200` `CheckoutStarted`. Lỗi: `400` · `401` · `403` · `404` · `409` Thú không còn trong chuồng · `BR-LT-17` thú còn ca nội trú (xuất viện trước).
 ### Care logs
 
 - **`GET /boarding-bookings/{bookingId}/care-logs`** — Xem nhật ký chăm sóc. Response `200` mảng `CareLog`. Lỗi: `401` · `403` · `404`.

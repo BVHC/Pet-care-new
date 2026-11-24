@@ -318,6 +318,39 @@ class AvailableSlotServiceTest {
     }
 
     @Test
+    void inpatientServiceIsBrLt18ForBothRolesAndNeverReachesSchedule() {
+        ServiceInfo inpatient = new ServiceInfo(SERVICE, "Điều trị nội trú", ServiceGroup.MEDICAL,
+                MedicalType.INPATIENT, 400_000, true);
+        when(branches.findBranch(BRANCH)).thenReturn(Optional.of(branch(BranchStatus.ACTIVE)));
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(inpatient));
+        when(branches.isServiceEnabled(BRANCH, SERVICE)).thenReturn(false);
+
+        for (Runnable role : List.<Runnable>of(this::asCustomer, this::asReceptionist)) {
+            role.run();
+            assertThatThrownBy(() -> service.listAvailableSlots(BRANCH, SERVICE, IN_WINDOW))
+                    .isInstanceOfSatisfying(BusinessRuleViolationException.class,
+                            e -> assertThat(e.getRuleId()).isEqualTo("BR-LT-18"))
+                    .hasMessage("Dịch vụ nội trú chỉ dùng qua nhập viện, không đặt lịch được (BR-LT-18)");
+        }
+        verify(branches, never()).openingRangesOn(anyLong(), any());
+        verify(branches, never()).quotaFor(anyLong(), any(), any(), any());
+        verifyNoInteractions(appointments);
+        verify(configs, never()).getInt(any());
+    }
+
+    @Test
+    void draftBranchBeatsInpatientForReceptionist() {
+        asReceptionist();
+        when(branches.findBranch(BRANCH)).thenReturn(Optional.of(branch(BranchStatus.DRAFT)));
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(new ServiceInfo(SERVICE, "Điều trị nội trú",
+                ServiceGroup.MEDICAL, MedicalType.INPATIENT, 400_000, true)));
+
+        assertThatThrownBy(() -> service.listAvailableSlots(BRANCH, SERVICE, IN_WINDOW))
+                .isInstanceOf(BusinessRuleViolationException.class)
+                .hasMessage("Chi nhánh chưa nhận đặt lịch (BR-LH-01)");
+    }
+
+    @Test
     void serviceDisabledAtBranchIsBrLh01() {
         asReceptionist();
         when(branches.findBranch(BRANCH)).thenReturn(Optional.of(branch(BranchStatus.ACTIVE)));

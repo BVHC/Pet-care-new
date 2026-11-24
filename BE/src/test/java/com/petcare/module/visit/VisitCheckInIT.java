@@ -408,6 +408,26 @@ class VisitCheckInIT {
                 .as("giá snapshot theo giá hiện tại lúc check-in").containsEntry("service_id", grooming);
     }
 
+    /** BR-LT-18 (docs/adr/0149 mục 40): dịch vụ nội trú không tiếp nhận được, walk-in cũng như lịch hẹn mang dịch vụ này. */
+    @Test
+    void inpatientServiceIsRejectedForAWalkInAndForAnAppointmentAndWritesNothing() {
+        long inpatient = data.service("MEDICAL");
+        jdbc.update("UPDATE services SET medical_type = 'INPATIENT' WHERE id = ?", inpatient);
+        data.branchService(branch, inpatient, true);
+        long otherPet = data.pet(customer);
+        long booked = data.appointment(customer, otherPet, branch, inpatient, "MEDICAL", TODAY, SLOT, "BOOKED",
+                receptionist);
+        Snapshot before = snapshot();
+
+        assertRule(post(token, body(pet, null, inpatient, null)), "BR-LT-18",
+                "Dịch vụ nội trú chỉ dùng qua nhập viện, không tiếp nhận được (BR-LT-18)");
+        assertRule(post(token, body(otherPet, booked, null, null)), "BR-LT-18",
+                "Lịch hẹn mang dịch vụ nội trú: hủy lịch rồi tiếp nhận như khách walk-in với dịch vụ khác (BR-LT-18)");
+
+        assertNothingChanged(before);
+        assertThat(appointmentStatus(booked)).as("lịch giữ nguyên BOOKED").isEqualTo("BOOKED");
+    }
+
     @Test
     void stoppedServiceIsStillRejectedForAWalkIn() {
         jdbc.update("UPDATE services SET is_active = false WHERE id = ?", grooming);

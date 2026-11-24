@@ -172,12 +172,12 @@ m.schema("HealthRecord", {
 
 VET_ASSIGNED = "Người được gán lượt"
 m.op("post", "/visits", "checkInVisit", "Tiếp nhận (check-in lịch hẹn / walk-in / cấp cứu)", "Queue", "UC44, UC47",
-     "BR-TN-01…04, BR-CN-05, BR-LH-01, BR-KH-05", "A06", "Lễ tân; chi nhánh của lễ tân",
+     "BR-TN-01…04, BR-CN-05, BR-LH-01, BR-KH-05, BR-LT-18", "A06", "Lễ tân; chi nhánh của lễ tân",
      "— → WAITING (Visit#1) · Lịch hẹn#3 · Order#1 (OPEN + dòng dịch vụ tự sinh) · có dịch vụ Khám → Care Task#6",
      body="CreateVisitRequest", resp="Visit", status=201, errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17",
+     err_desc={400: "`BR-TN-01` walk-in thiếu dịch vụ / thú không khớp lịch hẹn / thú đã mất · `BR-TN-02` lịch hẹn của chi nhánh khác hoặc ngoài cửa sổ check-in · `BR-CN-01` chi nhánh chưa ACTIVE · `BR-CN-05` ngoài giờ mà chi nhánh không có cờ hoặc chưa đánh dấu cấp cứu · `BR-LH-01` walk-in: dịch vụ đã ngừng, đang tắt tại chi nhánh hoặc không thuộc MEDICAL / GROOMING · `BR-LT-18` dịch vụ nội trú (kể cả lịch hẹn mang dịch vụ này) · body sai (`VALIDATION_FAILED`, `MALFORMED_REQUEST`); BR-TK-17",
                409: "Lịch hẹn không còn BOOKED (đã check-in / NO_SHOW: tiếp nhận như walk-in, BR-TN-03)"},
-     notes="Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Lịch có dịch vụ đã ngừng vẫn tiếp nhận (A12, docs/adr/0088). Khách mang nhiều thú thì tạo nhiều Visit.")
+     notes="Trễ quá `visit.late_priority_minutes` (15 phút) [CFG] xếp như walk-in. A9, A10, A11, A12. Thứ tự lỗi: 404 → 400 → 409 (docs/adr/0059). Có dịch vụ Khám: hủy nhắc tái khám đang chờ của thú và Care Task tái khám tương ứng (BR-TB-06, docs/adr/0084). Lịch có dịch vụ đã ngừng vẫn tiếp nhận (A12, docs/adr/0088); ngoại lệ: dịch vụ nội trú không tiếp nhận được, kể cả từ lịch hẹn (BR-LT-18, docs/adr/0149). Khách mang nhiều thú thì tạo nhiều Visit.")
 m.op("get", "/visits", "listQueue", "Hàng đợi của chi nhánh", "Queue", "UC45", "BR-TN-04, 09", "A05, A06, A07, A08",
      "Nhân viên chi nhánh", resp="array:Visit",
      query=["date=date|Ngày check-in (giờ Việt Nam). Không gửi: lượt chưa kết thúc của mọi ngày; với status COMPLETED / CANCELLED là hôm nay (A1)",
@@ -240,17 +240,19 @@ m.op("post", "/visits/{visitId}/reassign", "reassignCalledVisit", "Gán lại l�
            "người ghi; quyền xóa dòng Order người cũ đã thêm chuyển cho người mới; ghi audit.")
 
 m.op("post", "/visits/{visitId}/complete", "completeVisit", "Hoàn tất lượt", "Completion", "UC48, UC49, UC52",
-     "BR-KB-01, 02, BR-SP-06, BR-LH-11", "A07, A08", VET_ASSIGNED,
+     "BR-KB-01, 02, BR-SP-06, BR-LH-11, BR-LT-14", "A07, A08", VET_ASSIGNED,
      "IN_PROGRESS → COMPLETED (Visit#5) · Lịch hẹn#7 · Order#4 (→ PENDING) · bệnh án khóa", resp="Visit",
      path_params=["VisitId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-KB-02` có dịch vụ loại Khám mà chưa có chẩn đoán · chỉ có dịch vụ loại Tiêm mà chưa ghi mũi "
-                    "nào · lượt Khám/Tiêm không còn dịch vụ Khám hoặc Tiêm nào (A16) · `BR-TN-05` chức vụ hiện tại "
-                    "không phụ trách được nhóm dịch vụ của lượt (đổi chức vụ sau khi được gán) · tham số sai kiểu "
-                    "(`MALFORMED_REQUEST`); BR-TK-17",
+                    "nào · lượt Khám/Tiêm không còn dịch vụ Khám, Tiêm hoặc nội trú nào (A16) · `BR-TN-05` chức vụ "
+                    "hiện tại không phụ trách được nhóm dịch vụ của lượt (đổi chức vụ sau khi được gán) · tham số sai "
+                    "kiểu (`MALFORMED_REQUEST`); BR-TK-17",
                403: "Sai vai trò · lượt của chi nhánh khác · không phải người phụ trách hiện tại, kể cả lượt chưa gán",
-               409: "Lượt không IN_PROGRESS"},
-     notes="A16. Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → 409 → 400 "
-           "BR-KB-02 (docs/adr/0069). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác cả lịch hẹn, Order và bệnh án.")
+               409: "Lượt không IN_PROGRESS · lượt còn ca nội trú `ADMITTED` (BR-LT-14, xuất viện trước)"},
+     notes="A16. Lượt chỉ có dịch vụ `INPATIENT` (Visit điều trị) hoàn tất không cần chẩn đoán hay mũi tiêm (BR-LT-14). "
+           "Thứ tự lỗi: 403 vai trò → 404 → 403 chi nhánh → 403 người phụ trách → 400 BR-TN-05 → 409 trạng thái → 409 "
+           "còn ca nội trú → 400 BR-KB-02 (docs/adr/0069, docs/adr/0149). Gỡ cờ needsReassign. Lỗi BR-KB-02 hoàn tác "
+           "cả lịch hẹn, Order và bệnh án.")
 m.op("post", "/visits/{visitId}/cancel", "cancelVisit", "Hủy lượt khách bỏ về", "Completion", "UC45", "BR-TN-07",
      "A06", "Lễ tân chi nhánh", "WAITING → CANCELLED (Visit#6) · Lịch hẹn#8 · Order#6", body="CancelVisitRequest",
      resp="Visit", path_params=["VisitId"], errors=(400, 401, 403, 404, 409),

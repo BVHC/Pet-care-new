@@ -350,6 +350,47 @@ class AppointmentBookingServiceTest {
     }
 
     @Test
+    void inpatientServiceIsRuleLtOneEightForBothRolesAndWritesNothing() {
+        String message = "Dịch vụ nội trú chỉ dùng qua nhập viện, không đặt lịch được (BR-LT-18)";
+        givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(inpatientService()));
+
+        asCustomer();
+        assertRule("BR-LT-18", message);
+        asReceptionist();
+        assertRule("BR-LT-18", message);
+
+        verifyNoInteractions(restrictions, followUps);
+    }
+
+    @Test
+    void draftBranchBeatsInpatientAndInpatientBeatsPendingLinkAndDisabledService() {
+        asReceptionist();
+        givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.DRAFT);
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(inpatientService()));
+        assertRule("BR-LH-01", "Chi nhánh chưa nhận đặt lịch (BR-LH-01)");
+
+        asCustomer();
+        when(branchLocks.lockForBooking(BRANCH)).thenReturn(Optional.of(BranchStatus.ACTIVE));
+        when(customers.findContact(CUSTOMER_ID)).thenReturn(Optional.of(contact(CUSTOMER_ID, true)));
+        when(branches.isServiceEnabled(BRANCH, SERVICE)).thenReturn(false);
+        assertRule("BR-LT-18", "Dịch vụ nội trú chỉ dùng qua nhập viện, không đặt lịch được (BR-LT-18)");
+    }
+
+    @Test
+    void vaccineServiceStaysBookableNextToTheInpatientGuard() {
+        asCustomer();
+        givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(
+                new ServiceInfo(SERVICE, "Tiêm phòng", ServiceGroup.MEDICAL, MedicalType.VACCINE, 150_000, true)));
+
+        AppointmentResponse response = service.bookAppointment(request(DAY, START, null));
+
+        assertThat(response.code()).isEqualTo("LH-261015-0042");
+        verify(appointments).saveAndFlush(any(Appointment.class));
+    }
+
+    @Test
     void ruleLhZeroOneBeatsPendingLinkDecision() {
         asCustomer();
         givenBookable(pet(CUSTOMER_ID, null), ServiceGroup.MEDICAL, BranchStatus.ACTIVE);
@@ -535,6 +576,10 @@ class AppointmentBookingServiceTest {
     private static ServiceInfo service(ServiceGroup group, boolean active) {
         return new ServiceInfo(SERVICE, "Khám tổng quát", group,
                 group == ServiceGroup.MEDICAL ? MedicalType.EXAM : null, 150_000, active);
+    }
+
+    private static ServiceInfo inpatientService() {
+        return new ServiceInfo(SERVICE, "Điều trị nội trú", ServiceGroup.MEDICAL, MedicalType.INPATIENT, 400_000, true);
     }
 
     private static CustomerContact contact(long customerId, boolean linkDecisionPending) {

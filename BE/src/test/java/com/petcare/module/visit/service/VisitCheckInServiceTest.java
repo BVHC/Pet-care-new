@@ -394,6 +394,36 @@ class VisitCheckInServiceTest {
                 "Dịch vụ không tiếp nhận được tại chi nhánh này (BR-LH-01)");
     }
 
+    /** BR-LT-18 (docs/adr/0149 mục 40): dịch vụ nội trú không tiếp nhận được, walk-in cũng như lịch hẹn mang dịch vụ này. */
+    @Test
+    void inpatientServiceIsRuleLtOneEightForWalkInAndForAnAppointmentAndWritesNothing() {
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(inpatientService()));
+
+        assertRule(new CreateVisitRequest(PET, null, SERVICE, null), "BR-LT-18",
+                "Dịch vụ nội trú chỉ dùng qua nhập viện, không tiếp nhận được (BR-LT-18)");
+        assertRule(new CreateVisitRequest(PET, APPOINTMENT, null, null), "BR-LT-18",
+                "Lịch hẹn mang dịch vụ nội trú: hủy lịch rồi tiếp nhận như khách walk-in với dịch vụ khác (BR-LT-18)");
+    }
+
+    @Test
+    void inpatientRuleComesAfterTheDraftBranchAndAfterHoursChecksButBeforeTheServiceToggle() {
+        when(catalog.findService(SERVICE)).thenReturn(Optional.of(inpatientService()));
+        when(branches.isServiceEnabled(BRANCH, SERVICE)).thenReturn(false);
+
+        when(branches.findBranch(BRANCH)).thenReturn(Optional.of(branch(BranchStatus.DRAFT, false)));
+        assertRule(new CreateVisitRequest(PET, null, SERVICE, null), "BR-CN-01",
+                "Chi nhánh chưa hoạt động, chưa tiếp nhận được (BR-CN-01)");
+
+        when(branches.findBranch(BRANCH)).thenReturn(Optional.of(branch(BranchStatus.ACTIVE, false)));
+        when(branches.isOpenAt(BRANCH, LOCAL_NOW)).thenReturn(false);
+        assertRule(new CreateVisitRequest(PET, null, SERVICE, true), "BR-CN-05",
+                "Ngoài giờ mở cửa, chi nhánh không nhận cấp cứu ngoài giờ (BR-CN-05)");
+
+        when(branches.isOpenAt(BRANCH, LOCAL_NOW)).thenReturn(true);
+        assertRule(new CreateVisitRequest(PET, null, SERVICE, null), "BR-LT-18",
+                "Dịch vụ nội trú chỉ dùng qua nhập viện, không tiếp nhận được (BR-LT-18)");
+    }
+
     /** Docs/adr/0088 (thay 0059 Q3, trả D040): lịch đã đặt vẫn tiếp nhận khi dịch vụ ngừng / tắt tại chi nhánh. */
     @Test
     void appointmentWhoseServiceWasStoppedOrDisabledIsStillCheckedIn() {
@@ -471,6 +501,10 @@ class VisitCheckInServiceTest {
     private static ServiceInfo service(ServiceGroup group, boolean active) {
         return new ServiceInfo(SERVICE, "Khám tổng quát", group,
                 group == ServiceGroup.MEDICAL ? MedicalType.EXAM : null, 150_000, active);
+    }
+
+    private static ServiceInfo inpatientService() {
+        return new ServiceInfo(SERVICE, "Điều trị nội trú", ServiceGroup.MEDICAL, MedicalType.INPATIENT, 400_000, true);
     }
 
     private static BranchSummary branch(BranchStatus status, boolean afterHoursEmergency) {

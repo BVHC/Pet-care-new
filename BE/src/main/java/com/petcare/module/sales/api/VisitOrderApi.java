@@ -54,4 +54,26 @@ public interface VisitOrderApi {
 
     /** BR-KB-04: chỉ visit gọi khi xóa mũi tiêm ghi nhầm; dòng vaccine không xóa trực tiếp (BR-BH-02). */
     void removeVaccineLine(Long orderLineId);
+
+    // ------------------------------------------------------------------------------------------------------------
+    // Nội trú (docs/09 §C, ADR-0124, ADR-0148; T69). Bản thật ở VisitOrderService từ N0; N8 (ADR-0149 mục 42) bỏ `default`.
+    // ------------------------------------------------------------------------------------------------------------
+
+    /**
+     * Order#14 (— → {@code OPEN}, nguồn VISIT, SYS ← Visit#7): Order của Visit điều trị (nhập viện từ lưu trú, BR-LT-13b),
+     * <b>không có dòng dịch vụ tự sinh</b> (ngoại lệ của BR-TN-01: dòng nội trú chỉ có lúc xuất viện, BR-LT-14).
+     *
+     * @return {@code orders.id}
+     */
+    Long openTreatmentOrder(Long visitId, Long branchId, Long customerId, Long actorId);
+
+    /**
+     * BR-LT-14: xuất viện thêm <b>một</b> dòng dịch vụ nội trú vào Order {@code OPEN} của Visit. Nhận <b>đơn giá đã
+     * chốt</b> lúc nhập viện ({@code admissions.unit_price}, BR-BH-03), không tra giá hiện hành; không kiểm "đang kinh
+     * doanh" hay bật tại chi nhánh (dịch vụ có thể đã ngừng sau khi nhập) và không áp {@code OrderLinePolicy} vì bên gọi
+     * (inpatient) đã tự phân quyền VET phụ trách. Owner của dòng = {@code actorId}. Khóa Order trước khi đọc (D045).
+     *
+     * @throws com.petcare.platform.exception.InvalidStateTransitionException Order không {@code OPEN}
+     */
+    LineRef addServiceLine(Long visitId, Long serviceId, int quantity, long unitPrice, Long actorId);
 }

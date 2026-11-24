@@ -3,6 +3,21 @@ package com.petcare.module.visit.api;
 /** Owner: visit (KB, PrescriptionItem) · BE-1. Caller: sales (TG). Bean: {@code PrescriptionApiService} (docs/adr/0076). */
 public interface PrescriptionApi {
 
+    /** Dòng đơn thuốc của một lượt, đủ để y lệnh nội trú quyết định có liên kết được không (BR-LT-15). */
+    record PrescriptionItemRef(Long itemId, boolean externalPurchase) {}
+
+    /**
+     * Nội trú (docs/adr/0149 mục 28): khóa dòng đơn thuốc {@code itemId} của lượt {@code visitId} {@code FOR KEY SHARE}
+     * rồi trả về; rỗng nếu dòng không tồn tại hoặc thuộc lượt khác. Khóa giữ tới hết transaction của bên gọi, nên xóa dòng
+     * đơn (visit-v1 #17) chờ bên ra y lệnh xong, và ngược lại. Bên gọi (inpatient) tự phân quyền, tự quyết định dòng mua
+     * ngoài có dùng được không; method này không kiểm.
+     * <p>
+     * Chạy trong transaction của bên gọi ({@code MANDATORY}); bên gọi không bắt ngoại lệ của nó.
+     *
+     * @throws IllegalArgumentException {@code itemId} hoặc {@code visitId} null (lỗi lập trình của bên gọi)
+     */
+    java.util.Optional<PrescriptionItemRef> findItemOfVisitForKeyShare(Long itemId, Long visitId);
+
     /**
      * BR-BH-04: thiếu tồn lúc thu, dòng thuốc kê đơn chuyển sang mua ngoài: {@code is_external_purchase = true},
      * {@code external_reason = OUT_OF_STOCK_AT_PAYMENT}, gỡ {@code order_line_id}.

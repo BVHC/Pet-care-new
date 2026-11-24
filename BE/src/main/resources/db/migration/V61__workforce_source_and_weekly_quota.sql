@@ -3,6 +3,7 @@
 --   1. shift_assignments.source: SELF (nhân viên tự đăng ký tuần, BR-NS-11) | MANAGER (BRANCH_MANAGER phân hộ, BR-NS-02).
 --   2. Khóa [CFG] workforce.weekly_required_shifts: định mức ca mỗi tuần (BR-NS-12), khớp ConfigKey.
 --
+--   * Đánh số: file này từng là V55 (T58). V55 là `drop_feedback_status_columns` của dev, nên đổi sang V61 (22/11/2026, D069); chưa chạy trên DB dùng chung nào.
 --   * V36 đã áp dụng, không sửa. DEFAULT 'MANAGER' chỉ để ADD COLUMN NOT NULL chạy được trên bảng đã có dòng, rồi bỏ ngay:
 --     code buộc phải truyền source, tránh phân ca tự đăng ký bị ghi nhầm thành MANAGER.
 --   * Không thêm index: "phân ca SELF của nhân viên trong tuần" dùng ix_shift_assignments_staff_date (V36);

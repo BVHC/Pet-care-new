@@ -48,6 +48,7 @@ import com.petcare.module.customer.api.Species;
 import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.StaffDirectoryApi.StaffSummary;
+import com.petcare.module.inpatient.api.AdmissionQueryApi;
 import com.petcare.module.sales.api.OrderQueryApi;
 import com.petcare.module.sales.api.VisitOrderApi;
 import com.petcare.module.visit.dto.VisitResponse;
@@ -80,6 +81,7 @@ class VisitCompletionServiceTest {
     private static final long APPOINTMENT = 501L;
     private static final long EXAM = 11L;
     private static final long VACCINE = 12L;
+    private static final long INPATIENT = 13L;
     private static final Instant T = Instant.parse("2026-10-22T02:00:00Z");
     private static final Instant NOW = Instant.parse("2026-10-22T02:15:30.123456789Z");
     private static final Instant NOW_MICROS = NOW.truncatedTo(ChronoUnit.MICROS);
@@ -95,9 +97,10 @@ class VisitCompletionServiceTest {
     private final OrderQueryApi orders = mock(OrderQueryApi.class);
     private final PetQueryApi pets = mock(PetQueryApi.class);
     private final CustomerQueryApi customers = mock(CustomerQueryApi.class);
+    private final AdmissionQueryApi admissions = mock(AdmissionQueryApi.class);
     private final VisitCompletionService service = new VisitCompletionService(scope, staff, appointments, visitOrders,
             catalog, visits, records, new VisitTransitionHandler(), orders, pets, customers,
-            Mappers.getMapper(VisitMapper.class), Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE));
+            Mappers.getMapper(VisitMapper.class), Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE), admissions);
 
     @BeforeEach
     void setUp() {
@@ -114,7 +117,8 @@ class VisitCompletionServiceTest {
         doAnswer(inv -> ids(inv).stream()
                 .map(id -> new StaffSummary(id, "NV-" + id, Role.VET, BRANCH, true, true)).toList())
                 .when(staff).findStaffByIds(any());
-        doAnswer(inv -> ids(inv).stream().map(id -> service(id, id == VACCINE ? MedicalType.VACCINE : MedicalType.EXAM))
+        doAnswer(inv -> ids(inv).stream().map(id -> service(id, id == VACCINE ? MedicalType.VACCINE
+                : id == INPATIENT ? MedicalType.INPATIENT : MedicalType.EXAM))
                 .toList()).when(catalog).findServices(any());
     }
 
@@ -191,6 +195,74 @@ class VisitCompletionServiceTest {
 
         assertNothingWritten();
         assertThat(visit.getStatus()).isEqualTo(status);
+    }
+
+    // ================================================================ BR-LT-14: còn ca nội trú (docs/adr/0149)
+
+    @Test
+    void aVisitWithAnActiveAdmissionIs409AfterTheLockAndWritesNothing() {
+        Visit visit = inProgress(9001L, ServiceGroup.MEDICAL, VET, APPOINTMENT);
+        stubLoaded(visit);
+        doReturn(true).when(admissions).hasActiveAdmissionForVisit(9001L);
+
+        assertThatThrownBy(() -> service.completeVisit(9001L))
+                .isInstanceOf(InvalidStateTransitionException.class)
+                .hasMessageContaining("còn ca nội trú");
+
+        InOrder order = inOrder(visits, admissions);
+        order.verify(visits).lockById(9001L);
+        order.verify(admissions).hasActiveAdmissionForVisit(9001L);
+        assertNothingWritten();
+        assertThat(visit.getStatus()).isEqualTo(VisitStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void theStateCheckRunsBeforeTheAdmissionCheck() {
+        stubLoaded(visit(9001L, ServiceGroup.MEDICAL, VET, VisitStatus.COMPLETED));
+
+        assertThatThrownBy(() -> service.completeVisit(9001L)).isInstanceOf(InvalidStateTransitionException.class);
+
+        verifyNoInteractions(admissions);
+    }
+
+    @Test
+    void theAssigneeCheckRunsBeforeTheAdmissionCheck() {
+        stubLoaded(inProgress(9001L, ServiceGroup.MEDICAL, VET + 1, null));
+
+        assertThatThrownBy(() -> service.completeVisit(9001L)).isInstanceOf(AccessDeniedScopeException.class);
+
+        verifyNoInteractions(admissions);
+    }
+
+    @Test
+    void aTreatmentVisitWithOnlyTheInpatientLineCompletesWithoutDiagnosisOrDose() {
+        stubLoaded(inProgress(9001L, ServiceGroup.MEDICAL, VET, null));
+        doReturn(Optional.empty()).when(records).findById(9001L);
+        doReturn(List.of(INPATIENT)).when(visitOrders).findServiceIds(9001L);
+
+        VisitResponse response = service.completeVisit(9001L);
+
+        assertThat(response.status()).isEqualTo(VisitStatus.COMPLETED);
+        verify(visits, never()).hasVaccinationInVisit(anyLong(), anyLong());
+    }
+
+    @Test
+    void examPlusInpatientStillNeedsTheDiagnosis() {
+        stubLoaded(inProgress(9001L, ServiceGroup.MEDICAL, VET, null));
+        doReturn(Optional.of(recordWith(null))).when(records).findById(9001L);
+        doReturn(List.of(EXAM, INPATIENT)).when(visitOrders).findServiceIds(9001L);
+
+        assertRule(() -> service.completeVisit(9001L), "BR-KB-02");
+    }
+
+    @Test
+    void vaccinePlusInpatientStillNeedsTheDose() {
+        stubLoaded(inProgress(9001L, ServiceGroup.MEDICAL, VET, null));
+        doReturn(Optional.empty()).when(records).findById(9001L);
+        doReturn(List.of(VACCINE, INPATIENT)).when(visitOrders).findServiceIds(9001L);
+        doReturn(false).when(visits).hasVaccinationInVisit(12L, 9001L);
+
+        assertRule(() -> service.completeVisit(9001L), "BR-KB-02");
     }
 
     // ================================================================ thứ tự ghi và kết quả

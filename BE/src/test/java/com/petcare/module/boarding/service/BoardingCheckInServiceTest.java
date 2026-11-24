@@ -8,6 +8,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
@@ -30,6 +31,7 @@ import com.petcare.module.boarding.entity.BoardingBookingStatus;
 import com.petcare.module.boarding.entity.BookingChannel;
 import com.petcare.module.boarding.entity.Kennel;
 import com.petcare.module.boarding.entity.KennelStatus;
+import com.petcare.module.boarding.exception.BoardingConflictException;
 import com.petcare.module.boarding.fsm.BoardingBookingTransitionHandler;
 import com.petcare.module.boarding.fsm.KennelTransitionHandler;
 import com.petcare.module.boarding.repository.BoardingBookingRepository;
@@ -49,6 +51,7 @@ import com.petcare.module.customer.api.Species;
 import com.petcare.module.customer.api.WeightSource;
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
+import com.petcare.module.inpatient.api.AdmissionQueryApi;
 import com.petcare.module.visit.api.VaccinationQueryApi;
 import com.petcare.module.visit.api.VaccinationQueryApi.BoardingVaccineGap;
 import com.petcare.platform.exception.BusinessRuleViolationException;
@@ -69,6 +72,7 @@ class BoardingCheckInServiceTest {
     private PetApi petWeights;
     private BranchApi branchLocks;
     private VaccinationQueryApi vaccinations;
+    private AdmissionQueryApi admissions;
     private BoardingBookingRepository bookings;
     private KennelRepository kennels;
     private BoardingCheckInRepository checkIns;
@@ -118,8 +122,9 @@ class BoardingCheckInServiceTest {
         when(configs.getInt(ConfigKey.BOARDING_MIN_NIGHTS)).thenReturn(1);
         when(configs.getInt(ConfigKey.BOARDING_MAX_NIGHTS)).thenReturn(30);
         Clock clock = Clock.fixed(Instant.parse("2009-06-10T03:00:00Z"), ZoneOffset.UTC);   // 10:00 giờ VN
+        admissions = mock(AdmissionQueryApi.class);
         service = new BoardingCheckInService(scope, pets, petWeights, catalog, branchLocks, branches, vaccinations,
-                capacity, new BoardingAvailabilityService(scope, branches, null, capacity, configs, clock), bookings,
+                admissions, capacity, new BoardingAvailabilityService(scope, branches, null, capacity, configs, clock), bookings,
                 kennels, checkIns, new BoardingBookingTransitionHandler(), new KennelTransitionHandler(),
                 mock(BoardingAssembler.class), mock(BoardingClinicCancellationNotices.class),
                 mock(BoardingManagerNotices.class), clock);
@@ -133,10 +138,11 @@ class BoardingCheckInServiceTest {
     void locksPetThenBranchThenBookingThenKennelThenChecksVaccineThenWrites() {
         service.checkIn(ID, request(KENNEL, new BigDecimal("4.3")));
 
-        InOrder order = inOrder(pets, branchLocks, bookings, vaccinations, kennels, petWeights, checkIns);
+        InOrder order = inOrder(pets, branchLocks, bookings, admissions, vaccinations, kennels, petWeights, checkIns);
         order.verify(pets).findPetForShare(PET);
         order.verify(branchLocks).lockForBooking(BRANCH);
         order.verify(bookings).findByIdForUpdate(ID);
+        order.verify(admissions).hasActiveAdmission(PET);
         order.verify(vaccinations).findBoardingVaccineGaps(PET, LocalDate.parse("2009-06-10"));
         order.verify(kennels).findByIdForUpdate(KENNEL);
         order.verify(petWeights).recordWeight(PET, new BigDecimal("4.3"), WeightSource.INTAKE, null, ID, ACTOR);
@@ -145,6 +151,34 @@ class BoardingCheckInServiceTest {
         order.verify(checkIns).saveAndFlush(any());
         assertThat(booking.getStatus()).isEqualTo(BoardingBookingStatus.CHECKED_IN);
         assertThat(kennel.getStatus()).isEqualTo(KennelStatus.OCCUPIED);
+    }
+
+    @Test
+    void petStillAdmittedIsBrLt17AfterTheBookingLockAndWritesNothing() {
+        when(admissions.hasActiveAdmission(PET)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.checkIn(ID, request(KENNEL, BigDecimal.ONE)))
+                .isInstanceOfSatisfying(BoardingConflictException.class,
+                        e -> assertThat(e.getMessage()).contains("nhận vào lưu trú").endsWith("(BR-LT-17)"));
+
+        InOrder order = inOrder(bookings, admissions);
+        order.verify(bookings).findByIdForUpdate(ID);
+        order.verify(admissions).hasActiveAdmission(PET);
+        assertNothingWritten();
+        verify(kennels, never()).findByIdForUpdate(anyLong());
+        verify(vaccinations, never()).findBoardingVaccineGaps(anyLong(), any());
+        assertThat(booking.getStatus()).isEqualTo(BoardingBookingStatus.BOOKED);
+    }
+
+    @Test
+    void wrongBookingStatusWinsOverAdmittedAndNeverReadsAdmissions() {
+        booking.checkIn(KENNEL, Instant.parse("2009-06-10T03:00:00Z"), LocalDate.parse("2009-06-10"));
+        when(admissions.hasActiveAdmission(PET)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.checkIn(ID, request(KENNEL, BigDecimal.ONE)))
+                .isInstanceOf(com.petcare.platform.exception.InvalidStateTransitionException.class);
+
+        verifyNoInteractions(admissions);
     }
 
     @Test

@@ -1,10 +1,13 @@
 package com.petcare.module.visit.entity;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.catalog.api.ServiceGroup;
@@ -88,6 +91,41 @@ class VisitTest {
         assertThat(visit.getPriorityClass()).isEqualTo(PriorityClass.APPOINTMENT);
         assertThat(visit.getQueueSortKey()).isEqualTo(CHECKED_IN);
         assertThat(visit.getAppointmentId()).isEqualTo(501L);
+    }
+
+    /** Visit#7 (docs/adr/0149 mục 12): thẳng IN_PROGRESS, VET vừa tiếp nhận vừa phụ trách, không lịch hẹn. */
+    @Test
+    void startTreatmentOpensAnInProgressVisitOwnedByTheVet() {
+        Visit visit = Visit.startTreatment("TN-2610-00002", 3L, 88L, 12L, 45L, AT);
+
+        assertThat(visit.getStatus()).isEqualTo(VisitStatus.IN_PROGRESS);
+        assertThat(visit.getCode()).isEqualTo("TN-2610-00002");
+        assertThat(visit.getBranchId()).isEqualTo(3L);
+        assertThat(visit.getCustomerId()).isEqualTo(88L);
+        assertThat(visit.getPetId()).isEqualTo(12L);
+        assertThat(visit.getAssigneeId()).isEqualTo(45L);
+        assertThat(visit.getCheckedInBy()).isEqualTo(45L);
+        assertThat(visit.getCheckedInAt()).isEqualTo(AT);
+        assertThat(visit.getCalledAt()).isEqualTo(AT);
+        assertThat(visit.getQueueSortKey()).isEqualTo(AT);
+        assertThat(visit.getServiceGroup()).isEqualTo(ServiceGroup.MEDICAL);
+        assertThat(visit.getPriorityClass()).isEqualTo(PriorityClass.WALK_IN);
+        assertThat(visit.getAppointmentId()).isNull();
+        assertThat(visit.isNeedsReassign()).isFalse();
+        assertThat(visit.getCompletedAt()).isNull();
+        assertThat(visit.getCancelledAt()).isNull();
+    }
+
+    /** {@code ck_visits_assignee}: lượt IN_PROGRESS luôn có người phụ trách — thiếu bất kỳ tham số nào đều bị chặn. */
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3, 4, 5})
+    void startTreatmentRejectsAMissingArgument(int missing) {
+        Object[] args = {"TN-2610-00002", 3L, 88L, 12L, 45L, AT};
+        args[missing] = null;
+
+        assertThatThrownBy(() -> Visit.startTreatment((String) args[0], (Long) args[1], (Long) args[2],
+                (Long) args[3], (Long) args[4], (Instant) args[5]))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     private static Visit assigned() {

@@ -289,8 +289,9 @@ class Tier3Be1SchemaIT {
             long vet = account("VET");
             long service = service("MEDICAL", "EXAM");
             Map<String, Object> admitted = row("code", "NT-" + SEQ.incrementAndGet(), "visit_id", visit,
-                    "pet_id", f.pet, "branch_id", f.branch, "service_id", service, "unit_price", 300_000L,
-                    "status", "ADMITTED", "admitted_by", vet, "admitted_at", OffsetDateTime.now());
+                    "pet_id", f.pet, "branch_id", f.branch, "kennel_id", kennel(f.branch), "service_id", service,
+                    "unit_price", 300_000L, "status", "ADMITTED", "admitted_by", vet,
+                    "admitted_at", OffsetDateTime.now());
             Map<String, Object> discharged = with(admitted, "status", "DISCHARGED", "discharge_outcome", "HOME",
                     "discharge_summary", "Ổn định", "discharged_by", vet, "discharged_at", OffsetDateTime.now(),
                     "order_line_id", orderLine(f, service));
@@ -322,6 +323,31 @@ class Tier3Be1SchemaIT {
         });
     }
 
+    /** V62 (docs/adr/0149): đúng một nguồn — chuồng điều trị (nhập từ khám) hoặc đặt chỗ lưu trú (nhập từ lưu trú). */
+    @Test
+    void admissionHasExactlyOneSource() {
+        inTx(() -> {
+            Fixture f = fixture();
+            long vet = account("VET");
+            long service = service("MEDICAL", "EXAM");
+            Map<String, Object> base = row("code", "NT-" + SEQ.incrementAndGet(), "visit_id", visit(f, null),
+                    "pet_id", f.pet, "branch_id", f.branch, "service_id", service, "unit_price", 1L,
+                    "status", "ADMITTED", "admitted_by", vet, "admitted_at", OffsetDateTime.now());
+            long kennel = kennel(f.branch);
+            long booking = jdbc.queryForObject("""
+                    INSERT INTO boarding_bookings (code, customer_id, pet_id, branch_id, kennel_type_id, kennel_id,
+                            check_in_date, check_out_date, actual_check_in_at, nightly_price, status, channel, booked_by)
+                    SELECT ?, ?, ?, ?, kennel_type_id, id, current_date, current_date + 2, now(), 100000, 'CHECKED_IN',
+                           'COUNTER', ? FROM kennels WHERE id = ? RETURNING id""", Long.class,
+                    "LT-T3-" + SEQ.incrementAndGet(), f.customer, f.pet, f.branch, vet, kennel);
+
+            rejects("ck_admissions_source", () -> insert("admissions", base));
+            rejects("ck_admissions_source", () -> insert("admissions",
+                    with(base, "kennel_id", kennel, "boarding_booking_id", booking)));
+            insert("admissions", with(base, "boarding_booking_id", booking));
+        });
+    }
+
     @Test
     void admissionOrderChecksFollowTheStateMachine() {
         inTx(() -> {
@@ -329,8 +355,9 @@ class Tier3Be1SchemaIT {
             long vet = account("VET");
             long service = service("MEDICAL", "EXAM");
             long admission = insert("admissions", row("code", "NT-" + SEQ.incrementAndGet(), "visit_id",
-                    visit(f, null), "pet_id", f.pet, "branch_id", f.branch, "service_id", service,
-                    "unit_price", 1L, "status", "ADMITTED", "admitted_by", vet, "admitted_at", OffsetDateTime.now()));
+                    visit(f, null), "pet_id", f.pet, "branch_id", f.branch, "kennel_id", kennel(f.branch),
+                    "service_id", service, "unit_price", 1L, "status", "ADMITTED", "admitted_by", vet,
+                    "admitted_at", OffsetDateTime.now()));
             Map<String, Object> feeding = row("admission_id", admission, "order_type", "FEEDING",
                     "content", "Cho ăn 50 g", "scheduled_at", OffsetDateTime.now().plusHours(1),
                     "status", "ORDERED", "created_by", vet);
@@ -364,8 +391,9 @@ class Tier3Be1SchemaIT {
             long vet = account("VET");
             long service = service("MEDICAL", "EXAM");
             long admission = insert("admissions", row("code", "NT-" + SEQ.incrementAndGet(), "visit_id",
-                    visit(f, null), "pet_id", f.pet, "branch_id", f.branch, "service_id", service,
-                    "unit_price", 1L, "status", "ADMITTED", "admitted_by", vet, "admitted_at", OffsetDateTime.now()));
+                    visit(f, null), "pet_id", f.pet, "branch_id", f.branch, "kennel_id", kennel(f.branch),
+                    "service_id", service, "unit_price", 1L, "status", "ADMITTED", "admitted_by", vet,
+                    "admitted_at", OffsetDateTime.now()));
             Map<String, Object> observation = row("admission_id", admission, "recorded_by", vet,
                     "temperature_c", new java.math.BigDecimal("38.6"), "heart_rate", 120, "respiratory_rate", 30,
                     "weight_kg", new java.math.BigDecimal("12.40"), "appetite", "REDUCED", "note", "Ăn ít");
@@ -511,6 +539,16 @@ class Tier3Be1SchemaIT {
         return jdbc.queryForObject("""
                 INSERT INTO services (name, service_group, medical_type, price) VALUES (?, ?, ?, 100000) RETURNING id
                 """, Long.class, "T3 dịch vụ " + SEQ.incrementAndGet(), group, medicalType);
+    }
+
+    /** Chuồng {@code AVAILABLE} của chi nhánh (kèm dịch vụ và loại chuồng): nguồn "chuồng điều trị" của ca nội trú. */
+    private long kennel(long branch) {
+        long type = service("BOARDING", null);
+        jdbc.update("INSERT INTO kennel_types (service_id, species, max_weight_kg) VALUES (?, 'DOG', 30)", type);
+        return jdbc.queryForObject("""
+                INSERT INTO kennels (branch_id, kennel_type_id, code, status) VALUES (?, ?, ?, 'AVAILABLE')
+                RETURNING id
+                """, Long.class, branch, type, "K" + SEQ.incrementAndGet());
     }
 
     private long product() {

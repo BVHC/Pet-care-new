@@ -130,6 +130,24 @@ class PublicCatalogIT extends InventoryItSupport {
         jdbc.update("DELETE FROM branches WHERE id = ?", draft);
     }
 
+    /** BR-LT-18 (docs/adr/0148): dịch vụ nội trú không hiện công khai; dịch vụ khác (kể cả medical_type NULL) vẫn hiện. */
+    @Test
+    void inpatientServiceIsNeverListedButOtherServicesStillAre() {
+        long inpatient = service("MEDICAL", "INPATIENT", 300_000, true, false);
+        long exam = service("MEDICAL", "EXAM", 150_000, true, true);
+        long groom = service("GROOMING", null, 90_000, true, true);
+        enable(branch, inpatient);
+        enable(branch, exam);
+        enable(branch, groom);
+
+        List<Map<String, Object>> all = publicServices("");
+
+        assertThat(serviceById(all, inpatient)).as("INPATIENT bị loại").isNull();
+        assertThat(serviceById(all, exam)).isNotNull();
+        assertThat(serviceById(all, groom)).as("medical_type NULL không bị loại nhầm").isNotNull();
+        assertThat(serviceById(publicServices("?group=MEDICAL"), inpatient)).isNull();
+    }
+
     @Test
     void servicesGroupAndBranchFiltersKeepOnlyMatches() {
         long exam = service("MEDICAL", "EXAM", 150_000, true, true);

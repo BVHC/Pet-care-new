@@ -393,6 +393,20 @@ class AvailableSlotsIT {
         }
     }
 
+    /** BR-LT-18 (docs/adr/0149 mục 40): không hiện khung trống cho dịch vụ nội trú, dù đang bật tại chi nhánh. */
+    @Test
+    void inpatientServiceIsBrLt18ForBothRoles() {
+        String message = "Dịch vụ nội trú chỉ dùng qua nhập viện, không đặt lịch được (BR-LT-18)";
+        long inpatient = data.service("MEDICAL");
+        jdbc.update("UPDATE services SET medical_type = 'INPATIENT' WHERE id = ?", inpatient);
+        data.branchService(branch, inpatient, true);
+
+        assertError(get(customerToken, branch, inpatient, DAY.toString()), HttpStatus.BAD_REQUEST,
+                "BUSINESS_RULE_VIOLATION", message);
+        assertError(get(receptionistToken, branch, inpatient, DAY.toString()), HttpStatus.BAD_REQUEST,
+                "BUSINESS_RULE_VIOLATION", message);
+    }
+
     // ================================================================ tham số
 
     @ParameterizedTest
