@@ -30,11 +30,7 @@ class ConfigKeyTest {
         // + 1 công tắc BOOL ai.chat.pet_context_enabled (V56, docs/adr/0135 "Đã cài ở T91") = 83
         // + 1 công tắc BOOL ai.chat.open_domain_enabled (V57, docs/adr/0136 "Đã cài ở T92 (phần 2)") = 84
         // + 1 khóa INT ai.ingest.max_file_kb (V59, docs/adr/0147, T89) = 85
-<<<<<<< HEAD
-        // + 1 khóa INT workforce.weekly_required_shifts (V61, docs/adr/0123) = 86
-=======
         // + 1 khóa INT workforce.weekly_required_shifts (V61, docs/adr/0123, T58) = 86
->>>>>>> 0e695149 (feat: T69: nền module nội trú — entity, FSM #24 / #25, V62 (N1, ADR-0149, D078))
         assertThat(ConfigKey.values()).hasSize(86);
     }
 

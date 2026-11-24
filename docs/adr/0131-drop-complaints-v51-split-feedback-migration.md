@@ -2,16 +2,10 @@
 
 - **Trạng thái:** Proposed (BE-1 làm T70 PR1, PR2 và PR3, 10/11/2026; V55 đã áp lên DB demo 5433; đổi từ V52 ngày 15/11)
 - **Liên quan:** ADR-0122 (bỏ khiếu nại, feedback không trạng thái, giữ 30 ngày), ADR-0113 (V36–V41, **không sửa**, chỉ gỡ phần khiếu nại bằng V51), ADR-0123 (Nhân sự, cần một số V), ADR-0112 (khuôn job dọn dẹp); nợ D061, D062; `docs/02` BR-DG-05, `docs/09` §D, §G.
-<<<<<<< HEAD
 - **Đánh số lại:** (autopilot 15/11/2026) migration `feedbacks` (V52 trong văn bản dưới) đã đổi thành **V55** vì V52 trùng `V52__ai_general_knowledge_switch`; các chỗ ghi V52 cho phần feedback nghĩa là V55.
 - **Đánh số (16/11/2026):** số 0131 từng trùng với ADR AI `0131-ai-chat-pipeline-t77b`; ADR AI đã đổi sang **0141** (`0141-ai-chat-pipeline-t77b`), ADR này giữ **0131**; không cần sửa chú thích migration.
 - **Đánh số:** V51 dùng cho PR này, V52 giữ cho phần `feedbacks` (PR2), V53 cho D062. V49 vẫn bỏ trống cho BE-2 (CLAUDE.md *Persistence*).
 - **Đánh số lại (23/11/2026, sửa merge PR #33):** nhánh `manh` từng đổi phần `feedbacks` thành **V56** (D069) và dùng V55 cho Nhân sự; bản đã áp lên DB demo 5433 là **V55** = `drop_feedback_status_columns`, nên file V56 cùng DDL bị xóa và migration Nhân sự (D062) đổi thành **V61**. Mọi chỗ ghi V56 cho phần feedback đọc là V55.
-=======
-- **Đánh số lại:** (autopilot 15/11/2026) migration `feedbacks` (V52 trong văn bản dưới) đổi thành **V55** vì V52 trùng `V52__ai_general_knowledge_switch`; (BE-1 16/11/2026, D069) đổi tiếp thành **V56** vì V55 bị Nhân sự lấy. Sau merge PR #33 (22/11/2026) cây còn hai file `V55__…` và `V56__drop_feedback_status_columns.sql` **cùng chứa marker 8 ký tự giữa SQL** (sai cú pháp; V55 còn khác checksum của `dev`). Đã sửa ở N0 (22/11, D069): V55 khôi phục về file sạch của `dev` (blob `ae7de8f5`), V56 feedback xóa; số cuối cùng của phần feedback là **V55**, V56 là `ai_pet_context` của AI. Các chỗ ghi V52 cho phần feedback đọc là số cuối cùng được giữ.
-- **Đánh số (16/11/2026):** số 0131 từng trùng với ADR AI `0131-ai-chat-pipeline-t77b`; ADR AI đã đổi sang **0141** (`0141-ai-chat-pipeline-t77b`), ADR này giữ **0131**; không cần sửa chú thích migration.
-- **Đánh số:** V51 dùng cho PR này, V52 giữ cho phần `feedbacks` (PR2), V53 cho D062. **Đánh số lại (16/11/2026, D069):** V52 trùng V52 của AI (`ai_general_knowledge_switch`) và V53 bị AI lấy (T90) nên phần `feedbacks` đổi thành **V56**; Nhân sự (D062) dùng V55; mọi chỗ ghi V52 / V53 bên dưới đọc là V56 / V55. V49 vẫn bỏ trống cho BE-2 (CLAUDE.md *Persistence*).
->>>>>>> 0e695149 (feat: T69: nền module nội trú — entity, FSM #24 / #25, V62 (N1, ADR-0149, D078))
 
 ## Bối cảnh
 

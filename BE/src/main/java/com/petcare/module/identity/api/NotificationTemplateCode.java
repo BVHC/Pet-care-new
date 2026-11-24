@@ -42,7 +42,7 @@ public final class NotificationTemplateCode {
     public static final String BOARDING_OVERDUE_MANAGER_APP = "BOARDING_OVERDUE_MANAGER_APP";
     public static final String BOARDING_CAPACITY_WARNING_APP = "BOARDING_CAPACITY_WARNING_APP";
 
-    // LT — nội trú (docs/09 §C, BR-LT-16, docs/adr/0148, 0149; V62)
+    // LT — nội trú (docs/09 §C, BR-LT-16, docs/adr/0148, 0149; V63)
     public static final String INPATIENT_OBSERVATION_ABNORMAL = "INPATIENT_OBSERVATION_ABNORMAL";
     public static final String INPATIENT_OBSERVATION_ABNORMAL_APP = "INPATIENT_OBSERVATION_ABNORMAL_APP";
 

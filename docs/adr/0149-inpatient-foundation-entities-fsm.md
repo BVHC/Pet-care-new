@@ -2,7 +2,9 @@
 
 - **Trạng thái:** Proposed (BE-1, 2026-11-22). Cộng dồn mục theo từng bước N của T69, như ADR-0138 của workforce; N1 = mục 1–10; N2 (2026-11-23, interface chéo của BE-1) = mục 11–15; N3 (2026-11-23, inpatient-v1 #1–#3 + guard Visit#5) = mục 16–21; N4 (2026-11-24, xuất viện #4) = mục 22–25; N5 (2026-11-24, y lệnh #5–#8) = mục 26–30; N6 (theo dõi #9–#10) = mục 31–36; N7 (2026-11-24, guard lưu trú BR-LT-17, chặn dịch vụ nội trú BR-LT-18, chuỗi thú mất) = mục 37–41.
 - **Ngày:** 2026-11-22
-- **Liên quan:** ADR-0148 (chốt đặc tả nội trú; không sửa), ADR-0124, `docs/09` §C (BR-LT-13…18, FSM #24, #25), `docs/api/inpatient-v1`, V38, V62, ADR-0107 (`DocumentCodeGenerator`), ADR-0138 (khuôn entity + FSM), nợ D078, D079, D080, D064
+- **Liên quan:** ADR-0148 (chốt đặc tả nội trú; không sửa), ADR-0124, `docs/09` §C (BR-LT-13…18, FSM #24, #25), `docs/api/inpatient-v1`, V38, V63, ADR-0107 (`DocumentCodeGenerator`), ADR-0138 (khuôn entity + FSM), nợ D078, D079, D080, D064
+
+> Khi ghép PR #34, migration nội trú đổi từ V62 sang V63 vì V62 đã dành cho ảnh sản phẩm (ADR-0151). Nội dung SQL giữ nguyên. DB riêng đã áp migration nội trú dưới số V62 cần khởi tạo lại từ dump V61 trước khi dùng nhánh này.
 
 ## Bối cảnh
 
@@ -10,9 +12,9 @@ Schema nội trú đã có từ V38, đặc tả đã chốt ở ADR-0148, nhưn
 
 ## Quyết định
 
-1. **V62 thêm `ck_admissions_source`:** `CHECK ((boarding_booking_id IS NULL) <> (kennel_id IS NULL))` — đúng một nguồn (BR-LT-13: nhập từ khám có chuồng điều trị, nhập từ lưu trú có đặt chỗ). V38 chưa có; bảng rỗng ở mọi DB nên không cần dọn dữ liệu. `Admission.admit` kiểm cùng điều kiện; DB là lớp chặn khi service sót. Lệch so với `09` §C, ghi ở `05` §13 mục 27.
+1. **V63 thêm `ck_admissions_source`:** `CHECK ((boarding_booking_id IS NULL) <> (kennel_id IS NULL))` — đúng một nguồn (BR-LT-13: nhập từ khám có chuồng điều trị, nhập từ lưu trú có đặt chỗ). V38 chưa có; bảng rỗng ở mọi DB nên không cần dọn dữ liệu. `Admission.admit` kiểm cùng điều kiện; DB là lớp chặn khi service sót. Lệch so với `09` §C, ghi ở `05` §13 mục 27.
 2. **Hủy y lệnh không lưu người hủy và lúc hủy (nợ D078):** V38 chỉ có `cancel_reason`; ADR-0148 cố ý chưa mở rộng audit (BR-QT-15) cho nội trú. Chấp nhận: người hủy suy ra từ VET đang được gán Visit (BR-LT-15); gán lại Visit (BR-TN-08) làm mất dấu người hủy cũ; `updated_at` là mốc gần đúng. Không đổi schema, `09`, `inpatient-v1`.
-3. **Mẫu thông báo `INPATIENT_OBSERVATION_ABNORMAL` (EMAIL) / `_APP` (IN_APP), V62:** biến bắt buộc `ten_thu_cung`, `chi_nhanh`, `ma_noi_tru`, `ngay_ghi` (dd/MM/yyyy); `ten_khach` tùy chọn (khuôn `CARE_LOG_ABNORMAL`, V24). Giả định của BE-1: ADR-0148 mục 4 chưa nói biến nào bắt buộc. Bản `_APP` viết trung tính vì khách và VET phụ trách cùng đọc. Hằng ở `NotificationTemplateCode`.
+3. **Mẫu thông báo `INPATIENT_OBSERVATION_ABNORMAL` (EMAIL) / `_APP` (IN_APP), V63:** biến bắt buộc `ten_thu_cung`, `chi_nhanh`, `ma_noi_tru`, `ngay_ghi` (dd/MM/yyyy); `ten_khach` tùy chọn (khuôn `CARE_LOG_ABNORMAL`, V24). Giả định của BE-1: ADR-0148 mục 4 chưa nói biến nào bắt buộc. Bản `_APP` viết trung tính vì khách và VET phụ trách cùng đọc. Hằng ở `NotificationTemplateCode`.
 4. **Chỗ ghi quyết định code:** ADR này (không thêm vào ADR-0148, vốn là chốt đặc tả). Mục mới của N2+ thêm vào cuối file này.
 5. **Mã ca:** `Admission.CODE_DOC_TYPE = "admissions"`, `CODE_PREFIX = "NT"` → `NT-yyMM-xxxxx` (ADR-0148 mục 7, ADR-0107). Entity nhận `code` đã sinh; service N2 gọi `DocumentCodeGenerator.next(...)` **sau cùng** trong transaction. Không thêm bean bọc generator.
 6. **Bảng LOG `admission_observations`:** extends `CreatedAtEntity`, mọi cột `updatable = false`, không method đổi (khuôn `CareLogAddendum`). Repository vẫn là `JpaRepository` (quy ước "không gọi `delete`", test chặn method public lạ trên entity).
@@ -25,7 +27,7 @@ Schema nội trú đã có từ V38, đặc tả đã chốt ở ADR-0148, nhưn
 
 | Bất biến | Entity (N1) | DB | Service (N2) |
 |---|---|---|---|
-| Đúng một nguồn; giá ≥ 0; mã ≤ 20 ký tự; cột nhập viện không đổi | ✔ | `ck_admissions_source` (V62), `ck_admissions_unit_price` | 400 `BR-LT-13` thiếu / thừa `kennelId` |
+| Đúng một nguồn; giá ≥ 0; mã ≤ 20 ký tự; cột nhập viện không đổi | ✔ | `ck_admissions_source` (V63), `ck_admissions_unit_price` | 400 `BR-LT-13` thiếu / thừa `kennelId` |
 | Xuất viện chỉ từ `ADMITTED`, một lần; tóm tắt không rỗng (strip); lúc xuất ≥ lúc nhập; không còn y lệnh `ORDERED` | ✔ | `ck_admissions_discharge_*` | 400 `BR-LT-14`, 409 |
 | Số ngày tính tiền (ngày VN, gồm hai đầu, tối thiểu 1, đứng yên sau xuất viện), tiền tạm tính (`multiplyExact`) | ✔ `billedDays`, `estimatedAmount` | — | dùng cùng hàm cho dòng Order lúc xuất và API đọc |
 | Mỗi thú một ca `ADMITTED` | — | `ux_admissions_pet_admitted` | 409 |
@@ -38,7 +40,7 @@ Schema nội trú đã có từ V38, đặc tả đã chốt ở ADR-0148, nhưn
 
 - Unit: `AdmissionTransitionHandlerTest`, `AdmissionOrderTransitionHandlerTest` (`FsmTransitionTestBase`, mọi cặp và mọi trạng thái khởi tạo, bản sao độc lập của `09` §C); `AdmissionTest`, `AdmissionOrderTest`, `AdmissionObservationTest` (một ca đúng và một ca sai cho mỗi bất biến cột "Entity").
 - IT bean thật: `AdmissionFsmIT` (era 2093), `AdmissionOrderFsmIT` (era 2094): cạnh hợp lệ qua handler + entity + DB; cặp sai bị từ chối, dòng không đổi; `ck_admissions_source`, `ux_admissions_pet_admitted`, CHECK của y lệnh, mã `NT-yyMM-xxxxx` liên tục và trả lại khi rollback, khóa ngoài transaction bị từ chối.
-- Sửa test có sẵn vì V62: `Tier3Be1SchemaIT` (ba fixture `admissions` thêm chuồng; thêm `admissionHasExactlyOneSource`), `SchemaMigrationIT` (danh sách version, danh sách mẫu).
+- Sửa test có sẵn vì V63: `Tier3Be1SchemaIT` (ba fixture `admissions` thêm chuồng; thêm `admissionHasExactlyOneSource`), `SchemaMigrationIT` (danh sách version, danh sách mẫu).
 - Đã chạy 22/11/2026: 58 unit nội trú, `AdmissionFsmIT` 12, `AdmissionOrderFsmIT` 14, `SchemaMigrationIT` 29, `Tier3Be1SchemaIT` 13, `NotificationTemplateSeedIT` 1, `NotificationTemplateAdminIT` 32 — xanh.
 
 ## Quyết định N2 — interface chéo của BE-1 (2026-11-23, Mạnh chốt Q1–Q3)
@@ -129,7 +131,7 @@ Race đã chấp nhận: nhập (a) không khóa "vắng mặt đặt chỗ", n�
 
 ## Quyết định N6 — theo dõi nội trú (inpatient-v1 #9–#10, BR-LT-16) (2026-11-24, Mạnh chốt Q1–Q4)
 
-31. **Cân nặng vào hồ sơ cân với nguồn `VET` + Visit của ca** (*Q1*; cả hai đường nhập viện; người ghi là VET hay CARETAKER). `weight_records.source` chỉ có `VET` / `INTAKE` / `OWNER` (V1, `ck_weight_records_source`) và bảng, enum thuộc BE-2: thêm `INPATIENT` cần V63 + sửa code BE-2, nên không làm. Đánh đổi: CARETAKER đo vẫn hiện nhãn FE "Bác sĩ đo khi khám" (`FE/src/domains/pets/types.ts`); `recorded_by` vẫn đúng người. FE nên đổi nhãn thành "Đo tại phòng khám" (D064). `PetApi.recordWeight` chạy cùng transaction, `pets FOR SHARE`, kiểm thú còn sống.
+31. **Cân nặng vào hồ sơ cân với nguồn `VET` + Visit của ca** (*Q1*; cả hai đường nhập viện; người ghi là VET hay CARETAKER). `weight_records.source` chỉ có `VET` / `INTAKE` / `OWNER` (V1, `ck_weight_records_source`) và bảng, enum thuộc BE-2: thêm `INPATIENT` cần V64 + sửa code BE-2, nên không làm. Đánh đổi: CARETAKER đo vẫn hiện nhãn FE "Bác sĩ đo khi khám" (`FE/src/domains/pets/types.ts`); `recorded_by` vẫn đúng người. FE nên đổi nhãn thành "Đo tại phòng khám" (D064). `PetApi.recordWeight` chạy cùng transaction, `pets FOR SHARE`, kiểm thú còn sống.
 32. **Mục bất thường báo khách và VET phụ trách, trừ khi chính VET đó là người ghi** (*Q2*). Khách theo BR-TB-02 (tài khoản không `PENDING` → IN_APP + EMAIL; hồ sơ quầy có email → EMAIL; không kênh → log `INPATIENT_OBSERVATION_ABNORMAL_NO_CHANNEL`), người nhận là chủ hiện tại của thú; link khách `/pets` (khách chưa có màn hình nội trú, 09 Q4), link VET `/admin/inpatient`. Quy tắc kênh là bản sao thứ tư (`AdmissionObservationNotices`), vì `BoardingRecipients` là package-private và module không import `service` của module khác. Không chống trùng: mỗi mục bất thường gửi một lượt (như `CARE_LOG_ABNORMAL`). Đọc người phụ trách Visit không khóa: cùng cửa sổ hẹp D080.
 33. **Thứ tự lỗi #9** (*Q3*, khuôn y lệnh mục 26): 400 hình thức → 403 vai trò → 404 → 403 chi nhánh → **409 ca không `ADMITTED`** → 400 `BR-LT-16`. Ca đã xuất viện luôn báo 409 dù dữ liệu cũng sai. Không đòi người phụ trách Visit: mọi VET / CARETAKER của chi nhánh ghi được (hợp đồng §B). `abnormal` là `Boolean` + `@NotNull` (thiếu trường = 400, không âm thầm `false`).
 34. **Khóa #9** (*Q4*): `admissions FOR NO KEY UPDATE` (đọc ca **sau** khóa) → INSERT `admission_observations` → (có cân nặng) `pets FOR SHARE` + INSERT `weight_records` → INSERT outbox. Khóa ca trước mọi ghi là ràng buộc của mục 23 (không lọt mục theo dõi sau xuất viện). Không chu trình: không luồng nào khóa `pets` rồi mới khóa `admissions` (nhập viện chỉ `FOR SHARE` thú rồi INSERT ca mới). Đánh đổi: hai người ghi cùng ca xếp hàng vài ms. Đọc #10 `readOnly` + REPEATABLE READ, một câu tra tên người ghi theo lô (≤ 100 id), đọc được cả ca đã xuất viện.
@@ -232,6 +234,6 @@ Race đã chấp nhận: nhập (a) không khóa "vắng mặt đặt chỗ", n�
 
 ## Hệ quả
 
-- Số Flyway kế tiếp V63, ADR kế tiếp 0150, era IT kế tiếp 2112 (N3 dùng 2095–2099, N4 dùng 2100, N5 dùng 2101–2104, N6 dùng 2105–2108, N7 dùng 2109–2111).
+- Số Flyway kế tiếp V64, ADR kế tiếp 0150, era IT kế tiếp 2112 (N3 dùng 2095–2099, N4 dùng 2100, N5 dùng 2101–2104, N6 dùng 2105–2108, N7 dùng 2109–2111).
 - N2 phải kiểm trước mọi điều kiện ở cột "Service" để trả đúng 400 / 403 / 409; lỗi của entity (`IllegalArgumentException`, `IllegalStateException`, NPE) lọt ra HTTP sẽ là 500.
-- Phần FE (D064, D065): V62 thêm 2 mẫu thông báo, seed FE cần thêm khi cập nhật.
+- Phần FE (D064, D065): V63 thêm 2 mẫu thông báo, seed FE cần thêm khi cập nhật.
