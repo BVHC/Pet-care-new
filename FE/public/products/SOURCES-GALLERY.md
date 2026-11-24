@@ -1,8 +1,8 @@
 # Nguồn ảnh phụ (gallery) sản phẩm
 
-Ảnh phụ do người đóng góp Open Pet Food Facts tải lên cho đúng sản phẩm đó (bản thị trường châu Âu), giấy phép CC BY-SA 3.0, https://openpetfoodfacts.org. Ảnh bìa xem `SOURCES.md`.
+Ảnh phụ đồ ăn có thương hiệu: do người đóng góp Open Pet Food Facts tải lên cho đúng sản phẩm đó (bản thị trường châu Âu, CC BY-SA 3.0, https://openpetfoodfacts.org). Ảnh phụ khác: Pixabay (Pixabay Content License), ảnh minh họa CÙNG LOẠI hàng, không phải cùng một món. Ảnh bìa xem `SOURCES.md`.
 
-| Tệp | Loại | Tác giả | Trang sản phẩm | Giấy phép |
+| Tệp | Loại | Tác giả | Trang gốc | Giấy phép |
 |---|---|---|---|---|
 | rc-mini-2kg-2.jpg | thành phần | Open Pet Food Facts contributors | https://world.openpetfoodfacts.org/product/3182550831383 | CC BY-SA 3.0 |
 | rc-mini-2kg-3.jpg | ảnh đóng góp 2 | foodless | https://world.openpetfoodfacts.org/product/3182550831383 | CC BY-SA 3.0 |

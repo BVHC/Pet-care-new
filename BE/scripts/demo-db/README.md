@@ -1,12 +1,12 @@
 # DB demo dùng chung (`petcare_demo.dump`)
 
-Ảnh chụp DB demo của nhóm: schema đã áp **Flyway V1…V61** và dữ liệu đã làm giàu (24/11/2026): **134 sản phẩm** (119 hiện ở cửa hàng chi nhánh 1) trong 9 danh mục với 9 nhà cung cấp, 12 phiếu nhập, 143 lô (có lô sắp hết hạn, đã hết hạn, tồn thấp), **42 khách, 72 thú cưng**, 17 dịch vụ, **20 bài viết**, 13 chuồng, **80 lịch hẹn**, 47 đặt chỗ lưu trú, và dữ liệu **nhân sự** (ca, đăng ký tuần, 195 phân ca, 6 yêu cầu nghỉ / đổi ca đủ 4 trạng thái), cùng 70 tài liệu tri thức AI. Mỗi người chạy DB trên máy mình nên cách chung là cùng restore file này, không tự seed lại từ đầu.
+Ảnh chụp DB demo của nhóm: schema đã áp **Flyway V1…V62** và dữ liệu đã làm giàu (24/11/2026): **134 sản phẩm** (31 có ảnh bìa thật, 14 có ảnh phụ `galleryUrls` từ V62; 119 hiện ở cửa hàng chi nhánh 1) trong 9 danh mục với 9 nhà cung cấp, 12 phiếu nhập, 143 lô (có lô sắp hết hạn, đã hết hạn, tồn thấp), **42 khách, 72 thú cưng**, 17 dịch vụ, **20 bài viết**, 13 chuồng, **80 lịch hẹn**, 47 đặt chỗ lưu trú, và dữ liệu **nhân sự** (ca, đăng ký tuần, 195 phân ca, 6 yêu cầu nghỉ / đổi ca đủ 4 trạng thái), cùng 70 tài liệu tri thức AI. Mỗi người chạy DB trên máy mình nên cách chung là cùng restore file này, không tự seed lại từ đầu.
 
 Tài khoản và mật khẩu dev: xem `docs/be-fe-integration.md` mục "Dữ liệu nền" (không lặp lại ở đây).
 
 ## Điều kiện
 
-- **Code BE từ commit `64588f8` (sửa merge PR #33) trở lên**: `git pull origin dev` trước. Bản `d466c4d` cũ có hai file V55 và hai file V56 trùng số nên BE không khởi động được, và checksum Flyway của dump (V55 `drop_feedback`, V60, V61) chỉ khớp với code đã sửa.
+- **Code BE từ commit `e6436a0` (gallery ảnh sản phẩm, V62) trở lên**: `git pull origin dev` trước. Bản `d466c4d` cũ có hai file V55 và hai file V56 trùng số nên BE không khởi động được, và checksum Flyway của dump (V55 `drop_feedback`, V60, V61, V62) chỉ khớp với code đã sửa.
 - Postgres 17 có extension `vector` (ảnh `pgvector/pgvector:pg17`, như `docker-compose.yml`).
 
 ## Restore
@@ -22,7 +22,7 @@ docker exec <container> rm /tmp/petcare_demo.dump
 
 Chạy BE trỏ vào DB đó: `DB_NAME=petcare_demo` (và `DB_PORT` của container bạn). Muốn làm lại từ đầu: `drop database petcare_demo` rồi restore lại. Không dùng `<` hay pipe của PowerShell 5: nó làm hỏng file nhị phân.
 
-Đã kiểm 24/11/2026 bằng đúng các lệnh trên: restore vào DB trống, `exit 0`, Flyway 61, 134 sản phẩm, 42 khách, 72 thú, 80 lịch hẹn, 195 phân ca, 86 khóa [CFG], extension `vector` có.
+Đã kiểm 24/11/2026 bằng đúng các lệnh trên: restore vào DB trống, `exit 0`, Flyway 62, 134 sản phẩm (14 có ảnh phụ), 42 khách, 72 thú, 80 lịch hẹn, 195 phân ca, 86 khóa [CFG], extension `vector` có.
 
 ## Cần biết
 

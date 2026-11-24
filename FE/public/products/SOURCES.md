@@ -1,7 +1,7 @@
 # Nguồn ảnh sản phẩm demo
 
-Ảnh đồ ăn: Open Pet Food Facts (https://openpetfoodfacts.org, đóng góp của cộng đồng, giấy phép CC BY-SA 3.0). Ảnh đồ dùng: Pixabay (Pixabay Content License, https://pixabay.com/service/license-summary/) và Wikimedia Commons (CC0, miền công cộng, CC BY hoặc CC BY-SA, theo từng ảnh).
-Chỉ để minh họa trong đồ án; ảnh khớp LOẠI hàng, không phải đúng mẫu. Tác giả và giấy phép từng ảnh ở bảng dưới.
+Ảnh đồ ăn có thương hiệu: Open Pet Food Facts (https://openpetfoodfacts.org, cộng đồng đóng góp, CC BY-SA 3.0). Ảnh đồ dùng và hàng không thương hiệu: Pixabay (Pixabay Content License, https://pixabay.com/service/license-summary/) và Wikimedia Commons (CC0, miền công cộng, CC BY hoặc CC BY-SA, theo từng ảnh).
+Chỉ để minh họa trong đồ án; ảnh khớp LOẠI hàng, không phải đúng mẫu hay đúng bao bì. Tác giả và giấy phép từng ảnh ở bảng dưới.
 
 | SKU | File | Nguồn | Tên / mô tả | Tác giả | Giấy phép | Trang gốc |
 |---|---|---|---|---|---|---|
