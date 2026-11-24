@@ -11,17 +11,22 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.payment.api.PaymentGatewayClient;
 import com.petcare.module.payment.api.PaymentGatewayClient.GatewayTransaction;
 import com.petcare.module.payment.api.PaymentGatewayException;
+import com.petcare.module.payment.dto.ReconciliationSummary;
+import com.petcare.module.payment.dto.ReconciliationSummary.ReconciliationStatus;
 import com.petcare.module.payment.gateway.PaymentProperties;
 import com.petcare.module.payment.repository.PaymentReconciliationDao;
 import com.petcare.module.payment.repository.PaymentReconciliationDao.LocalTransaction;
 import com.petcare.module.payment.repository.PaymentReconciliationDao.Mismatch;
 import com.petcare.module.payment.repository.PaymentReconciliationDao.MismatchKind;
+import com.petcare.platform.model.PageResponse;
 
 /** BR-TG-10: so khớp báo cáo và dữ liệu nội bộ theo mã tham chiếu, chỉ ghi kết quả đối soát. */
 @Service
@@ -93,5 +98,12 @@ public class PaymentReconciliationService {
     private static String gatewayRef(GatewayTransaction transaction) {
         return transaction.gatewayTxnId() == null || transaction.gatewayTxnId().isBlank() ? transaction.txnCode()
                 : transaction.gatewayTxnId();
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<ReconciliationSummary> list(ReconciliationStatus status, int page, int size) {
+        PageRequest pagination = PageRequest.of(page, size);
+        long total = reconciliations.countRuns(status);
+        return PageResponse.of(new PageImpl<>(reconciliations.listRuns(status, pagination), pagination, total));
     }
 }

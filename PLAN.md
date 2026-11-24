@@ -10,7 +10,7 @@ Use one checkout and a separate `codex/be2-<slice>` branch for each API or job. 
 | L4 | refund-confirm | Returns controller/service/repository, sales shift lock and cashier totals, new `RefundConfirmIT`. Follow cashier shift ownership and transactional collection. | L1 for shared code; fixture refund rows while L2 is blocked | Verified with fixtures |
 | L5 | payment-expire | `payment/{service,repository,job}`, new `PaymentExpiryIT`. Follow `OnlineOrderPaymentExpiryService` locking and scheduling. | Common UC63 outcome service | Blocked |
 | L6 | payment-reconcile-job | `payment/{repository,service,job}`, new `PaymentReconciliationJobIT`. Follow existing job scheduling/transaction style. | V45, fake report client; real source for sandbox acceptance | Verified locally |
-| L7 | payment-reconcile-list | Payment controller/DTO/read query, new `PaymentReconciliationListIT`. | L6 | Pending |
+| L7 | payment-reconcile-list | Payment controller/DTO/read query, new `PaymentReconciliationListIT`. | L6 | Verified locally |
 | L8 | payment-reconcile-items | Payment controller/DTO/read query, new `PaymentReconciliationItemsIT`. | L6, shared L7 controller | Pending |
 | L9 | payment-reconcile-resolve | Payment controller/DTO/write service, new `PaymentReconciliationResolveIT`. | L6, shared L7 controller | Pending |
 | L10 | gateway-refund-job | Returns worker/service/repository and existing payment gateway interface, new `GatewayRefundJobIT`. | L2 and T127 for reachable flow; scripted adapter and fixture rows for worker tests | Pending local slice; sandbox blocked |

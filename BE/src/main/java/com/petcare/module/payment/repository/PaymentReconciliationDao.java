@@ -1,14 +1,19 @@
 package com.petcare.module.payment.repository;
 
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
+
+import com.petcare.module.payment.dto.ReconciliationSummary;
+import com.petcare.module.payment.dto.ReconciliationSummary.ReconciliationStatus;
 
 /** Đọc giao dịch và ghi kết quả đối soát ST14, không cập nhật giao dịch gốc. */
 @Repository
@@ -74,5 +79,30 @@ public class PaymentReconciliationDao {
                 .addValue("status", mismatchCount == 0 ? "MATCHED" : "MISMATCHED")
                 .addValue("txnCount", txnCount).addValue("mismatchCount", mismatchCount)
                 .addValue("now", Timestamp.from(finishedAt)));
+    }
+
+    public long countRuns(ReconciliationStatus status) {
+        return jdbc.queryForObject("""
+                SELECT count(*) FROM payment_reconciliations WHERE (:status IS NULL OR status = :status)
+                """, runFilter(status), Long.class);
+    }
+
+    public List<ReconciliationSummary> listRuns(ReconciliationStatus status, Pageable page) {
+        return jdbc.query("""
+                SELECT id, recon_date, status, txn_count, mismatch_count, finished_at
+                FROM payment_reconciliations WHERE (:status IS NULL OR status = :status)
+                ORDER BY recon_date DESC
+                LIMIT :limit OFFSET :offset
+                """, runFilter(status).addValue("limit", page.getPageSize()).addValue("offset", page.getOffset()),
+                (rs, index) -> {
+                    Timestamp finished = rs.getTimestamp("finished_at");
+                    return new ReconciliationSummary(rs.getLong("id"), rs.getObject("recon_date", LocalDate.class),
+                            ReconciliationStatus.valueOf(rs.getString("status")), rs.getInt("txn_count"),
+                            rs.getInt("mismatch_count"), finished == null ? null : finished.toInstant());
+                });
+    }
+
+    private static MapSqlParameterSource runFilter(ReconciliationStatus status) {
+        return new MapSqlParameterSource().addValue("status", status == null ? null : status.name(), Types.VARCHAR);
     }
 }
