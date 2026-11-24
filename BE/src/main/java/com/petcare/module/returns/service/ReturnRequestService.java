@@ -29,17 +29,22 @@ import com.petcare.module.identity.api.Role;
 import com.petcare.module.identity.api.StaffDirectoryApi;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.module.returns.dto.CreateReturnRequest;
+import com.petcare.module.returns.dto.RejectReturnRequest;
 import com.petcare.module.returns.dto.ReturnRequestResponse;
 import com.petcare.module.returns.repository.ReturnRequestDao;
+import com.petcare.module.returns.repository.ReturnRequestDao.DecisionTarget;
 import com.petcare.module.returns.repository.ReturnRequestDao.NewLine;
 import com.petcare.module.sales.api.OrderQueryApi;
 import com.petcare.module.sales.api.OrderQueryApi.ReturnOrderLine;
 import com.petcare.module.sales.api.OrderQueryApi.ReturnOrderSnapshot;
 import com.petcare.module.sales.api.OrderSource;
 import com.petcare.module.shop.api.OnlineOrderQueryApi;
+import com.petcare.platform.audit.AuditEntry;
+import com.petcare.platform.audit.AuditRecorder;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
+import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
 import com.petcare.platform.security.BranchScope;
 
@@ -61,18 +66,14 @@ public class ReturnRequestService {
     private final StaffDirectoryApi staff;
     private final BranchQueryApi branches;
     private final NotificationApi notifications;
+    private final AuditRecorder audit;
     private final Clock clock;
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public ReturnRequestResponse create(CreateReturnRequest input) {
         long branchId = orders.findBranchForReturn(input.orderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order", input.orderId()));
-        scope.check(branchId);
-        long actorId = scope.current().accountId();
-        if (staff.findStaffForShare(actorId).filter(actor -> actor.active() && actor.role() == Role.RECEPTIONIST
-                && Long.valueOf(branchId).equals(actor.branchId())).isEmpty()) {
-            throw new AccessDeniedScopeException("branch:" + branchId, "account:" + actorId);
-        }
+        long actorId = checkActor(branchId, Role.RECEPTIONIST);
 
         ReturnOrderSnapshot order = orders.lockForReturn(input.orderId())
                 .orElseThrow(() -> new ResourceNotFoundException("Order", input.orderId()));
@@ -91,6 +92,47 @@ public class ReturnRequestService {
         notifyManagers(order, code);
         return new ReturnRequestResponse(id, code, order.id(), branchId, "PENDING", input.reasonCode(), note, lines,
                 null, null, null, now, null);
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public ReturnRequestResponse reject(long requestId, RejectReturnRequest input) {
+        long branchId = requests.findBranch(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("yêu cầu trả hàng", requestId));
+        long actorId = checkActor(branchId, Role.BRANCH_MANAGER);
+        DecisionTarget request = requests.lockForDecision(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("yêu cầu trả hàng", requestId));
+        String reason = input.reason() == null ? "" : input.reason().strip();
+        if (reason.isEmpty()) {
+            throw new BusinessRuleViolationException("BR-BH-14", "Cần lý do từ chối yêu cầu trả hàng");
+        }
+
+        Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
+        if (!requests.rejectPending(requestId, actorId, reason, now)) {
+            throw new InvalidStateTransitionException("yêu cầu trả hàng", request.status(), "REJECTED");
+        }
+        audit.record(AuditEntry.of("RETURN_REQUEST_REJECTED").entity("return_requests", requestId)
+                .before(Map.of("status", request.status()))
+                .after(Map.of("status", "REJECTED", "decidedBy", actorId, "decidedAt", now))
+                .reason(reason));
+        notifications.enqueue(new NotificationRequest(NotificationTemplateCode.RETURN_REJECTED_APP, Channel.IN_APP,
+                request.createdBy(), null, Map.of("ma_tra_hang", request.code(), "ma_don", request.orderCode(),
+                        "ly_do", reason), null));
+        List<ReturnRequestResponse.Line> lines = requests.listLines(requestId).stream()
+                .map(line -> new ReturnRequestResponse.Line(line.orderLineId(), line.name(), line.unitPrice(),
+                        line.quantity())).toList();
+        return new ReturnRequestResponse(requestId, request.code(), request.orderId(), branchId, "REJECTED",
+                CreateReturnRequest.Reason.valueOf(request.reasonCode()), request.reasonNote(), lines, null, null,
+                reason, request.createdAt(), now);
+    }
+
+    private long checkActor(long branchId, Role role) {
+        scope.check(branchId);
+        long actorId = scope.current().accountId();
+        if (staff.findStaffForShare(actorId).filter(actor -> actor.active() && actor.role() == role
+                && Long.valueOf(branchId).equals(actor.branchId())).isEmpty()) {
+            throw new AccessDeniedScopeException("branch:" + branchId, "account:" + actorId);
+        }
+        return actorId;
     }
 
     private void checkWindow(ReturnOrderSnapshot order, Instant now) {

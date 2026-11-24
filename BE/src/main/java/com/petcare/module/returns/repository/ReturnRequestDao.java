@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -70,5 +71,53 @@ public class ReturnRequestDao {
                 INSERT INTO return_request_lines (request_id, order_line_id, quantity, created_at, updated_at)
                 VALUES (:request, :line, :quantity, :now, :now)
                 """, parameters);
+    }
+
+    public Optional<Long> findBranch(long requestId) {
+        return jdbc.query("""
+                SELECT branch_id FROM return_requests WHERE id = :id
+                """, new MapSqlParameterSource("id", requestId), (row, index) -> row.getLong("branch_id"))
+                .stream().findFirst();
+    }
+
+    public record DecisionTarget(String code, long orderId, String orderCode, String status, String reasonCode,
+                                 String reasonNote, long createdBy, Instant createdAt) {}
+
+    public Optional<DecisionTarget> lockForDecision(long requestId) {
+        return jdbc.query("""
+                SELECT request.code, request.order_id, orders.code AS order_code, request.status, request.reason_code,
+                       request.reason_note, request.created_by, request.created_at
+                FROM return_requests request
+                JOIN orders ON orders.id = request.order_id
+                WHERE request.id = :id
+                FOR NO KEY UPDATE OF request
+                """, new MapSqlParameterSource("id", requestId), (row, index) -> new DecisionTarget(
+                        row.getString("code"), row.getLong("order_id"), row.getString("order_code"),
+                        row.getString("status"), row.getString("reason_code"), row.getString("reason_note"),
+                        row.getLong("created_by"), row.getTimestamp("created_at").toInstant())).stream().findFirst();
+    }
+
+    public boolean rejectPending(long requestId, long actorId, String reason, Instant now) {
+        return jdbc.update("""
+                UPDATE return_requests
+                SET status = 'REJECTED', decided_by = :actor, decision_note = :reason, decided_at = :now,
+                    updated_at = :now
+                WHERE id = :id AND status = 'PENDING'
+                """, new MapSqlParameterSource("id", requestId).addValue("actor", actorId)
+                .addValue("reason", reason).addValue("now", Timestamp.from(now))) == 1;
+    }
+
+    public record StoredLine(long orderLineId, String name, long unitPrice, int quantity) {}
+
+    public List<StoredLine> listLines(long requestId) {
+        return jdbc.query("""
+                SELECT line.order_line_id, orders_line.description, orders_line.unit_price, line.quantity
+                FROM return_request_lines line
+                JOIN order_lines orders_line ON orders_line.id = line.order_line_id
+                WHERE line.request_id = :id
+                ORDER BY line.id
+                """, new MapSqlParameterSource("id", requestId), (row, index) -> new StoredLine(
+                        row.getLong("order_line_id"), row.getString("description"), row.getLong("unit_price"),
+                        row.getInt("quantity")));
     }
 }
