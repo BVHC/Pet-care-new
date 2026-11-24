@@ -26,6 +26,19 @@ import com.petcare.platform.exception.BusinessRuleViolationException;
  */
 class DocumentFileReaderTest {
 
+    /** Trần mặc định của [CFG] {@code ai.ingest.max_file_kb} (2048 kB); reader không còn hằng, nhận trần làm tham số. */
+    private static final int LIMIT = 2 * 1024 * 1024;
+
+    private static DocumentFileReader.Extracted read(String fileName, byte[] bytes) {
+        return DocumentFileReader.read(fileName, bytes, LIMIT);
+    }
+
+    private static byte[] filled(int size) {
+        byte[] bytes = new byte[size];
+        java.util.Arrays.fill(bytes, (byte) 'x');
+        return bytes;
+    }
+
     private static byte[] utf8(String text) {
         return text.getBytes(StandardCharsets.UTF_8);
     }
@@ -69,37 +82,37 @@ class DocumentFileReaderTest {
     @Test
     void markdownAndTextKeepTheTextDropTheBomAndNormalizeLineEndings() {
         byte[] bytes = utf8("﻿# Chăm sóc mèo\r\n\r\nCho ăn đủ bữa.\r\n");
-        assertThat(DocumentFileReader.read("meo.md", bytes).text()).isEqualTo("# Chăm sóc mèo\n\nCho ăn đủ bữa.");
-        assertThat(DocumentFileReader.read("meo.TXT", bytes).kind()).isEqualTo("TXT");
+        assertThat(read("meo.md", bytes).text()).isEqualTo("# Chăm sóc mèo\n\nCho ăn đủ bữa.");
+        assertThat(read("meo.TXT", bytes).kind()).isEqualTo("TXT");
     }
 
     @Test
     void markdownFrontmatterIsDroppedAndItsTitleBecomesTheTitleHint() {
         byte[] bytes = utf8("---\r\ndocument_id: PET-DOG-003\r\ntitle: Hành vi và huấn luyện chó\r\nstatus: DRAFT\r\n---\r\n\r\n# Hành vi\r\n\r\nNội dung");
-        DocumentFileReader.Extracted extracted = DocumentFileReader.read("DOG_BEHAVIOR.md", bytes);
+        DocumentFileReader.Extracted extracted = read("DOG_BEHAVIOR.md", bytes);
         assertThat(extracted.text()).isEqualTo("# Hành vi\n\nNội dung");
         assertThat(extracted.titleHint()).isEqualTo("Hành vi và huấn luyện chó");
     }
 
     @Test
     void textWithoutFrontmatterHasNoTitleHintAndALoneDashLineIsKept() {
-        assertThat(DocumentFileReader.read("a.md", utf8("# Tiêu đề\n\nA")).titleHint()).isNull();
+        assertThat(read("a.md", utf8("# Tiêu đề\n\nA")).titleHint()).isNull();
         String withRule = "Mở đầu\n---\nphần sau";   // đường kẻ ngang giữa văn bản không phải frontmatter
-        assertThat(DocumentFileReader.read("b.md", utf8(withRule)).text()).isEqualTo(withRule);
-        assertThat(DocumentFileReader.read("c.txt", utf8("---\ntitle: Không phải md\n---\nx")).titleHint())
+        assertThat(read("b.md", utf8(withRule)).text()).isEqualTo(withRule);
+        assertThat(read("c.txt", utf8("---\ntitle: Không phải md\n---\nx")).titleHint())
                 .as(".txt không có frontmatter").isNull();
     }
 
     @Test
     void docxHeadingStylesBecomeMarkdownHeadings() throws Exception {
-        String text = DocumentFileReader.read("goc.docx", docx("Vệ sinh tai", "Lau tai nhẹ nhàng.")).text();
+        String text = read("goc.docx", docx("Vệ sinh tai", "Lau tai nhẹ nhàng.")).text();
         assertThat(text).contains("## Vệ sinh tai").contains("Lau tai nhẹ nhàng.");
         assertThat(text.indexOf("## Vệ sinh tai")).isLessThan(text.indexOf("Lau tai"));
     }
 
     @Test
     void pdfTextIsExtracted() throws Exception {
-        assertThat(DocumentFileReader.read("v.pdf", pdf("Vaccine schedule basics")).text())
+        assertThat(read("v.pdf", pdf("Vaccine schedule basics")).text())
                 .contains("Vaccine schedule basics");
     }
 
@@ -107,26 +120,40 @@ class DocumentFileReaderTest {
 
     @Test
     void aPdfWithoutAnyTextLayerIsRejectedBecauseOcrIsOutOfScope() throws Exception {
-        assertRejected(() -> DocumentFileReader.read("scan.pdf", pdfBytesUnchecked(null)), "OCR");
+        assertRejected(() -> read("scan.pdf", pdfBytesUnchecked(null)), "OCR");
     }
 
     @Test
     void theExtensionMustMatchTheFirstBytes() throws Exception {
-        assertRejected(() -> DocumentFileReader.read("gia.pdf", utf8("không phải pdf")), "nội dung");
-        assertRejected(() -> DocumentFileReader.read("gia.docx", utf8("không phải zip")), "nội dung");
-        assertRejected(() -> DocumentFileReader.read("gia.docx", pdfBytesUnchecked("x")), "nội dung");
+        assertRejected(() -> read("gia.pdf", utf8("không phải pdf")), "nội dung");
+        assertRejected(() -> read("gia.docx", utf8("không phải zip")), "nội dung");
+        assertRejected(() -> read("gia.docx", pdfBytesUnchecked("x")), "nội dung");
     }
 
     @Test
     void unsupportedExtensionsAreRejected() {
-        assertRejected(() -> DocumentFileReader.read("chay.exe", utf8("x")), "định dạng");
-        assertRejected(() -> DocumentFileReader.read("khongduoi", utf8("x")), "định dạng");
+        assertRejected(() -> read("chay.exe", utf8("x")), "định dạng");
+        assertRejected(() -> read("khongduoi", utf8("x")), "định dạng");
     }
 
     @Test
     void emptyAndOversizedFilesAreRejected() {
-        assertRejected(() -> DocumentFileReader.read("rong.md", new byte[0]), "rỗng");
-        assertRejected(() -> DocumentFileReader.read("lon.txt", new byte[DocumentFileReader.MAX_FILE_BYTES + 1]), "tối đa");
+        assertRejected(() -> read("rong.md", new byte[0]), "rỗng");
+        assertRejected(() -> read("lon.txt", new byte[LIMIT + 1]), "tối đa");
+    }
+
+    @Test
+    void theLimitIsAParameterSoAFileOfExactlyThatSizeIsAcceptedAndOneByteMoreIsNot() {
+        int limit = 256 * 1024;
+        assertThat(DocumentFileReader.read("vua.txt", filled(limit), limit).text()).hasSize(limit);
+        assertRejected(() -> DocumentFileReader.read("qua.txt", filled(limit + 1), limit), "tối đa 256 kB");
+    }
+
+    @Test
+    void aLargerConfiguredLimitAcceptsWhatTheDefaultRejects() {
+        byte[] threeMegabytes = filled(3 * 1024 * 1024);
+        assertRejected(() -> read("lon.txt", threeMegabytes), "tối đa 2048 kB");
+        assertThat(DocumentFileReader.read("lon.txt", threeMegabytes, 10_240 * 1024).text()).hasSize(threeMegabytes.length);
     }
 
     @Test
@@ -142,8 +169,8 @@ class DocumentFileReaderTest {
             zip.closeEntry();
         }
         byte[] bomb = out.toByteArray();
-        assertThat(bomb.length).isLessThan(DocumentFileReader.MAX_FILE_BYTES);
-        assertRejected(() -> DocumentFileReader.read("bom.docx", bomb), "đọc được");
+        assertThat(bomb.length).isLessThan(LIMIT);
+        assertRejected(() -> read("bom.docx", bomb), "đọc được");
     }
 
     // ---------------------------------------------------------------- tách

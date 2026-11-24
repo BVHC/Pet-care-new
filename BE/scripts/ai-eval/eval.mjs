@@ -12,6 +12,7 @@
 // Chạy (BE 8082 + DB demo 5433 + GEMINI_API_KEY trong tiến trình BE; KB đã nạp):
 //   EVAL_PASSWORD=... node BE/scripts/ai-eval/eval.mjs --label t77 [--api http://localhost:8082] [--gap-ms 7000] [--runs 1]
 //        [--only Q01,Q02] [--no-db] [--container petcare-seed-pg] [--db petcare_seed] [--summarize] [--dry]
+//        [--questions BE/scripts/spike/questions-v1.1.json]   (mặc định questions.json; bản v1.1 chỉ đổi kỳ vọng Q08, Q14, Q20, lý do ở tệp đó)
 // - `--dry`: đăng nhập từng khách, tra id thú theo tên, in kế hoạch rồi thoát; KHÔNG gửi câu chat nào (không trừ hạn mức).
 // - Giới hạn tần suất của chính BE (BR-AI-09): 10 câu / phút và 60 câu / giờ mỗi IP, dùng chung hai endpoint chat; MỌI request
 //   chat đều tính (kể cả 4xx). Một lượt 43 câu cách nhau 7 giây là đủ dưới cả hai; hai lượt không nằm chung một giờ. Gặp 429
@@ -38,7 +39,8 @@ const USE_DB = args['no-db'] !== 'true';
 const CONTAINER = args.container ?? 'petcare-seed-pg';
 const DB_NAME = args.db ?? 'petcare_seed';
 const only = args.only ? new Set(args.only.split(',')) : null;
-const fx = JSON.parse(readFileSync(`${dir}../spike/questions.json`, 'utf8'));
+const questionsFile = args.questions ?? `${dir}../spike/questions.json`;   // mặc định giữ bộ gốc bất biến (ADR-0136 D6)
+const fx = JSON.parse(readFileSync(questionsFile, 'utf8'));
 const questions = fx.questions.filter((q) => !only || only.has(q.id));
 const outDir = `${dir}results`;
 const jsonl = `${outDir}/t77-${label}.jsonl`;
@@ -195,7 +197,7 @@ function summarize() {
   }
   const tok = llmRows.filter((r) => r.inputTokens != null);
   return {
-    label, finishedAt: new Date().toISOString(), api: API, model: 'đọc ở app.ai.llm-model của BE (mặc định gemini-3.1-flash-lite, ADR-0122)',
+    label, questionsFile: questionsFile.replace(/^.*[\\/]/, ''), finishedAt: new Date().toISOString(), api: API, model: 'đọc ở app.ai.llm-model của BE (mặc định gemini-3.1-flash-lite, ADR-0122)',
     gapMs: GAP_MS, rows: all.length, rowsPassed: all.filter((r) => r.pass).length, httpErrors: all.filter((r) => r.status !== 200).length,
     rateLimitedRetries: all.reduce((n, r) => n + r.rateLimited, 0),
     groups: byGroup, endpoints: count(all.map((r) => r.endpoint ?? 'public')),

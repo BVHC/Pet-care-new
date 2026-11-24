@@ -255,6 +255,45 @@ class AiSchemaIT {
         assertThat(jdbc.update("UPDATE ai_documents SET external_id = ? WHERE id = ?", id + "-2", second)).isOne();
     }
 
+    /** V59 (docs/adr/0147): topic thêm {@code SAFETY} (cấp cứu, sơ cứu, ngộ độc) và {@code LIFESTYLE} (nhận nuôi, đi lại); sáu giá trị cũ giữ. */
+    @ParameterizedTest(name = "topic {0} được nhận")
+    @CsvSource({"CARE", "NUTRITION", "BEHAVIOR", "HYGIENE", "VACCINATION", "CLINIC_INFO", "SAFETY", "LIFESTYLE"})
+    void topicAcceptsTheEightValues(String topic) {
+        assertThat(jdbc.update("""
+                INSERT INTO ai_documents (source_type, title, topic, species, content, source_note, status)
+                VALUES ('MANUAL', ?, ?, 'ALL', 'x', 'Nguồn', 'DRAFT')""", TAG + " " + UUID.randomUUID(), topic)).isOne();
+    }
+
+    /** V59: {@code risk_level} NULL cho tài liệu cũ; có giá trị thì chỉ LOW / MODERATE / HIGH; VARCHAR(30) như mọi cột enum (SchemaMigrationIT). */
+    @ParameterizedTest(name = "risk_level {0} được nhận")
+    @CsvSource({"LOW", "MODERATE", "HIGH"})
+    void riskLevelAcceptsTheThreeLevels(String level) {
+        assertThat(jdbc.update("""
+                INSERT INTO ai_documents (source_type, title, topic, species, content, source_note, status, risk_level)
+                VALUES ('MANUAL', ?, 'CARE', 'ALL', 'x', 'Nguồn', 'DRAFT', ?)""", TAG + " " + UUID.randomUUID(), level)).isOne();
+    }
+
+    @Test
+    void riskLevelIsOptionalAndRejectsAnythingElse() {
+        long legacy = manualDocument("DRAFT", null, null);
+
+        assertThat(jdbc.queryForObject("SELECT risk_level FROM ai_documents WHERE id = ?", String.class, legacy)).isNull();
+        assertThatThrownBy(() -> jdbc.update("UPDATE ai_documents SET risk_level = 'EXTREME' WHERE id = ?", legacy))
+                .hasMessageContaining("ck_ai_documents_risk_level");
+        assertThatThrownBy(() -> jdbc.update("UPDATE ai_documents SET risk_level = 'low' WHERE id = ?", legacy))
+                .hasMessageContaining("ck_ai_documents_risk_level");
+    }
+
+    /** V59 (BR-AI-29): trần cỡ file nạp là [CFG] INT, mặc định 2048 kB, khoảng 256–10240. */
+    @Test
+    void theIngestLimitIsAnIntConfigWithTheRangeOfAdr0134() {
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT value, value_type, min_value, max_value, unit FROM system_configs WHERE key = 'ai.ingest.max_file_kb'");
+
+        assertThat(row).containsEntry("value", "2048").containsEntry("value_type", "INT")
+                .containsEntry("min_value", "256").containsEntry("max_value", "10240").containsEntry("unit", "kB");
+    }
+
     @Test
     void theBusinessSwitchStartsOffAndIsABooleanConfig() {
         Map<String, Object> row = jdbc.queryForMap(

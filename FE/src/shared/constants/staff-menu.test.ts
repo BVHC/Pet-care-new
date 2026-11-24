@@ -39,6 +39,15 @@ describe('staff menu', () => {
     expect(pageLabel('/admin/payments')).toBe('Ca thu ngân');
   });
 
+  // T68: shop-v1 #12, #13 cho A06 và A05 (chỉ xem); mọi thao tác ghi chỉ A06. AdminGuard lấy quyền trang từ chính mục menu này (rolesForPath).
+  it('gives the online orders page to the receptionist and, read-only, the branch manager (UC65); every other role is kept out', () => {
+    expect(rolesForPath('/admin/orders')).toEqual(['RECEPTIONIST', 'BRANCH_MANAGER']);
+    expect(labels('RECEPTIONIST')).toContain('Đơn online');
+    expect(labels('BRANCH_MANAGER')).toContain('Đơn online');
+    for (const role of ['ADMIN', 'SUPER_MANAGER', 'VET', 'CARETAKER'] as const) expect(labels(role)).not.toContain('Đơn online');
+    expect(pageLabel('/admin/orders')).toBe('Đơn online');
+  });
+
   it('gives vets and caretakers the boarding page and the read-only customer lookup besides their workspace (UC23, UC57)', () => {
     // Tầng 3 (T57): thêm Nội trú (UC55, 56), Lịch làm việc (UC35, 36); VET thêm Bài viết của tôi (UC80) và Kho hàng (chỉ tab Truy vết lô, UC79).
     expect(labels('VET')).toEqual(['Lưu trú', 'Nội trú', 'Lịch làm việc', 'Tra cứu khách & thú', 'Bài viết của tôi', 'Kho hàng']);

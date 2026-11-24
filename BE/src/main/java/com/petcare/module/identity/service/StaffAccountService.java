@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.SortedMap;
 import java.util.stream.Collectors;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.module.identity.api.Role;
+import com.petcare.module.identity.api.StaffLeftBranchEvent;
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.CreateStaffRequest;
 import com.petcare.module.identity.dto.ReactivateStaffRequest;
@@ -77,12 +79,13 @@ public class StaffAccountService {
     private final BranchApi branchLocks;
     private final VisitQueryApi visitQueries;
     private final CashierShiftQueryApi cashierShifts;
+    private final ApplicationEventPublisher events;
 
     public StaffAccountService(AccountRepository accounts, StaffProfileRepository staffProfiles,
             AccountTransitionHandler transitions, StaffHierarchyPolicy policy, BranchScope branchScope,
             BranchQueryApi branches, SessionService sessions, NotificationApi notifications, AuditRecorder audit,
             StaffAdminMapper mapper, StaffPresence presence, BranchApi branchLocks, VisitQueryApi visitQueries,
-            CashierShiftQueryApi cashierShifts) {
+            CashierShiftQueryApi cashierShifts, ApplicationEventPublisher events) {
         this.accounts = accounts;
         this.staffProfiles = staffProfiles;
         this.transitions = transitions;
@@ -97,6 +100,7 @@ public class StaffAccountService {
         this.branchLocks = branchLocks;
         this.visitQueries = visitQueries;
         this.cashierShifts = cashierShifts;
+        this.events = events;
     }
 
     /**
@@ -207,6 +211,8 @@ public class StaffAccountService {
      * gọi, id tăng dần) → {@code accounts} → đọc {@code staff_profiles}, rồi: phân cấp (403) → đã ở chi nhánh đích thì
      * trả nguyên trạng → chi nhánh vừa đổi trong lúc chờ khóa → 409 → BR-QT-03 → BR-QT-04 trên chi nhánh nguồn →
      * BR-QT-08 (cuối cùng: hai interface còn là placeholder, nợ D016). Không hủy phiên (chi nhánh đọc lại mỗi request).
+     * Sau {@code flush} phát {@link StaffLeftBranchEvent} (chi nhánh <b>cũ</b>, lấy từ hồ sơ đã khóa, không từ body):
+     * workforce hủy phân ca chưa bắt đầu trong cùng transaction (BR-NS-09, docs/adr/0149 bước 5).
      */
     @Transactional
     public StaffResponse transferStaff(Long accountId, TransferStaffRequest request) {
@@ -235,6 +241,8 @@ public class StaffAccountService {
                 .before(branchSnapshot(branchId)).after(branchSnapshot(newBranchId)));
         staffProfiles.flush();
 
+        events.publishEvent(new StaffLeftBranchEvent(accountId, branchId));
+
         log.info("STAFF_TRANSFERRED accountId={} from={} to={}", accountId, branchId, newBranchId);
         return currentResponse(accountId);
     }
@@ -244,7 +252,9 @@ public class StaffAccountService {
      * (chi nhánh hiện tại; SUPER_MANAGER không có) → {@code accounts} → đọc {@code staff_profiles}, rồi: phân cấp (403,
      * audit do facade) → BR-QT-12 → chỉ khi {@code ACTIVE}: chi nhánh vừa đổi (409) → BR-QT-04 (đếm dưới khóa chi
      * nhánh, trả nợ D014) → BR-QT-08 (cuối cùng, bỏ qua với SUPER_MANAGER) →
-     * {@code validateTransition} (409 nếu đã {@code DISABLED}). Hủy mọi phiên, chuyển offline; không gửi email.
+     * {@code validateTransition} (409 nếu đã {@code DISABLED}). Hủy mọi phiên, chuyển offline; không gửi email. Sau
+     * {@code flush}, nếu nhân viên có chi nhánh (SUPER_MANAGER thì không), phát {@link StaffLeftBranchEvent} để workforce
+     * hủy phân ca chưa bắt đầu trong cùng transaction (BR-NS-09, docs/adr/0149 bước 5).
      */
     @Transactional
     public StaffResponse disableStaff(Long accountId) {
@@ -276,6 +286,10 @@ public class StaffAccountService {
         audit.record(AuditEntry.of(QtAuditActions.STAFF_DISABLED).entity("accounts", accountId)
                 .before(statusSnapshot(before, null, false)).after(statusSnapshot(account.getStatus(), null, false)));
         staffProfiles.flush();
+
+        if (branchId != null) {
+            events.publishEvent(new StaffLeftBranchEvent(accountId, branchId));
+        }
 
         log.info("STAFF_DISABLED accountId={} role={} branchId={}", accountId, account.getRole(), branchId);
         return currentResponse(accountId);

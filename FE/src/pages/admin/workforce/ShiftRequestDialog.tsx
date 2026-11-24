@@ -16,7 +16,7 @@ export interface ShiftOption {
 
 interface Props {
   assignment: ShiftAssignment;
-  /** Ca đích cho đổi ca; rỗng thì chỉ xin nghỉ được. */
+  /** Ca đích cho đổi ca (ca đang dùng của chi nhánh trừ ca hiện tại, #1); rỗng thì chỉ xin nghỉ được. */
   options: ShiftOption[];
   onClose: () => void;
   onDone: (message: string) => void;
@@ -76,7 +76,7 @@ export function ShiftRequestDialog({ assignment: a, options, onClose, onDone }: 
             </label>
           ))}
         </div>
-        {options.length === 0 && <p className="mt-1 text-xs text-(--text-tertiary)">Chưa có ca khác trong lịch của bạn để đổi sang.</p>}
+        {options.length === 0 && <p className="mt-1 text-xs text-(--text-tertiary)">Chi nhánh chưa có ca khác đang dùng để đổi sang.</p>}
       </fieldset>
       {type === 'SWAP' && (
         <Field label="Đổi sang ca">

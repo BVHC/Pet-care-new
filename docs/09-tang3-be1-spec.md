@@ -131,7 +131,7 @@ Hợp đồng chéo: `StockApi.issueMaterials(branchId, lines)` trả danh sách
 
 | Nhóm | UC / ST | FSM | Bảng mới / cột | Module API (endpoint) |
 |---|---|---|---|---|
-| Nhân sự (đã làm ở `02`–`06`) | UC34–38 | #11, #12 | 3 | `workforce` (14) |
+| Nhân sự (đã làm ở `02`–`06`) | UC34–38 | #11, #12 | 3 | `workforce` (17) |
 | ~~B. Phẫu thuật~~ (bỏ, ADR-0125) | ~~UC50~~ | ~~#23~~ | — | — |
 | C. Nội trú | UC55, UC56 | #24, #25 | 3 | `inpatient` (10) |
 | E. Vật tư tiêu hao | ST07 | — | 1 | `materialuse` (3) |

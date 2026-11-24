@@ -4,13 +4,13 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { toApiError } from '../api/api-error';
 import { workforceApi } from '../api/workforce.api';
 import { retryDelay, shouldRetry } from '../constants/realtime';
-import type { MyShiftAssignmentQuery, ShiftAssignmentQuery, ShiftDefinitionQuery, ShiftRequestQuery } from '../types/workforce';
+import type { MyShiftAssignmentQuery, ShiftAssignmentQuery, ShiftDefinitionQuery, ShiftRequestQuery, ShiftWeeklySummaryQuery } from '../types/workforce';
 
 /** Lỗi 4xx (400 khoảng ngày, 403 vai trò) không đổi khi thử lại; 5xx và mất mạng thử tối đa 3 lần. */
 const opts = { retry: (count: number, error: unknown) => shouldRetry(count, toApiError(error)), retryDelay } as const;
 const paged = { ...opts, placeholderData: keepPreviousData } as const;
 
-/** #1 (BRANCH_MANAGER). */
+/** #1 (BRANCH_MANAGER; A06–A08 cũng gọi được, chỉ nhận ca đang dùng). */
 export const useShiftDefinitions = (query: ShiftDefinitionQuery = {}) =>
   useQuery({ queryKey: ['workforce', 'definitions', query], queryFn: () => workforceApi.listShiftDefinitions(query), ...opts });
 
@@ -30,8 +30,16 @@ export const useMyShiftRequests = (query: ShiftRequestQuery = {}) =>
 export const useShiftRequests = (query: ShiftRequestQuery = {}) =>
   useQuery({ queryKey: ['workforce', 'requests', query], queryFn: () => workforceApi.listShiftRequests(query), ...paged });
 
+/** #17 (A06–A08): đăng ký ca của tôi trong tuần `weekStart` (thứ Hai) + định mức. */
+export const useMyShiftRegistration = (weekStart: string, enabled = true) =>
+  useQuery({ queryKey: ['workforce', 'my-registration', weekStart], queryFn: () => workforceApi.getMyShiftRegistration(weekStart), enabled, ...paged });
+
+/** #16 (BRANCH_MANAGER): số ca mỗi nhân viên trong tuần. */
+export const useShiftWeeklySummaries = (query: ShiftWeeklySummaryQuery, enabled = true) =>
+  useQuery({ queryKey: ['workforce', 'weekly-summaries', query], queryFn: () => workforceApi.listShiftWeeklySummaries(query), enabled, ...paged });
+
 /**
- * Lệnh ghi #2, #3, #5, #6, #7, #9, #11, #13, #14: `useWorkforceMutation(workforceApi.approveShiftRequest)`.
+ * Lệnh ghi #2, #3, #5, #6, #7, #9, #11, #13, #14, #15: `useWorkforceMutation(workforceApi.approveShiftRequest)`.
  * Hàm nhiều tham số thì bọc lại: `({ id, body }) => workforceApi.xxx(id, body)` (mutationFn nhận đúng một biến).
  */
 export function useWorkforceMutation<A, R>(fn: (args: A) => Promise<R>) {

@@ -16,7 +16,7 @@ import { addDays, isoDayOfWeek } from '@/shared/utils/branch-schedule';
 import { vnDate } from '@/shared/utils/vn-time';
 import { AssignDialog } from './AssignDialog';
 import { ReasonDialog } from './FormDialog';
-import { ASSIGNMENT_STATUS_LABELS, ASSIGNMENT_STATUS_TONE, dayLabel, hasStarted, shiftTime } from './labels';
+import { ASSIGNMENT_SOURCE_LABELS, ASSIGNMENT_STATUS_LABELS, ASSIGNMENT_STATUS_TONE, dayLabel, hasStarted, shiftTime } from './labels';
 
 const PAGE_SIZE = 100;
 const weekStartOf = (iso: string) => addDays(iso, 1 - isoDayOfWeek(iso));
@@ -94,7 +94,9 @@ export function AssignmentsTab() {
                   </td>
                   <td className="align-top">
                     <span className="block font-medium text-(--text-primary)">{a.shiftName}</span>
-                    <span className="text-xs tabular-nums text-(--text-secondary)">{shiftTime(a)}</span>
+                    <span className="text-xs tabular-nums text-(--text-secondary)">
+                      {shiftTime(a)} · {ASSIGNMENT_SOURCE_LABELS[a.source]}
+                    </span>
                   </td>
                   <td className="align-top">{a.staffName}</td>
                   <td className="align-top">

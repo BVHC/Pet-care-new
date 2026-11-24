@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
@@ -30,6 +31,7 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.beans.BeanUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
@@ -40,6 +42,7 @@ import com.petcare.module.branch.api.BranchQueryApi;
 import com.petcare.module.branch.api.BranchQueryApi.BranchStatus;
 import com.petcare.module.care.api.NotificationApi;
 import com.petcare.module.identity.api.Role;
+import com.petcare.module.identity.api.StaffLeftBranchEvent;
 import com.petcare.module.identity.dto.ChangeRoleRequest;
 import com.petcare.module.identity.dto.StaffResponse;
 import com.petcare.module.identity.dto.TransferStaffRequest;
@@ -95,9 +98,10 @@ class StaffRoleTransferServiceTest {
     private final BranchApi branchLocks = mock(BranchApi.class);
     private final VisitQueryApi visitQueries = mock(VisitQueryApi.class);
     private final CashierShiftQueryApi cashierShifts = mock(CashierShiftQueryApi.class);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final StaffAccountService service = new StaffAccountService(accounts, staffProfiles,
             new AccountTransitionHandler(), new StaffHierarchyPolicy(), branchScope, branches, sessions, notifications,
-            audit, mapper, presence, branchLocks, visitQueries, cashierShifts);
+            audit, mapper, presence, branchLocks, visitQueries, cashierShifts, events);
 
     @BeforeEach
     void setUp() {
@@ -132,7 +136,8 @@ class StaffRoleTransferServiceTest {
         order.verify(staffProfiles).findStaffDetail(TARGET);
         assertThat(target.account().getRole()).isEqualTo(Role.RECEPTIONIST);
         verify(staffProfiles, never()).countActiveBranchManagers(anyLong());
-        verifyNoInteractions(visitQueries, cashierShifts, sessions, notifications);
+        // Đổi chức vụ không phải "rời chi nhánh" (BR-NS-09 chỉ nói vô hiệu hóa và điều chuyển; nợ D073)
+        verifyNoInteractions(visitQueries, cashierShifts, sessions, notifications, events);
     }
 
     @Test
@@ -299,7 +304,7 @@ class StaffRoleTransferServiceTest {
         StaffResponse response = service.transferStaff(TARGET, new TransferStaffRequest(DRAFT_BRANCH));
 
         assertThat(response).isEqualTo(mapper.toResponse(after, false));
-        InOrder order = inOrder(staffProfiles, branchLocks, accounts, visitQueries, cashierShifts, audit);
+        InOrder order = inOrder(staffProfiles, branchLocks, accounts, visitQueries, cashierShifts, audit, events);
         order.verify(staffProfiles).findStaffRow(TARGET);
         order.verify(branchLocks).lockForStaffChange(Set.of(ACTIVE_BRANCH, DRAFT_BRANCH));
         order.verify(accounts).findByIdForUpdate(TARGET);
@@ -308,7 +313,10 @@ class StaffRoleTransferServiceTest {
         order.verify(cashierShifts).findOpenShift(TARGET);
         order.verify(audit).record(any());
         order.verify(staffProfiles).flush();
+        // BR-NS-09: sự kiện phát SAU flush, mang chi nhánh CŨ (ACTIVE_BRANCH), không phải chi nhánh đích của body
+        order.verify(events).publishEvent(new StaffLeftBranchEvent(TARGET, ACTIVE_BRANCH));
         order.verify(staffProfiles).findStaffDetail(TARGET);
+        verifyNoMoreInteractions(events);
         assertThat(target.profile().getBranchId()).isEqualTo(DRAFT_BRANCH);
 
         AuditEntry entry = capturedAudit();
@@ -327,7 +335,7 @@ class StaffRoleTransferServiceTest {
         assertThat(service.transferStaff(TARGET, new TransferStaffRequest(ACTIVE_BRANCH)))
                 .isEqualTo(mapper.toResponse(current, false));
         assertThat(target.profile().getBranchId()).isEqualTo(ACTIVE_BRANCH);
-        verifyNoInteractions(visitQueries, cashierShifts, audit);
+        verifyNoInteractions(visitQueries, cashierShifts, audit, events);
         verify(staffProfiles, never()).flush();
     }
 
@@ -412,7 +420,7 @@ class StaffRoleTransferServiceTest {
 
         givenDetail(Role.VET, OTHER_ACTIVE_BRANCH);
         service.transferStaff(TARGET, new TransferStaffRequest(OTHER_ACTIVE_BRANCH));
-        verifyNoInteractions(audit, visitQueries, cashierShifts);
+        verifyNoInteractions(audit, visitQueries, cashierShifts, events);
     }
 
     @Test
@@ -502,7 +510,8 @@ class StaffRoleTransferServiceTest {
         verify(staffProfiles, never()).flush();
         verify(staffProfiles, never()).save(any());
         verify(accounts, never()).save(any());
-        verifyNoInteractions(audit, sessions, notifications);
+        // Mọi nhánh lỗi / no-op dừng trước điểm phát: không có sự kiện nào rời identity
+        verifyNoInteractions(audit, sessions, notifications, events);
     }
 
     private static void assertRule(ThrowingCallable call, String ruleId, String message) {

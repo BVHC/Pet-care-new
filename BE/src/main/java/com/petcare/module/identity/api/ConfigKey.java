@@ -75,9 +75,10 @@ public enum ConfigKey {
     FEEDBACK_MAX_PER_DAY("feedback.max_per_day", INT),                     // BR-DG-01
     FEEDBACK_RETENTION_DAYS("feedback.retention_days", INT),               // BR-DG-05 (V51, docs/adr/0122)
 
-    // NS — nhân sự (docs/02 BR-NS-04, BR-NS-07, docs/adr/0113; V40)
+    // NS — nhân sự (docs/02 BR-NS-04, BR-NS-07, BR-NS-12, docs/adr/0113, 0123; V40, V61)
     WORKFORCE_REQUEST_LEAD_HOURS("workforce.request_lead_hours", INT),     // BR-NS-04
     WORKFORCE_ABSENCE_REPORT_MAX_DAYS("workforce.absence_report_max_days", INT), // BR-NS-07
+    WORKFORCE_WEEKLY_REQUIRED_SHIFTS("workforce.weekly_required_shifts", INT), // BR-NS-12 (V61, docs/adr/0123)
 
     // AI (docs/07 §4.6, docs/adr/0110; V35). Tên có ba đoạn <nhóm>.<mục>.<tên>
     AI_CHAT_MAX_QUESTION_CHARS("ai.chat.max_question_chars", INT),                       // BR-AI-08
@@ -102,6 +103,7 @@ public enum ConfigKey {
     AI_CHAT_BUSINESS_INTENT_ENABLED("ai.chat.business_intent_enabled", BOOL),            // BR-AI-31 (V53, docs/adr/0134)
     AI_CHAT_PET_CONTEXT_ENABLED("ai.chat.pet_context_enabled", BOOL),                    // BR-AI-32 (V56, docs/adr/0135)
     AI_CHAT_OPEN_DOMAIN_ENABLED("ai.chat.open_domain_enabled", BOOL),                    // BR-AI-33 chế độ mở (V57, docs/adr/0136)
+    AI_INGEST_MAX_FILE_KB("ai.ingest.max_file_kb", INT),                                 // BR-AI-29 (V59, docs/adr/0147)
 
     // BH online, TG online, trả hàng, bình luận (docs/08 §G, docs/adr/0117; V44, V45, V46, V48)
     SHOP_PAYMENT_WINDOW_HOURS("shop.payment_window_hours", INT),         // BR-BH-12

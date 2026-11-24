@@ -1,4 +1,4 @@
-// Nhân sự (UC34–38) theo docs/api/workforce-v1.md #1–14 (mục Schema + openapi/workforce-v1.yaml). Trường `?` có thể vắng hoặc null.
+// Nhân sự (UC34–38) theo docs/api/workforce-v1.md #1–17 (mục Schema + openapi/workforce-v1.yaml). Trường `?` có thể vắng hoặc null.
 // Giờ trong ngày là `HH:mm`, ngày là `YYYY-MM-DD`, cả hai theo giờ Việt Nam (00-method §3.6).
 
 /** 03 #12. `ON_LEAVE`, `ABSENT`, `CANCELLED` là trạng thái cuối. */
@@ -12,8 +12,12 @@ export type ShiftRequestType = (typeof SHIFT_REQUEST_TYPES)[number];
 export const SHIFT_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'] as const;
 export type ShiftRequestStatus = (typeof SHIFT_REQUEST_STATUSES)[number];
 
-/** Độ dài của hợp đồng (maxLength) và khoảng ngày tối đa của lịch (BR-NS-03). */
-export const WORKFORCE_LIMITS = { name: 60, reason: 300, rangeDays: 62 } as const;
+/** SELF = nhân viên tự đăng ký tuần (BR-NS-11); MANAGER = quản lý phân hộ (BR-NS-02). */
+export const SHIFT_ASSIGNMENT_SOURCES = ['SELF', 'MANAGER'] as const;
+export type ShiftAssignmentSource = (typeof SHIFT_ASSIGNMENT_SOURCES)[number];
+
+/** Độ dài của hợp đồng (maxLength), khoảng ngày tối đa của lịch (BR-NS-03) và số mục tối đa của một lần đăng ký tuần (ADR-0148 mục 12). */
+export const WORKFORCE_LIMITS = { name: 60, reason: 300, rangeDays: 62, registrationItems: 100 } as const;
 
 export interface ShiftDefinition {
   shiftDefinitionId: number;
@@ -50,6 +54,7 @@ export interface ShiftAssignment {
   endTime: string;
   workDate: string;
   status: ShiftAssignmentStatus;
+  source: ShiftAssignmentSource;
   /** Lý do vắng hoặc hủy. */
   reason?: string | null;
   /** Yêu cầu PENDING của phân ca, nếu có (BR-NS-04). */
@@ -98,7 +103,42 @@ export interface RejectShiftRequestRequest {
   decisionNote: string;
 }
 
+// ─── Đăng ký ca theo tuần (#15, #17) và thống kê tuần (#16) ───
+
+export interface ShiftRegistrationItem {
+  workDate: string;
+  shiftDefinitionId: number;
+}
+
+/** Thay cả tuần: mục thiếu so với phân ca SELF hiện có bị hủy, mục mới được tạo (tối đa `WORKFORCE_LIMITS.registrationItems`). */
+export interface PutShiftRegistrationRequest {
+  items: ShiftRegistrationItem[];
+}
+
+/** `assignments` chỉ gồm phân ca SCHEDULED của tuần (SELF và MANAGER); `editableUntil` là 00:00 thứ Hai của `weekStart` giờ Việt Nam, dạng UTC. */
+export interface ShiftRegistration {
+  weekStart: string;
+  requiredShifts: number;
+  shiftCount: number;
+  editableUntil: string;
+  assignments: ShiftAssignment[];
+}
+
+export interface ShiftWeeklySummary {
+  staffId: number;
+  staffName: string;
+  role: 'RECEPTIONIST' | 'VET' | 'CARETAKER';
+  shiftCount: number;
+  requiredShifts: number;
+  meetsRequirement: boolean;
+}
+
 // ─── Tham số truy vấn ───
+
+/** `weekStart` phải là thứ Hai (BR-NS-11), năm 2000–2100. */
+export interface ShiftWeeklySummaryQuery {
+  weekStart: string;
+}
 
 /** `activeOnly` vắng = false (cả ca ngừng dùng). */
 export interface ShiftDefinitionQuery {

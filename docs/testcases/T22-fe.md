@@ -131,7 +131,7 @@
 | 9.3 | Click "Khóa" → modal bắt buộc nhập **lý do** (BR-QT-11) | Submit → 200, isLocked=true, status giữ nguyên (BR-QT-12). Nếu đang đăng nhập, refresh → 401, về login | (test sau) |
 | 9.4 | Khóa chính mình | 400 BR-QT-11, nút ẩn | (test sau) |
 | 9.5 | Khóa tài khoản đã khóa | 409 INVALID_STATE_TRANSITION | (test sau) |
-| 9.6 | Khóa nhân viên A05–A08 còn Visit/ca OPEN (sau T26/T30) | 200 + `pendingWork` liệt kê. UI hiện "Cần reassign: <danh sách>" + link `/admin/queue` hoặc modal "Phân lại" | (test sau — D016) |
+| 9.6 | Khóa nhân viên A05–A08 còn Visit/ca OPEN (sau T26/T30) | 200 + `pendingWork` liệt kê. Sau khi khóa hiện hộp "Quy trình dở dang của <email>" (bảng Loại / Mã / Chi nhánh; lượt đã gọi có nhãn "Cần gán lại"), bấm Đóng thì tắt; người không có việc dở thì không có hộp. Mock chỉ dựng việc dở từ lượt được gán (BS. Minh Anh #5: lượt 2002 cần gán lại, lượt 2102 đang chờ) | Mock; BE thật chưa chạy lại |
 | 9.7 | Khóa BRANCH_MANAGER cuối của CN1 | UI cảnh báo: "Quản lý cuối cùng, sẽ thông báo SUPER_MANAGER qua app (BR-QT-11 LAST_BRANCH_MANAGER_LOCKED_APP)" | (test sau) |
 | 9.8 | Mở khóa (click icon "Mở khóa") → nhập lý do | 200, isLocked=false, status vẫn giữ giá trị trước khi khóa, ghi audit `ACCOUNT_UNLOCKED` | (test sau) |
 | 9.9 | Mở khóa tài khoản không bị khóa | 409 INVALID_STATE_TRANSITION | (test sau) |

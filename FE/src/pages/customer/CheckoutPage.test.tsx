@@ -3,7 +3,7 @@ import { Route } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loginAs, renderRoutes } from '@/components/customer/shop/testing';
 import { ApiError } from '@/shared/api/api-error';
-import { apiClient } from '@/shared/api/axios';
+import { apiClient, paymentGatewayClosed } from '@/shared/api/axios';
 import { installMockApi } from '@/shared/api/mock/mock-api';
 import { paymentApi } from '@/shared/api/payment.api';
 import { profileApi } from '@/shared/api/profile.api';
@@ -13,9 +13,14 @@ import { CheckoutPage } from './CheckoutPage';
 // UC62, shop-v1 #5–7: khach@ có giỏ 486.000 đ, sổ địa chỉ 2 dòng (Nguyễn Thu Trang là mặc định), chi nhánh xử lý duy nhất PetCare Cầu Giấy.
 // Phí vận chuyển mặc định 30.000 đ, miễn phí từ 500.000 đ. Đặt xong sang cổng giả lập `/payment/mock-gateway?code=&amount=`.
 
+// Vitest luôn chạy VITE_API_MOCK=true (toàn mock: cổng giả lập mở). Ca "chế độ hỗn hợp" thay hàm điều kiện bằng vi.mock; ba chế độ được kiểm thật ở
+// `paymentClosedForRealOrders` (mock-scope.test.ts) và dòng VITE_API_MOCK_ONLY đã commit trong .env.example.
+vi.mock('@/shared/api/axios', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/shared/api/axios')>()), paymentGatewayClosed: vi.fn(() => false) }));
+
 beforeAll(() => installMockApi(apiClient));
 beforeEach(async () => {
   sessionStorage.clear();
+  vi.mocked(paymentGatewayClosed).mockReturnValue(false);
   await loginAs();
 });
 afterEach(() => vi.restoreAllMocks());
@@ -80,9 +85,51 @@ describe('CheckoutPage (UC62)', () => {
     await shopApi.clearCart();
     const before = (await shopApi.listMyOrders()).totalElements;
     await user.click(within(summary()).getByRole('button', { name: 'Đặt hàng và thanh toán' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Giỏ hàng đang trống');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Giỏ hàng trống hoặc không còn sản phẩm bán được');
     expect((await shopApi.listMyOrders()).totalElements).toBe(before);
     expect(screen.getByTestId('url')).toHaveTextContent('/checkout');
+  });
+
+  it('hết hàng giữa chừng (400 BR-BH-08 của BE): lỗi hiện ngay chỗ bấm, giữ nguyên màn đặt hàng, nút đặt dùng lại được', async () => {
+    vi.spyOn(shopApi, 'placeOrder').mockRejectedValueOnce(new ApiError('BUSINESS_RULE_VIOLATION', 'Chi nhánh không đủ hàng cho Pate Whiskas 85g (cần 4, còn 3) (BR-BH-08)', 400));
+    const { user } = renderCheckout();
+    await quoted();
+    await user.click(within(summary()).getByRole('button', { name: 'Đặt hàng và thanh toán' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Chi nhánh không đủ hàng cho Pate Whiskas 85g (cần 4, còn 3)');
+    expect(screen.getByTestId('url')).toHaveTextContent('/checkout');
+    await quoted();
+  });
+
+  it('địa chỉ không còn trong sổ (404 của BE, cả địa chỉ của khách khác): báo "địa chỉ giao hàng không hợp lệ", không tạo đơn', async () => {
+    vi.spyOn(shopApi, 'placeOrder').mockRejectedValueOnce(new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy địa chỉ giao hàng #1', 404));
+    const { user } = renderCheckout();
+    await quoted();
+    await user.click(within(summary()).getByRole('button', { name: 'Đặt hàng và thanh toán' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Địa chỉ giao hàng không hợp lệ');
+    expect(screen.getByTestId('url')).toHaveTextContent('/checkout');
+    await quoted();
+  });
+
+  it('báo giá lỗi 404 địa chỉ: cùng thông báo "địa chỉ giao hàng không hợp lệ", khóa nút đặt', async () => {
+    vi.spyOn(shopApi, 'quote').mockRejectedValue(new ApiError('RESOURCE_NOT_FOUND', 'Không tìm thấy địa chỉ giao hàng #1', 404));
+    renderCheckout();
+    const aside = await screen.findByRole('complementary', { name: 'Tóm tắt đơn hàng' });
+    expect(await within(aside).findByRole('alert')).toHaveTextContent('Địa chỉ giao hàng không hợp lệ');
+    expect(within(aside).getByRole('button', { name: 'Đặt hàng và thanh toán' })).toBeDisabled();
+  });
+
+  it('chế độ hỗn hợp (đặt đơn thật, pay còn mock): đặt xong KHÔNG gọi pay, sang chi tiết đơn PENDING_PAYMENT kèm "Cổng thanh toán chưa mở (T65)"', async () => {
+    vi.mocked(paymentGatewayClosed).mockReturnValue(true);
+    const pay = vi.spyOn(paymentApi, 'pay');
+    const { user } = renderCheckout();
+    await quoted();
+    await user.click(within(summary()).getByRole('button', { name: 'Đặt hàng và thanh toán' }));
+    expect(await screen.findByText('Chi tiết đơn')).toBeInTheDocument();
+    expect(await screen.findByText(/Cổng thanh toán chưa mở \(T65\)/)).toBeInTheDocument();
+    expect(pay).not.toHaveBeenCalled();
+    expect(screen.getByTestId('url')).toHaveTextContent(/^\/order\/\d+$/);
+    expect((await shopApi.getCart()).items).toEqual([]);
+    expect((await shopApi.listMyOrders({ size: 1 })).content[0]).toMatchObject({ status: 'PENDING_PAYMENT', total: 516_000 });
   });
 
   it('đã đặt nhưng mở cổng thất bại (409): báo lỗi và đưa tới chi tiết đơn để thanh toán lại', async () => {

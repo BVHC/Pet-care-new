@@ -8,7 +8,6 @@ import { useAiMutation } from '../../../shared/hooks/useAi';
 import {
   AI_LIMITS,
   AI_IMPORT_EXTENSIONS,
-  AI_IMPORT_MAX_BYTES,
   DOCUMENT_SPECIES,
   DOCUMENT_TOPICS,
   type DocumentSpecies,
@@ -53,7 +52,6 @@ export function ImportDocumentDialog({ onClose, onDone }: { onClose: () => void;
     const found: typeof errors = {};
     if (!file) found.file = 'Chọn một file.';
     else if (!AI_IMPORT_EXTENSIONS.includes(extensionOf(file.name))) found.file = 'Chỉ nhận file .md, .txt, .docx, .pdf.';
-    else if (file.size > AI_IMPORT_MAX_BYTES) found.file = 'File vượt quá 2 MB.';
     else if (file.size === 0) found.file = 'File rỗng.';
     if (!topic) found.topic = 'Chọn chủ đề.';
     if (!species) found.species = 'Chọn loài áp dụng.';
@@ -82,7 +80,7 @@ export function ImportDocumentDialog({ onClose, onDone }: { onClose: () => void;
       open
       onOpenChange={(open) => !open && onClose()}
       title="Nạp tài liệu từ file"
-      description="Chấp nhận .md, .txt, .docx, .pdf (tối đa 2 MB). Tài liệu tạo ra là bản nháp, chưa dùng cho chatbot."
+      description="Chấp nhận .md, .txt, .docx, .pdf (cỡ tối đa mặc định 2 MB, đổi được ở Cấu hình hệ thống). Tài liệu tạo ra là bản nháp, chưa dùng cho chatbot."
       submitText="Nạp file"
       loading={importFile.isPending}
       onSubmit={submit}

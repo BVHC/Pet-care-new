@@ -185,6 +185,8 @@ class AiDocumentFsmIT {
                 new Object[] {"nguồn quá 500 ký tự", "sourceNote", "n".repeat(501), 400, "VALIDATION_FAILED", null},
                 new Object[] {"tên người rà soát quá 100 ký tự", "reviewerName", "r".repeat(101), 400, "VALIDATION_FAILED", null},
                 new Object[] {"chủ đề lạ", "topic", "KHONG_CO", 400, "MALFORMED_REQUEST", null},
+                new Object[] {"mức rủi ro lạ", "riskLevel", "EXTREME", 400, "MALFORMED_REQUEST", null},
+                new Object[] {"mức rủi ro viết thường", "riskLevel", "high", 400, "MALFORMED_REQUEST", null},
                 new Object[] {"ngày rà soát sai định dạng", "reviewedOn", "09/11/2026", 400, "MALFORMED_REQUEST", null});
     }
 
@@ -376,6 +378,56 @@ class AiDocumentFsmIT {
                 .containsEntry("topic", "BEHAVIOR").containsEntry("species", "DOG");
     }
 
+    /** T89 (docs/adr/0147): {@code riskLevel} tùy chọn, null cho tài liệu không nêu; chưa dùng lọc truy hồi. */
+    @Test
+    void createTakesAnOptionalRiskLevelAndTheTwoNewTopicsAndLeavesItNullWhenAbsent() {
+        Map<String, Object> withRisk = body("rủi ro");
+        withRisk.put("riskLevel", "HIGH");
+        withRisk.put("topic", "SAFETY");
+        Map<String, Object> without = body("không rủi ro");
+        without.put("topic", "LIFESTYLE");
+
+        Map<String, Object> high = created(call(manager, HttpMethod.POST, BASE, withRisk));
+        Map<String, Object> none = created(call(manager, HttpMethod.POST, BASE, without));
+
+        assertThat(high).containsEntry("riskLevel", "HIGH").containsEntry("topic", "SAFETY");
+        assertThat(none).containsEntry("riskLevel", null).containsEntry("topic", "LIFESTYLE");
+        assertThat(support.row(id(high)).get("risk_level")).isEqualTo("HIGH");
+        assertThat(support.row(id(none)).get("risk_level")).isNull();
+        assertThat(data(call(manager, HttpMethod.GET, BASE + "/" + id(high), null))).containsEntry("riskLevel", "HIGH");
+        assertThat(content(call(manager, HttpMethod.GET, BASE + "?q=" + TAG.toLowerCase(), null)))
+                .extracting(d -> d.get("riskLevel")).containsExactlyInAnyOrder("HIGH", null);
+    }
+
+    @Test
+    void editingOnlyTheRiskLevelOfAPublishedDocumentKeepsStatusVersionAndIndexAndAnAbsentFieldKeepsIt() {
+        long id = doc("PUBLISHED");
+        jdbc.update("UPDATE ai_documents SET indexed_version = 1, index_status = 'INDEXED' WHERE id = ?", id);
+
+        Map<String, Object> edited = data(call(manager, HttpMethod.PATCH, BASE + "/" + id, Map.of("riskLevel", "MODERATE")));
+        Map<String, Object> untouched = data(call(manager, HttpMethod.PATCH, BASE + "/" + id, Map.of("topic", "SAFETY")));
+
+        assertThat(edited).containsEntry("riskLevel", "MODERATE").containsEntry("version", 1)
+                .containsEntry("indexStatus", "INDEXED").containsEntry("status", "PUBLISHED");
+        assertThat(untouched).as("vắng = giữ nguyên").containsEntry("riskLevel", "MODERATE").containsEntry("topic", "SAFETY");
+    }
+
+    @Test
+    void theRiskLevelChangeIsAuditedWithBeforeAndAfter() {
+        Map<String, Object> request = body("rủi ro audit");
+        request.put("riskLevel", "LOW");
+        long id = id(created(call(manager, HttpMethod.POST, BASE, request)));
+        call(manager, HttpMethod.PATCH, BASE + "/" + id, Map.of("riskLevel", "HIGH"));
+
+        List<Map<String, Object>> rows = jdbc.queryForList("""
+                SELECT before_data::text AS before_data, after_data::text AS after_data
+                FROM audit_logs WHERE entity_type = 'ai_documents' AND entity_id = ? AND action = 'AI_DOCUMENT_UPDATED'""", id);
+
+        assertThat(rows).hasSize(1);
+        assertThat((String) rows.get(0).get("before_data")).contains("\"riskLevel\": \"LOW\"");
+        assertThat((String) rows.get(0).get("after_data")).contains("\"riskLevel\": \"HIGH\"");
+    }
+
     @Test
     void sendingTheSameContentIsNotAChange() {
         long id = doc("PUBLISHED");
@@ -489,7 +541,7 @@ class AiDocumentFsmIT {
 
         assertThat(all).extracting(d -> id(d)).containsExactly(fourth, third, second, first);
         assertThat(all.get(0)).containsOnlyKeys("documentId", "sourceType", "title", "topic", "species", "status",
-                "version", "indexStatus", "updatedAt", "externalId");
+                "version", "indexStatus", "updatedAt", "externalId", "riskLevel");
         assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&status=DRAFT", null))).extracting(d -> id(d))
                 .containsExactly(fourth, first);
         assertThat(content(call(manager, HttpMethod.GET, BASE + q + "&status=ARCHIVED&topic=CARE&species=ALL", null)))

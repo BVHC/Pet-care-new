@@ -153,21 +153,75 @@ describe('tab Tài liệu tri thức', () => {
     expect(screen.queryByRole('dialog', { name: 'Nạp tài liệu từ file' })).not.toBeInTheDocument();
   });
 
-  it('nạp từ file: file sai định dạng hoặc quá 2 MB bị chặn ngay ở giao diện, không gọi BE', async () => {
+  it('nạp từ file: file sai định dạng bị chặn ngay ở giao diện; cỡ file KHÔNG còn kiểm cứng ở giao diện (trần là [CFG] của BE), lỗi 400 của BE hiện trong hộp thoại', async () => {
     const user = renderPage();
     await docRow(T.draft);
     await user.click(screen.getByRole('button', { name: /Nạp từ file/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Nạp tài liệu từ file' });
+    expect(within(dialog).getByText(/cỡ tối đa mặc định 2 MB, đổi được ở Cấu hình hệ thống/)).toBeInTheDocument();
     await user.selectOptions(within(dialog).getByLabelText('Chủ đề'), 'CARE');
     await user.selectOptions(within(dialog).getByLabelText('Loài áp dụng'), 'ALL');
     fireEvent.change(within(dialog).getByLabelText('File'), { target: { files: [new File(['x'], 'chay.exe')] } }); // user.upload lọc theo `accept` nên không chọn được .exe
     await user.click(within(dialog).getByRole('button', { name: 'Nạp file' }));
     expect(within(dialog).getByText('Chỉ nhận file .md, .txt, .docx, .pdf.')).toBeInTheDocument();
-    const big = new File(['x'], 'lon.txt');
-    Object.defineProperty(big, 'size', { value: 2 * 1024 * 1024 + 1 }); // khỏi cấp phát 2 MB thật
+    const big = new File(['x'.repeat(2 * 1024 * 1024 + 1)], 'lon.txt');
     fireEvent.change(within(dialog).getByLabelText('File'), { target: { files: [big] } });
     await user.click(within(dialog).getByRole('button', { name: 'Nạp file' }));
-    expect(within(dialog).getByText('File vượt quá 2 MB.')).toBeInTheDocument();
+    expect(await within(dialog).findByText(/File vượt quá tối đa 2048 kB/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/File vượt quá 2 MB\./)).not.toBeInTheDocument();
+  });
+
+  it('nạp lại đúng file đã nạp: BE trả 409 BR-AI-30, hộp thoại giữ nguyên và nêu mã tài liệu đã có; không thêm nháp', async () => {
+    const user = renderPage();
+    await docRow(T.draft);
+    const importOnce = async () => {
+      await user.click(screen.getByRole('button', { name: /Nạp từ file/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Nạp tài liệu từ file' });
+      await user.upload(within(dialog).getByLabelText('File'), new File(['# Chải lông\n\nChải lông mỗi ngày.'], 'chai-long.md', { type: 'text/markdown' }));
+      await user.selectOptions(within(dialog).getByLabelText('Chủ đề'), 'HYGIENE');
+      await user.selectOptions(within(dialog).getByLabelText('Loài áp dụng'), 'DOG');
+      await user.click(within(dialog).getByRole('button', { name: 'Nạp file' }));
+      return dialog;
+    };
+    await importOnce();
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã nạp “chai-long.md” thành 1 bản nháp');
+    const dialog = await importOnce();
+    expect(await within(dialog).findByText(/File này đã được nạp trước đó thành tài liệu #20/)).toBeInTheDocument();
+    expect(screen.getAllByText('chai-long')).toHaveLength(1);
+  });
+
+  it('tám chủ đề (thêm An toàn và cấp cứu, Lối sống) và mức rủi ro: tạo nháp có mức rủi ro thì danh sách hiện huy hiệu; tài liệu không nêu thì không có huy hiệu', async () => {
+    const user = renderPage();
+    await docRow(T.draft);
+    expect(within(screen.getByLabelText('Lọc chủ đề')).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Mọi chủ đề', 'Chăm sóc', 'Dinh dưỡng', 'Hành vi', 'Vệ sinh', 'Tiêm phòng', 'Thông tin phòng khám', 'An toàn và cấp cứu', 'Lối sống',
+    ]);
+    expect(screen.queryByText(/^Rủi ro /)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Tạo tài liệu/ }));
+    const form = await screen.findByRole('dialog', { name: 'Tạo tài liệu nháp' });
+    await user.type(within(form).getByLabelText('Tiêu đề'), 'Sơ cứu khi chó bị ngộ độc');
+    await user.selectOptions(within(form).getByLabelText('Chủ đề'), 'SAFETY');
+    await user.selectOptions(within(form).getByLabelText('Loài áp dụng'), 'DOG');
+    expect(within(form).getByLabelText('Mức rủi ro (tùy chọn)')).toHaveValue('');
+    await user.selectOptions(within(form).getByLabelText('Mức rủi ro (tùy chọn)'), 'HIGH');
+    await user.type(within(form).getByLabelText('Nội dung (Markdown)'), '## Việc cần làm ngay');
+    await user.click(within(form).getByRole('button', { name: 'Lưu nháp' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã lưu bản nháp “Sơ cứu khi chó bị ngộ độc”');
+    const row = await docRow('Sơ cứu khi chó bị ngộ độc');
+    expect(within(row).getByText('Rủi ro cao')).toBeInTheDocument();
+    expect(within(row).getByText(/An toàn và cấp cứu/)).toBeInTheDocument();
+    expect(screen.getAllByText(/^Rủi ro /)).toHaveLength(1);
+  });
+
+  it('sửa mức rủi ro của tài liệu đã có: PATCH chỉ gửi mức rủi ro; mở lại thấy mức mới', async () => {
+    const user = renderPage();
+    const row = await docRow(T.draft);
+    await user.click(within(row).getByRole('button', { name: /Sửa|Xem/ }));
+    const form = await screen.findByRole('dialog', { name: 'Sửa tài liệu' });
+    await user.selectOptions(within(form).getByLabelText('Mức rủi ro (tùy chọn)'), 'MODERATE');
+    await user.click(within(form).getByRole('button', { name: 'Lưu thay đổi' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã lưu');
+    expect(within(await docRow(T.draft)).getByText('Rủi ro trung bình')).toBeInTheDocument();
   });
 
   it('xuất bản nháp thiếu nguồn và người rà soát: BE chặn (BR-AI-14), thông báo liệt kê phần thiếu ngay trên trang', async () => {

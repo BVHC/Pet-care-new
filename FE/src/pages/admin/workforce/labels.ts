@@ -1,7 +1,7 @@
 import { formatSlotDate } from '@/components/appointments/format';
 import { toMinutes } from '@/shared/utils/branch-schedule';
 import { vnClock } from '@/shared/utils/vn-time';
-import type { ShiftAssignmentStatus, ShiftRequest, ShiftRequestStatus, ShiftRequestType } from '@/shared/types/workforce';
+import type { ShiftAssignmentSource, ShiftAssignmentStatus, ShiftRequest, ShiftRequestStatus, ShiftRequestType } from '@/shared/types/workforce';
 
 // Nhãn và tông màu của nhân sự (UC34–38). Màu luôn đi kèm chữ.
 
@@ -14,6 +14,9 @@ export const ASSIGNMENT_STATUS_LABELS: Record<ShiftAssignmentStatus, string> = {
   CANCELLED: 'Đã hủy',
 };
 export const ASSIGNMENT_STATUS_TONE: Record<ShiftAssignmentStatus, Tone> = { SCHEDULED: 'info', ON_LEAVE: 'warning', ABSENT: 'danger', CANCELLED: 'neutral' };
+
+/** Phân ca do nhân viên tự đăng ký tuần (BR-NS-11) hay do quản lý phân hộ (BR-NS-02). */
+export const ASSIGNMENT_SOURCE_LABELS: Record<ShiftAssignmentSource, string> = { SELF: 'Tự đăng ký', MANAGER: 'Quản lý phân' };
 
 export const REQUEST_TYPE_LABELS: Record<ShiftRequestType, string> = { LEAVE: 'Xin nghỉ', SWAP: 'Đổi ca' };
 

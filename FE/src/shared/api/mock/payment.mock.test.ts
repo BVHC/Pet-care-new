@@ -279,12 +279,18 @@ describe('callback của cổng (BR-TG-07, 08, 09)', () => {
     expect((await data<OnlineOrder>('other', 'post', `/api/me/online-orders/${placed.onlineOrderId}/confirm-received`)).status).toBe('COMPLETED');
   });
 
-  it('hủy đơn đã thanh toán hoàn hàng về lô gốc và sinh hoàn tiền; ST21 hoàn xong sau 1 phút', async () => {
+  it('lễ tân hủy đơn đã thanh toán sau giao thất bại (#19) hoàn hàng về lô gốc và sinh hoàn tiền; ST21 hoàn xong sau 1 phút', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const session = await pay(8);
     await callback(signed(session.code, { amount: 480_000 }));
     expect(await stock(1)).toBe(11);
-    await call('owner', 'post', '/api/me/online-orders/8/cancel', { reason: 'Đổi ý sau khi trả tiền' });
+    // Khách không tự hủy được đơn đã thanh toán (BE thật, ADR-0145 C1): hoàn hàng + hoàn tiền chỉ còn ở nhánh lễ tân hủy sau giao thất bại.
+    await expect(call('owner', 'post', '/api/me/online-orders/8/cancel', { reason: 'Đổi ý sau khi trả tiền' })).rejects.toMatchObject({ response: { status: 409 } });
+    expect(await stock(1)).toBe(11);
+    await call('desk', 'post', '/api/online-orders/8/start-processing');
+    await call('desk', 'post', '/api/online-orders/8/ship', { carrier: 'GHN', trackingCode: 'G8' });
+    await call('desk', 'post', '/api/online-orders/8/fail-delivery', { reason: 'Khách vắng nhà' });
+    await call('desk', 'post', '/api/online-orders/8/cancel-failed', { reason: 'Khách không nhận hàng' });
     expect(await stock(1)).toBe(12); // về đúng lô đã xuất
     const refund = (await data<PageResponse<{ onlineOrderId: number | null; status: string; amount: number }>>('desk', 'get', '/api/refunds')).content.find((r) => r.onlineOrderId === 8);
     expect(refund).toMatchObject({ status: 'REQUESTED', amount: 480_000 });

@@ -5,7 +5,7 @@ import { MapPin, ShoppingCart, Store } from 'lucide-react'
 import { toast } from 'sonner'
 import { EmptyPanel, ErrorPanel, InlineError, LoadingBlock } from '@/components/customer/shop/panels'
 import { BTN_PRIMARY, CARD, H2, vnd } from '@/components/customer/shop/styles'
-import { usePayOrder } from '@/components/customer/shop/usePayOrder'
+import { GATEWAY_CLOSED, usePayOrder } from '@/components/customer/shop/usePayOrder'
 import { plainMessage, toApiError } from '@/shared/api/api-error'
 import { shopApi } from '@/shared/api/shop.api'
 import { useAddresses } from '@/shared/hooks/useProfile'
@@ -24,6 +24,12 @@ function Choice({ name, checked, onChange, children }: { name: string; checked: 
 }
 
 const addressText = (a: Address) => [a.addressLine, a.ward, a.province].filter(Boolean).join(', ')
+
+/** BE trả 404 cho địa chỉ không có HOẶC của khách khác (ADR-0144): nói rõ để khách chọn lại; lỗi khác giữ nguyên thông báo của BE. */
+function checkoutError(e: unknown): string {
+  const err = toApiError(e)
+  return err.statusCode === 404 && /địa chỉ/i.test(err.message) ? 'Địa chỉ giao hàng không hợp lệ hoặc không còn trong sổ địa chỉ của bạn. Hãy chọn lại địa chỉ.' : plainMessage(err)
+}
 
 function AddressStep({ addresses, value, onChange }: { addresses: Address[]; value: number | null; onChange: (id: number) => void }) {
   return (
@@ -126,7 +132,7 @@ export function CheckoutPage() {
   // Đặt đơn dọn giỏ và làm mới giỏ / báo giá ngay trước khi sang cổng: giữ nguyên màn đang xem cho đến khi chuyển trang.
   const [frozen, setFrozen] = useState<{ cart: Cart; quote?: OnlineOrderQuote } | null>(null)
   const place = useShopMutation(shopApi.placeOrder)
-  const { pay } = usePayOrder()
+  const { pay, gatewayClosed } = usePayOrder()
 
   const addressList = addresses.data ?? []
   const addressId = addressList.some((a) => a.addressId === addressPick) ? addressPick : (addressList.find((a) => a.isDefault) ?? addressList[0])?.addressId ?? null
@@ -141,6 +147,12 @@ export function CheckoutPage() {
     setFrozen({ cart: cart.data, quote: quote.data })
     try {
       const order = await place.mutateAsync({ branchId, addressId })
+      if (gatewayClosed) {
+        // Đơn thật đã đặt và đang giữ hàng; payment chưa có BE nên không mở cổng, hạn thanh toán xem ở chi tiết đơn.
+        toast.info(`Đã đặt đơn ${order.code} và đang giữ hàng cho bạn. ${GATEWAY_CLOSED}, bạn quay lại thanh toán sau.`)
+        navigate(`/order/${order.onlineOrderId}`)
+        return
+      }
       try {
         await pay(order.onlineOrderId)
       } catch (e) {
@@ -149,7 +161,7 @@ export function CheckoutPage() {
         navigate(`/order/${order.onlineOrderId}`)
       }
     } catch (e) {
-      setError(plainMessage(toApiError(e)))
+      setError(checkoutError(e))
       setFrozen(null)
     }
   }
@@ -177,7 +189,7 @@ export function CheckoutPage() {
             <Summary
               cart={shown}
               quote={frozen ? frozen.quote : quote.data}
-              quoteError={quote.isError && !submitting ? plainMessage(toApiError(quote.error)) : ''}
+              quoteError={quote.isError && !submitting ? checkoutError(quote.error) : ''}
               quoting={quote.isFetching}
               canOrder={!submitting && quote.isSuccess && !quote.isFetching}
               submitting={submitting}

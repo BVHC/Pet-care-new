@@ -304,8 +304,8 @@ describe('fees tab (UC32)', () => {
     await user.clear(base);
     await user.type(base, '25000');
     await user.click(screen.getByRole('button', { name: 'Lưu phí vận chuyển' }));
-    // Chưa nói "đơn đặt từ bây giờ tính theo mức mới": checkout mock không đọc cấu hình thật (T63 / T67 sẽ thêm lại).
-    expect(await screen.findByText('Đã lưu phí vận chuyển.')).toBeInTheDocument();
+    // Câu "đơn đặt từ bây giờ tính theo mức mới" đã thêm lại ở T67: BE `shop` thật gọi `ShippingFeeApi.quote` khi báo giá và khi đặt đơn (OnlineOrderService), nên đúng.
+    expect(await screen.findByText('Đã lưu phí vận chuyển. Đơn đặt từ bây giờ tính theo mức mới.')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText(/Hiện tại: 25\.000/)).toBeInTheDocument());
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });

@@ -1,6 +1,6 @@
 # ADR-0135: Ngữ cảnh thú cưng trong chat cá nhân và chuyển sang gói Gemini trả phí (AI v2, phần 2)
 
-- **Trạng thái:** Proposed (Hiến duyệt **hướng** 13/11/2026; nội dung chờ Hiến duyệt; T91). **Công tắc `ai.chat.pet_context_enabled` (`BOOL`) mặc định `false` và chỉ được bật sau khi mục "Hiến xác minh" dưới đây hoàn tất.** **Quyết định 16/11/2026 (Hiến): phạm vi demo dùng khóa Gemini free và chỉ khách demo giả (phương án A); trả phí và bảng "Hiến xác minh" chỉ cần khi dùng dữ liệu khách thật (phương án B): xem mục "Quyết định 16/11/2026".** **Đã cài ở T91 (14/11/2026): mã và V56 xong, công tắc `false`; ngày 16/11 đã bật tạm trên DB demo để đo 4 câu `/me` bằng khách demo giả với Gemini thật (khóa free) rồi tắt lại; mục "Hiến xác minh" còn trống và không áp dụng cho phạm vi A** (xem "Đã cài ở T91" và "Quyết định 16/11/2026").
+- **Trạng thái:** Accepted (Hiến duyệt **hướng** 13/11/2026 và **nội dung** 18/11/2026; T91). **Công tắc `ai.chat.pet_context_enabled` (`BOOL`) mặc định `false` và chỉ được bật sau khi mục "Hiến xác minh" dưới đây hoàn tất.** **Quyết định 16/11/2026 (Hiến): phạm vi demo dùng khóa Gemini free và chỉ khách demo giả (phương án A); trả phí và bảng "Hiến xác minh" chỉ cần khi dùng dữ liệu khách thật (phương án B): xem mục "Quyết định 16/11/2026".** **Đã cài ở T91 (14/11/2026): mã và V56 xong, công tắc `false`; ngày 16/11 đã bật tạm trên DB demo để đo 4 câu `/me` bằng khách demo giả với Gemini thật (khóa free) rồi tắt lại; mục "Hiến xác minh" còn trống và không áp dụng cho phạm vi A** (xem "Đã cài ở T91" và "Quyết định 16/11/2026").
 - **Ngày:** 2026-11-13
 - **Liên quan:** ADR-0122 (gói free, che tên thú), 0129 (I-1…I-10 đã cài), 0141 (đường ống), 0142 (chat cá nhân, che tên thú sau định tuyến), 0134, 0136; `07` §4.5 BR-AI-25 (v2), §4.7 BR-AI-32, §5.2 bước 6c, §5.4 khối `THÔNG TIN THÚ`, §12; `docs/06` §6b I-1.
 - **Đánh số:** [CFG] `ai.chat.pet_context_enabled` và cột `ai_chat_logs.used_pet_context` ở **V56** (ADR viết "V53" ở bản đề xuất; V53 chỉ mang khóa `business_intent`, T90; V54 và V55 đã bị BE-1 / BE-2 lấy ở `origin/dev` trước khi T91 được đẩy lên, xem "Đã cài ở T91"). Không có endpoint mới.
@@ -138,6 +138,8 @@ Chat cá nhân (T77c) chỉ có hai ý định tất định (lịch hẹn, lị
 | 6 | Khóa cũ (đã dán vào chat) đã thu hồi, khóa mới chỉ trong `.env` | _chưa_ | |
 
 ## Chờ Hiến duyệt (trước khi viết mã)
+
+_Hiến duyệt nội dung ADR này ngày 18/11/2026 ("duyệt nội dung ADR 0134–0136"), trạng thái chuyển Accepted. Các điểm dưới đây là câu hỏi lúc viết; điểm gạch đã chốt riêng trước đó. Điểm 2 (đổi record `PetProfile`) còn cần Dũng xác nhận (`docs/06` §6b hàng 19, đang "chờ chủ module xác nhận"): lời duyệt của Hiến không thay được xác nhận đó._
 
 1. Bảng chọn trường theo ý định (D2) — có bỏ trường nào không (ví dụ triệt sản)?
 2. Đổi record `PetProfile` (D3) hay thêm method mới — và Dũng đồng ý không?

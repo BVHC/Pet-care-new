@@ -29,3 +29,21 @@ export function isMockedRequest(method: string, pathname: string, rules: MockRul
       rule.segments.every((s, i) => s === '*' || s === path[i]),
   );
 }
+
+/**
+ * T67: `payment` chưa có controller (T65). Chỉ khi ĐẶT ĐƠN đi BE thật mà `pay` còn mock thì cổng thanh toán đóng: `pay` mock tra theo id của kho mock,
+ * không biết đơn thật (404, hoặc trùng id một đơn mock của khách mock có cùng account id). Toàn mock giữ cổng giả lập của T57; toàn thật gọi `pay` thật.
+ * Khi T65 xong và luật `pay` gỡ khỏi VITE_API_MOCK_ONLY thì điều kiện tự hết, không phải sửa mã.
+ */
+export function paymentClosedForRealOrders(apiMock: boolean, rules: MockRule[]): boolean {
+  return !apiMock && !isMockedRequest('POST', '/api/me/online-orders', rules) && isMockedRequest('POST', '/api/me/online-orders/0/pay', rules);
+}
+
+/**
+ * T68: BE chưa có `cancel-failed` (shop-v1 #19, task 138). Lễ tân thấy đơn THẬT, còn `cancel-failed` mock tra theo id của kho mock: trùng id thì hủy nhầm đơn mock
+ * mà báo thành công, không trùng thì 404 / 409 sai. Nên chỉ khi danh sách đơn đi BE thật mà `cancel-failed` còn mock thì nút "Hủy đơn" khóa. Toàn mock giữ T57,
+ * toàn thật gọi `cancel-failed` thật. Khi task 138 xong và luật gỡ khỏi VITE_API_MOCK_ONLY thì điều kiện tự hết, không phải sửa mã.
+ */
+export function cancelFailedClosedForRealOrders(apiMock: boolean, rules: MockRule[]): boolean {
+  return !apiMock && !isMockedRequest('GET', '/api/online-orders', rules) && isMockedRequest('POST', '/api/online-orders/0/cancel-failed', rules);
+}

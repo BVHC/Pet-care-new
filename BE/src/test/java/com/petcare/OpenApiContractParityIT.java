@@ -56,7 +56,7 @@ class OpenApiContractParityIT {
     /** File hợp đồng đã có annotation đầy đủ; thêm file khi module đó viết xong tài liệu (D026: branch, catalog). */
     private static final Set<String> DOCUMENTED = Set.of("identity-v1.yaml", "care-v1.yaml", "customer-v1.yaml",
             "inventory-v1.yaml", "sales-v1.yaml", "appointment-v1.yaml", "visit-v1.yaml", "boarding-v1.yaml", "content-v1.yaml", "report-v1.yaml",
-            "ai-v1.yaml", "fees-v1.yaml", "shop-v1.yaml");
+            "ai-v1.yaml", "fees-v1.yaml", "shop-v1.yaml", "workforce-v1.yaml");
     private static final Set<String> METHODS = Set.of("get", "post", "put", "patch", "delete");
     private static final Pattern SECRET = Pattern.compile("(?i)(password|secret|hash)$|^otp(code)?$");
     /** Tên khớp {@link #SECRET} nhưng không phải bí mật: cờ bắt đổi mật khẩu (BR-TK-17). */
@@ -124,10 +124,21 @@ class OpenApiContractParityIT {
         // + 3 shop checkout (task 117: fulfillment-branches, quote, place; docs/adr/0144)
         // + 4 shop my online orders (task 125: list, get, cancel, confirm-received; docs/adr/0145)
         // + 7 shop fulfillment (task 126: list, get, start-processing, ship, mark-delivered, fail-delivery, redeliver; cancel-failed chờ task 138; docs/adr/0146)
+        // + 3 workforce #1–3 (GET / POST / PATCH /shift-definitions, ca làm việc, T58 bước 2, docs/adr/0149).
+        // + 2 workforce #4–5 (GET / POST /shift-assignments, lịch phân ca và phân ca hộ, T58 bước 3, docs/adr/0149).
+        // + 2 workforce #6, #8 (POST /shift-assignments/{id}/cancel, GET /me/shift-assignments, T58 bước 4, docs/adr/0149).
+        // + 3 workforce #9–11 (POST / GET /me/shift-requests, POST /me/shift-requests/{id}/withdraw, yêu cầu nghỉ / đổi ca của nhân viên, T59 bước 1, docs/adr/0149).
+        // + 1 workforce #7 (POST /shift-assignments/{id}/absent, ghi nhận vắng đột xuất, T59 bước 2, docs/adr/0149).
+        // + 1 workforce #12 (GET /shift-requests, danh sách yêu cầu của chi nhánh, T59 bước 3, docs/adr/0149).
+        // + 1 workforce #14 (POST /shift-requests/{id}/reject, quản lý từ chối yêu cầu, T59 bước 4, docs/adr/0150).
+        // + 1 workforce #13 (POST /shift-requests/{id}/approve, quản lý duyệt yêu cầu nghỉ; SWAP còn placeholder, N3-S5a, docs/adr/0150).
+        // + 1 workforce #17 (GET /me/shift-registrations/{weekStart}, đăng ký ca của tôi trong tuần, N3-S6, docs/adr/0149).
+        // + 1 workforce #15 (PUT /me/shift-registrations/{weekStart}, đăng ký ca theo tuần, N3-S7, docs/adr/0149).
+        // + 1 workforce #16 (GET /shift-weekly-summaries, thống kê số ca mỗi nhân viên trong tuần, N3-S8, docs/adr/0149).
         // − 1 content #22 (đánh dấu feedback đã xử lý; feedback không trạng thái, V55, docs/adr/0122, 0131): content còn 21.
         assertThat(documentedOps())
-                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop đã cài")
-                .hasSize(220);
+                .as("số endpoint identity + care + customer + inventory + sales + appointment + visit + boarding + content + report + ai + fees + shop + workforce đã cài")
+                .hasSize(237);
     }
 
     @Test

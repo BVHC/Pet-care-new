@@ -194,17 +194,29 @@ describe('GET /ai/documents (#5): tài liệu đồng bộ từ bài viết (T93
     expect((await failure(client.get('/api/ai/documents', { params: { fromArticle: 'maybe' }, ...(await as(ROLES.VET)) }))).data.errorCode).toBe('MALFORMED_REQUEST'); // kiểu sai đến trước vai trò (đo trên BE 11/11)
   });
 
-  it('tạo / nạp file / sửa: tài liệu soạn tay và nạp file có externalId null; sửa tài liệu từ bài viết giữ nguyên externalId', async () => {
+  it('tạo / nạp file / sửa: tài liệu soạn tay có externalId null, nạp file có FILE-<hash>-<n> (T89); sửa tài liệu từ bài viết giữ nguyên externalId', async () => {
     const created = await postDoc('', { title: 'Tay', topic: 'CARE', species: 'ALL', content: 'x' });
     expect(created.data.data.externalId).toBeNull();
     const imported = await postDoc('/import', { fileName: 'a.md', contentBase64: b64('# Tiêu đề\n\nNội dung'), topic: 'CARE', species: 'ALL' });
-    expect(imported.data.data.documents[0].externalId).toBeNull();
+    expect(imported.data.data.documents[0].externalId).toMatch(/^FILE-[0-9a-f]{16}-1$/);
     expect((await patchDoc(17, { content: 'Nội dung bài viết đã sửa tay' })).data.data).toMatchObject({ externalId: 'ARTICLE-8', content: 'Nội dung bài viết đã sửa tay' });
     expect((await listDocs({ fromArticle: true })).totalElements).toBe(3);
   });
 });
 
 describe('POST /ai/documents (#6) và GET /ai/documents/{id} (#7)', () => {
+  it('riskLevel tùy chọn (LOW / MODERATE / HIGH), vắng thì null; hai topic mới SAFETY và LIFESTYLE được nhận; mức lạ hoặc viết thường là 400 MALFORMED_REQUEST', async () => {
+    const high = (await client.post('/api/ai/documents', { title: 'Ngộ độc', topic: 'SAFETY', species: 'ALL', content: 'x', riskLevel: 'HIGH' }, await manager())).data.data as AiDocument;
+    const none = (await client.post('/api/ai/documents', { title: 'Nhận nuôi', topic: 'LIFESTYLE', species: 'ALL', content: 'x' }, await manager())).data.data as AiDocument;
+    expect(high).toMatchObject({ topic: 'SAFETY', riskLevel: 'HIGH' });
+    expect(none).toMatchObject({ topic: 'LIFESTYLE', riskLevel: null });
+    expect((await getDoc(high.documentId)).riskLevel).toBe('HIGH');
+    expect((await listDocs({ topic: 'SAFETY' })).content.map((d) => [d.documentId, d.riskLevel])).toEqual([[high.documentId, 'HIGH']]);
+    for (const bad of ['EXTREME', 'high']) {
+      expect((await errorOf(client.post('/api/ai/documents', { title: 'T', topic: 'CARE', species: 'ALL', content: 'x', riskLevel: bad }, await manager())))[1]).toBe('MALFORMED_REQUEST');
+    }
+  });
+
   it('tạo → 201 DRAFT, version 1, chưa nạp, thiếu nguồn vẫn lưu nháp được; GET trả đủ trường, không lộ đoạn đang phục vụ', async () => {
     const res = await client.post('/api/ai/documents', { title: '  Bản nháp mới  ', topic: 'BEHAVIOR', species: 'DOG', content: '' }, await manager());
     expect(res.status).toBe(201);
@@ -251,7 +263,7 @@ describe('POST /ai/documents (#6) và GET /ai/documents/{id} (#7)', () => {
   });
 });
 
-describe('POST /ai/documents/import (#14, BR-AI-29)', () => {
+describe('POST /ai/documents/import (#14, BR-AI-29, BR-AI-30)', () => {
   const body = (over: object = {}) => ({ fileName: 'cham-soc-cho.md', contentBase64: b64('# Chăm sóc chó\n\nCho ăn hai bữa.'), topic: 'NUTRITION', species: 'DOG', ...over });
   const post = async (data: unknown) => client.post('/api/ai/documents/import', data, await manager());
 
@@ -275,7 +287,7 @@ describe('POST /ai/documents/import (#14, BR-AI-29)', () => {
     const doc = (res.data.data as { documents: AiDocument[] }).documents[0];
     expect(doc.content).toBe('Nội dung trích từ goc.docx (mock).');
     expect(doc.sourceNote).toBe('WSAVA 2024');
-    expect(((await post(body({ fileName: 'v.PDF' }))).data.data as { fileKind: string }).fileKind).toBe('PDF');
+    expect(((await post(body({ fileName: 'v.PDF', contentBase64: b64('# Khác\n\nPDF khác byte') }))).data.data as { fileKind: string }).fileKind).toBe('PDF');
   });
 
   it('văn bản dài hơn 20 000 ký tự tách thành nhiều nháp "(phần n/N)", mỗi phần ≤ 20 000', async () => {
@@ -293,6 +305,49 @@ describe('POST /ai/documents/import (#14, BR-AI-29)', () => {
     expect(await errorOf(post(body({ contentBase64: b64('   \n  ') })))).toEqual(rule('File không có chữ để nạp'));
     expect(await errorOf(post(body({ contentBase64: b64('x'.repeat(2 * 1024 * 1024 + 1)) })))).toEqual(rule('File vượt quá tối đa 2048 kB'));
     expect((await listDocs({ size: 100 })).totalElements).toBe(19);
+  });
+
+  const docsOf = (res: AxiosResponse) => (res.data.data as { documents: AiDocument[] }).documents;
+
+  it('externalId = FILE-<16 hex>-<n>: cùng byte thì cùng mã, khác byte thì khác mã; file tách nhiều phần có một mã mỗi phần', async () => {
+    const [a] = docsOf(await post(body()));
+    expect(a.externalId).toMatch(/^FILE-[0-9a-f]{16}-1$/);
+    const [other] = docsOf(await post(body({ contentBase64: b64('# Khác\n\nNội dung khác') })));
+    expect(other.externalId).not.toBe(a.externalId);
+    const parts = docsOf(await post(body({ fileName: 'dai.md', contentBase64: b64('a'.repeat(45_000)) })));
+    expect(parts.map((d) => d.externalId?.slice(-2))).toEqual(['-1', '-2', '-3']);
+    expect(new Set(parts.map((d) => d.externalId?.slice(0, -2))).size).toBe(1);
+  });
+
+  it('nạp lại cùng byte file (kể cả đổi tên) → 409 CONCURRENCY_CONFLICT nêu mã tài liệu đã có, không tạo thêm; file tách nhiều phần bị từ chối nguyên file', async () => {
+    const [first] = docsOf(await post(body()));
+    expect(await errorOf(post(body({ fileName: 'doi-ten.md' })))).toEqual([409, 'CONCURRENCY_CONFLICT', `File này đã được nạp trước đó thành tài liệu #${first.documentId} (BR-AI-30)`]);
+    expect((await listDocs({ size: 100 })).totalElements).toBe(20);
+    const big = body({ fileName: 'dai.md', contentBase64: b64('b'.repeat(45_000)) });
+    expect(docsOf(await post(big))).toHaveLength(3);
+    expect((await errorOf(post(big)))[1]).toBe('CONCURRENCY_CONFLICT');
+    expect((await listDocs({ size: 100 })).totalElements).toBe(23);
+  });
+
+  it('tài liệu đã lưu trữ vẫn giữ externalId nên cùng file vẫn 409; CRLF và LF là hai file khác nhau (băm byte gốc, không phải văn bản chuẩn hóa)', async () => {
+    const [first] = docsOf(await post(body()));
+    expect((await client.post(`/api/ai/documents/${first.documentId}/archive`, undefined, await manager())).status).toBe(200);
+    expect(await errorOf(post(body({ fileName: 'lai.md' })))).toEqual([409, 'CONCURRENCY_CONFLICT', `File này đã được nạp trước đó thành tài liệu #${first.documentId} (BR-AI-30)`]);
+    expect((await post(body({ contentBase64: b64('# Chăm sóc chó\r\n\r\nCho ăn hai bữa.') }))).status).toBe(201);
+  });
+
+  it('trần cỡ là [CFG] ai.ingest.max_file_kb đọc mỗi lần nạp: đúng trần nhận, trần + 1 byte bị 400, nâng trần có hiệu lực ngay, ngoài 256–10240 bị từ chối', async () => {
+    expect((await putConfig('ai.ingest.max_file_kb', '256')).status).toBe(200);
+    expect((await post(body({ contentBase64: b64('x'.repeat(256 * 1024)) }))).status).toBe(201);
+    expect(await errorOf(post(body({ contentBase64: b64('y'.repeat(256 * 1024 + 1)) })))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'File vượt quá tối đa 256 kB (BR-AI-29)']);
+    expect((await putConfig('ai.ingest.max_file_kb', '512')).status).toBe(200);
+    expect((await post(body({ contentBase64: b64('y'.repeat(256 * 1024 + 1)) }))).status).toBe(201);
+    expect((await failure(putConfig('ai.ingest.max_file_kb', '255'))).status).toBe(400);
+  });
+
+  it('thứ tự kiểm theo mã BE: quá cỡ thắng định dạng lạ', async () => {
+    const big = b64('x'.repeat(2 * 1024 * 1024 + 1));
+    expect(await errorOf(post(body({ fileName: 'chay.exe', contentBase64: big })))).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'File vượt quá tối đa 2048 kB (BR-AI-29)']);
   });
 
   it('VALIDATION_FAILED thiếu trường; MALFORMED_REQUEST sai kiểu; @Valid chạy trước vai trò', async () => {
@@ -315,6 +370,14 @@ describe('PATCH /ai/documents/{id} (#8)', () => {
     expect(same.data.data).toEqual(res.data.data);
     expect((await patchDoc(9, { title: 'Chó sủa nhiều (sửa)' })).data.data).toEqual(res.data.data);
     expect((await patchDoc(9, { sourceNote: '' })).data.data.sourceNote).toBeNull(); // chuỗi rỗng xóa nguồn của bản nháp
+  });
+
+  it('riskLevel: PATCH đặt / đổi được kể cả tài liệu PUBLISHED mà không tăng version; vắng thì giữ nguyên; không xóa được về trống', async () => {
+    const res = await patchDoc(5, { riskLevel: 'MODERATE' });
+    expect(res.data.data).toMatchObject({ status: 'PUBLISHED', version: 1, indexedVersion: 1, indexStatus: 'INDEXED', riskLevel: 'MODERATE' });
+    expect((await patchDoc(5, { topic: 'SAFETY' })).data.data).toMatchObject({ topic: 'SAFETY', riskLevel: 'MODERATE' });
+    expect((await patchDoc(5, { riskLevel: null })).data.data.riskLevel).toBe('MODERATE');
+    expect((await errorOf(patchDoc(5, { riskLevel: 'EXTREME' })))[1]).toBe('MALFORMED_REQUEST');
   });
 
   it('PUBLISHED: sửa tiêu đề tăng version, PENDING tới khi ST22 nạp (lần đọc sau); sửa topic không tăng version', async () => {

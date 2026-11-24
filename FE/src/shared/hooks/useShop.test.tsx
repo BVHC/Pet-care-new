@@ -104,13 +104,14 @@ describe('useShopMutation làm mới ["shop"]', () => {
     for (const queryKey of COMMERCE_ROOTS) expect(spy).toHaveBeenCalledWith({ queryKey });
   });
 
-  it('hủy đơn đã thanh toán: danh sách đơn của tôi thấy CANCELLED', async () => {
+  // Khách chỉ hủy được đơn PENDING_PAYMENT (#8 trong dữ liệu mẫu); đơn PAID (#5) trả 409 cho tới task 138 (ADR-0145 C1).
+  it('hủy đơn chưa thanh toán: danh sách đơn của tôi thấy CANCELLED', async () => {
     const { wrapper } = wrap();
     const { result } = renderHook(() => ({ orders: useMyOnlineOrders(), cancel: useShopMutation((id: number) => shopApi.cancelMyOrder(id, { reason: 'Đổi ý' })) }), { wrapper });
-    await waitFor(() => expect(result.current.orders.data?.content.find((o) => o.onlineOrderId === 5)?.status).toBe('PAID'));
+    await waitFor(() => expect(result.current.orders.data?.content.find((o) => o.onlineOrderId === 8)?.status).toBe('PENDING_PAYMENT'));
 
-    await act(() => result.current.cancel.mutateAsync(5));
+    await act(() => result.current.cancel.mutateAsync(8));
 
-    await waitFor(() => expect(result.current.orders.data?.content.find((o) => o.onlineOrderId === 5)?.status).toBe('CANCELLED'));
+    await waitFor(() => expect(result.current.orders.data?.content.find((o) => o.onlineOrderId === 8)?.status).toBe('CANCELLED'));
   });
 });

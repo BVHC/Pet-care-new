@@ -26,7 +26,7 @@
 | 4 | `GET /me/ai/pets/{petId}/recommendations` | Gợi ý cá nhân hóa cho thú | UC92 | BR-AI-18…23 |
 | 5 | `GET /ai/documents` | Danh sách tài liệu tri thức | UC93 | BR-AI-17 |
 | 6 | `POST /ai/documents` | Tạo tài liệu tri thức (nháp) | UC93 | BR-AI-14, 17 |
-| 7 | `POST /ai/documents/import` | Nạp tài liệu tri thức từ file | UC93 | BR-AI-14, 17, 29 |
+| 7 | `POST /ai/documents/import` | Nạp tài liệu tri thức từ file | UC93 | BR-AI-14, 17, 29, 30 |
 | 8 | `GET /ai/documents/{documentId}` | Chi tiết tài liệu tri thức | UC93 | BR-AI-17 |
 | 9 | `PATCH /ai/documents/{documentId}` | Sửa tài liệu tri thức | UC93 | BR-AI-14, 16, 17 |
 | 10 | `POST /ai/documents/{documentId}/publish` | Xuất bản tài liệu | UC93 | BR-AI-14, 16, 17 |
@@ -47,7 +47,7 @@
 | Gợi ý cá nhân hóa cho thú | A02 | CUSTOMER, chỉ thú hiện thuộc về mình | — | — | Không bao giờ có thuốc, vaccine, sản phẩm kê đơn, dịch vụ khám / tiêm (BR-SP-01, BR-AI-18). Mỗi lần tính từ dữ liệu thú hiện tại (BR-AI-23). |
 | Danh sách tài liệu tri thức | A04 | Chỉ SUPER_MANAGER | — | — | Mới sửa trước (`updatedAt` giảm dần, trùng thì `documentId` giảm dần). |
 | Tạo tài liệu tri thức (nháp) | A04 | Chỉ SUPER_MANAGER | — → DRAFT (Tài liệu#1) | — | — |
-| Nạp tài liệu tri thức từ file | A04 | Chỉ SUPER_MANAGER | — → DRAFT (Tài liệu#1) | — | Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON, tối đa 2 MB); tạo một hoặc nhiều nháp `MANUAL`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14. |
+| Nạp tài liệu tri thức từ file | A04 | Chỉ SUPER_MANAGER | — → DRAFT (Tài liệu#1) | — | Nhận `.md`, `.txt`, `.docx`, `.pdf` (base64 trong JSON; trần cỡ là [CFG] `ai.ingest.max_file_kb`, mặc định 2048 kB, khoảng 256–10240, đọc mỗi lần nạp); trích văn bản tối đa 20 giây. Tạo một hoặc nhiều nháp `MANUAL` có `externalId` = `FILE-<16 hex đầu của SHA-256 của file>-<n>`, không xuất bản. PDF scan không có lớp chữ bị từ chối. Xuất bản đi #9 với hai lớp BR-AI-14. |
 | Chi tiết tài liệu tri thức | A04 | Chỉ SUPER_MANAGER | — | — | — |
 | Sửa tài liệu tri thức | A04 | Chỉ SUPER_MANAGER | PUBLISHED → PUBLISHED (Tài liệu#3) hoặc sửa nháp | — | Sửa tài liệu `PUBLISHED` tăng `version`; ST22 dựng đoạn mới rồi hoán đổi trong một transaction, đoạn cũ phục vụ tới lúc đó (BR-AI-16). |
 | Xuất bản tài liệu | A04 | Chỉ SUPER_MANAGER | DRAFT / ARCHIVED → PUBLISHED (Tài liệu#2, #5) | — | `indexStatus` về `PENDING`; ST22 nạp chỉ mục sau commit. |
@@ -72,7 +72,7 @@
 
 - **`GET /ai/documents`** — Danh sách tài liệu tri thức. Query: `status?`, `topic?`, `species?`, `fromArticle?`, `q?`, `page?`, `size?`. Response `200` trang `AiDocumentSummary`. Lỗi: `400` · `401` · `403`.
 - **`POST /ai/documents`** — Tạo tài liệu tri thức (nháp). Request `CreateAiDocumentRequest`. Response `201` `AiDocument`. Lỗi: `400` `BR-AI-14` tiêu đề rỗng / quá 200 ký tự · nội dung quá 20 000 ký tự · `401` · `403`.
-- **`POST /ai/documents/import`** — Nạp tài liệu tri thức từ file. Request `ImportAiDocumentRequest`. Response `201` `ImportAiDocumentResponse`. Lỗi: `400` `BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ, rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự · `401` · `403`.
+- **`POST /ai/documents/import`** — Nạp tài liệu tri thức từ file. Request `ImportAiDocumentRequest`. Response `201` `ImportAiDocumentResponse`. Lỗi: `400` `BR-AI-29` kiểu file không hỗ trợ, nội dung không khớp phần mở rộng, quá cỡ ([CFG] `ai.ingest.max_file_kb`), hết thời gian trích (20 giây), rỗng, hỏng, PDF không có chữ · `BR-AI-14` tiêu đề rỗng / quá 200 ký tự · `401` · `403` · `409` `CONCURRENCY_CONFLICT` `BR-AI-30` file đã được nạp trước đó (cùng SHA-256 của byte file); message nêu mã tài liệu đã có, kể cả khi đã `ARCHIVED`; không tạo thêm tài liệu nào · `429` `TOO_MANY_REQUESTS` mọi luồng trích văn bản đang bận: header `Retry-After` là số giây nên chờ rồi nạp lại.
 - **`GET /ai/documents/{documentId}`** — Chi tiết tài liệu tri thức. Response `200` `AiDocument`. Lỗi: `400` · `401` · `403` · `404`.
 - **`PATCH /ai/documents/{documentId}`** — Sửa tài liệu tri thức. Request `UpdateAiDocumentRequest`. Response `200` `AiDocument`. Lỗi: `400` `BR-AI-14` nội dung quá dài · tài liệu `CATALOG_PROTOCOL` không sửa tay (BR-AI-13) · `401` · `403` · `404` · `409` Tài liệu `ARCHIVED` không sửa được.
 - **`POST /ai/documents/{documentId}/publish`** — Xuất bản tài liệu. Response `200` `AiDocument`. Lỗi: `400` `BR-AI-14` thiếu `sourceNote` (lớp 1) hoặc `reviewerName` / `reviewedOn` (lớp 2) với tài liệu `MANUAL` · nội dung rỗng · `401` · `403` · `404` · `409` `INVALID_STATE_TRANSITION` trạng thái hiện tại không cho phép (03 #13).
@@ -93,7 +93,8 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`RecoGroup`** — enum: `GROOMING`, `BOARDING`, `PRODUCT`. BR-AI-18
 - **`ItemType`** — enum: `SERVICE`, `PRODUCT`.
 - **`DocumentSource`** — enum: `MANUAL`, `CATALOG_PROTOCOL`. BR-AI-13
-- **`DocumentTopic`** — enum: `CARE`, `NUTRITION`, `BEHAVIOR`, `HYGIENE`, `VACCINATION`, `CLINIC_INFO`.
+- **`DocumentTopic`** — enum: `CARE`, `NUTRITION`, `BEHAVIOR`, `HYGIENE`, `VACCINATION`, `CLINIC_INFO`, `SAFETY`, `LIFESTYLE`. `SAFETY`: cấp cứu, sơ cứu, ngộ độc, an toàn trẻ em · `LIFESTYLE`: nhận nuôi, đi lại, nhiều thú, thú già (V59)
+- **`RiskLevel`** — enum: `LOW`, `MODERATE`, `HIGH`. Mức rủi ro của nội dung tài liệu (V59); chưa dùng để lọc truy hồi
 - **`DocumentSpecies`** — enum: `DOG`, `CAT`, `OTHER`, `ALL`.
 - **`DocumentStatus`** — enum: `DRAFT`, `PUBLISHED`, `ARCHIVED`. 03 #13
 - **`IndexStatus`** — enum: `PENDING`, `INDEXED`, `FAILED`.
@@ -106,12 +107,12 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`VaccinationSummary`** — {`petId`: int64, `petName`: string, `items`: [VaccinationItem], `message`: string, `disclaimer`: string}
 - **`RecommendedItem`** — {`group`: RecoGroup, `itemType`: ItemType, `itemId`: int64, `name`: string, `price`: int64, `priceIsFrom`: boolean, `priceUnit?`: string, `imageUrl?`: string, `score`: number, `reasons`: [string]}
 - **`RecommendationResponse`** — {`petId`: int64, `generatedAt`: date-time, `items`: [RecommendedItem]}
-- **`AiDocumentSummary`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `status`: DocumentStatus, `version`: int32, `indexStatus`: IndexStatus, `updatedAt`: date-time, `externalId?`: string}
-- **`AiDocument`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date, `status`: DocumentStatus, `version`: int32, `indexedVersion`: int32, `indexStatus`: IndexStatus, `indexError?`: string, `chunkCount`: int32, `publishedAt?`: date-time, `updatedAt`: date-time, `externalId?`: string}
-- **`CreateAiDocumentRequest`** — {`title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date}
+- **`AiDocumentSummary`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `status`: DocumentStatus, `version`: int32, `indexStatus`: IndexStatus, `updatedAt`: date-time, `externalId?`: string, `riskLevel?`: RiskLevel}
+- **`AiDocument`** — {`documentId`: int64, `sourceType`: DocumentSource, `title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date, `status`: DocumentStatus, `version`: int32, `indexedVersion`: int32, `indexStatus`: IndexStatus, `indexError?`: string, `chunkCount`: int32, `publishedAt?`: date-time, `updatedAt`: date-time, `externalId?`: string, `riskLevel?`: RiskLevel}
+- **`CreateAiDocumentRequest`** — {`title`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `content`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date, `riskLevel?`: RiskLevel}
 - **`ImportAiDocumentRequest`** — {`fileName`: string, `contentBase64`: string, `topic`: DocumentTopic, `species`: DocumentSpecies, `sourceNote?`: string}
 - **`ImportAiDocumentResponse`** — {`fileKind`: string, `documents`: [AiDocument]}
-- **`UpdateAiDocumentRequest`** — {`title?`: string, `topic?`: DocumentTopic, `species?`: DocumentSpecies, `content?`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date}
+- **`UpdateAiDocumentRequest`** — {`title?`: string, `topic?`: DocumentTopic, `species?`: DocumentSpecies, `content?`: string, `sourceNote?`: string, `reviewerName?`: string, `reviewedOn?`: date, `riskLevel?`: RiskLevel}
 - **`ProfileSpecies`** — enum: `DOG`, `CAT`, `OTHER`.
 - **`ItemProfile`** — {`species?`: ProfileSpecies, `minAgeWeeks?`: int32, `maxAgeWeeks?`: int32, `minWeightKg?`: number, `maxWeightKg?`: number, `breedKeywords`: [string], `repeatIntervalDays?`: int32}
 - **`ItemProfileRow`** — {`itemType`: ItemType, `itemId`: int64, `name`: string, `group`: RecoGroup, `hasProfile`: boolean, `profile?`: ItemProfile}

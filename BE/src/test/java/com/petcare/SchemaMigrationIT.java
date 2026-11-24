@@ -117,6 +117,7 @@ class SchemaMigrationIT {
         STATE_COLUMNS.put("articles.status", Set.of("DRAFT", "PUBLISHED", "HIDDEN", "PENDING_REVIEW", "REJECTED")); // V48, 08 §F.3 FSM #21
         // Tầng 3 phần BE-1 (docs/03 #11, #12, docs/09 FSM #23–#26)
         STATE_COLUMNS.put("shift_assignments.status", Set.of("SCHEDULED", "ON_LEAVE", "ABSENT", "CANCELLED"));
+        STATE_COLUMNS.put("shift_assignments.source", Set.of("SELF", "MANAGER")); // V61, docs/adr/0123
         STATE_COLUMNS.put("shift_requests.status", Set.of("PENDING", "APPROVED", "REJECTED", "WITHDRAWN"));
         STATE_COLUMNS.put("surgeries.status", Set.of("PLANNED", "CONSENTED", "IN_PROGRESS", "COMPLETED", "CANCELLED"));
         STATE_COLUMNS.put("admissions.status", Set.of("ADMITTED", "DISCHARGED"));
@@ -217,11 +218,14 @@ class SchemaMigrationIT {
         // V56 ai_chat_logs.used_pet_context + công tắc [CFG] ai.chat.pet_context_enabled (docs/adr/0135, T91; đánh số lại từ V55 vì trùng V55 của feedbacks),
         // V57 ai_chat_logs.intent + công tắc [CFG] ai.chat.open_domain_enabled (docs/adr/0136 "Đã cài ở T92 (phần 2)"),
         // V58 online_orders.delivery_failure_reason (docs/adr/0137 D2, task 126),
+        // V59 ai_documents.risk_level, topic thêm SAFETY / LIFESTYLE + khóa [CFG] ai.ingest.max_file_kb (docs/adr/0147, T89),
+        // V60 shift_requests.current_shift_definition_id (ca lúc gửi, docs/adr/0150 N3-S5b; V57–V59 đã có trên dev, D069),
+        // V61 Nhân sự: shift_assignments.source + khóa [CFG] workforce.weekly_required_shifts (docs/adr/0123, T58; đánh số lại từ V55 ngày 23/11/2026 vì V55 đã dùng cho feedbacks),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -231,7 +235,7 @@ class SchemaMigrationIT {
      * ST24 và danh sách theo chi nhánh.
      */
     @Test
-    void v51And52DropComplaintsAndFeedbackStatus() {
+    void v51And55DropComplaintsAndFeedbackStatus() {
         assertThat(jdbc.queryForList("""
                 SELECT table_name FROM information_schema.tables
                 WHERE table_schema = 'public' AND table_name LIKE 'complaint%'

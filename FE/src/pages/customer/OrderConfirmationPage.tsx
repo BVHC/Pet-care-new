@@ -8,14 +8,15 @@ import { OrderStatusBadge } from '@/components/customer/shop/OrderStatusBadge'
 import { OrderTimeline } from '@/components/customer/shop/OrderTimeline'
 import { EmptyPanel, ErrorPanel, InlineError, LoadingBlock } from '@/components/customer/shop/panels'
 import { BTN_DANGER_OUTLINE, BTN_PRIMARY, CARD, H2, formatDateTime, vnd } from '@/components/customer/shop/styles'
-import { usePayOrder } from '@/components/customer/shop/usePayOrder'
+import { GATEWAY_CLOSED, usePayOrder } from '@/components/customer/shop/usePayOrder'
 import { plainMessage, toApiError } from '@/shared/api/api-error'
 import { shopApi } from '@/shared/api/shop.api'
 import { CommonPageHero } from '@/shared/components/layout/CommonPageHero'
 import { useMyOnlineOrder, useShopMutation } from '@/shared/hooks/useShop'
 import type { OnlineOrder } from '@/shared/types/shop'
 
-const CANCELLABLE = ['PENDING_PAYMENT', 'PAID', 'PROCESSING']
+// BE thật (ADR-0145 C1): khách chỉ hủy được đơn chưa thanh toán; PAID / PROCESSING trả 409 cho tới task 138 (hoàn hàng, hoàn tiền).
+const CANCELLABLE = ['PENDING_PAYMENT']
 
 function Lines({ order }: { order: OnlineOrder }) {
   return (
@@ -81,6 +82,9 @@ function statusNote(order: OnlineOrder): string | null {
   switch (order.status) {
     case 'PENDING_PAYMENT':
       return `Đơn được giữ hàng đến ${formatDateTime(order.paymentDueAt)}, quá hạn sẽ tự hủy.`
+    case 'PAID':
+    case 'PROCESSING':
+      return 'Đơn đã thanh toán nên bạn chưa tự hủy được trên website. Cần hủy hoặc đổi đơn, vui lòng liên hệ chi nhánh xử lý.'
     case 'SHIPPED':
       return 'Đơn đang trên đường giao. Từ lúc bàn giao vận chuyển, bạn không tự hủy được đơn.'
     case 'DELIVERY_FAILED':
@@ -95,13 +99,14 @@ function statusNote(order: OnlineOrder): string | null {
 function Actions({ order }: { order: OnlineOrder }) {
   const [cancelOpen, setCancelOpen] = useState(false)
   const [error, setError] = useState('')
-  const { pay, isPending: paying } = usePayOrder()
+  const { pay, isPending: paying, gatewayClosed } = usePayOrder()
   const confirm = useShopMutation(() => shopApi.confirmReceived(order.onlineOrderId))
   const note = statusNote(order)
   const canCancel = CANCELLABLE.includes(order.status)
 
   const onPay = () => {
     setError('')
+    if (gatewayClosed) return setError(`${GATEWAY_CLOSED}: đơn được giữ hàng đến ${formatDateTime(order.paymentDueAt)}, bạn quay lại thanh toán sau.`)
     pay(order.onlineOrderId).catch((e) => setError(plainMessage(toApiError(e))))
   }
   const onConfirm = () => {

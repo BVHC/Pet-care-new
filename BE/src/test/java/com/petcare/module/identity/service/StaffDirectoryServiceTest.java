@@ -182,6 +182,74 @@ class StaffDirectoryServiceTest {
         assertThat(lock.propagation()).isEqualTo(Propagation.MANDATORY);
     }
 
+    // ------------------------------------------------ findStaffForUpdate (docs/adr/0123 mục 8, docs/adr/0149)
+
+    @Test
+    void findStaffForUpdateLocksExclusivelyBeforeReadingAndNeverTakesTheSharedLock() {
+        when(accounts.lockForUpdate(1L)).thenReturn(Optional.of(1L));
+        when(staffProfiles.findStaffRow(1L)).thenReturn(Optional.of(row(1L, AccountStatus.ACTIVE, false, NOW.plusSeconds(60))));
+
+        StaffSummary summary = service.findStaffForUpdate(1L).orElseThrow();
+
+        InOrder order = inOrder(accounts, staffProfiles);
+        order.verify(accounts).lockForUpdate(1L);
+        order.verify(staffProfiles).findStaffRow(1L);
+        verify(accounts, never()).lockForShare(1L);
+        assertThat(summary.active()).isTrue();
+        assertThat(summary.online()).isTrue();
+        assertThat(summary.branchId()).isEqualTo(5L);
+    }
+
+    @Test
+    void findStaffForUpdateOfAMissingAccountReadsNothing() {
+        when(accounts.lockForUpdate(9L)).thenReturn(Optional.empty());
+
+        assertThat(service.findStaffForUpdate(9L)).isEmpty();
+        verifyNoInteractions(staffProfiles);
+    }
+
+    @Test
+    void findStaffForUpdateOfANonStaffAccountIsEmpty() {
+        when(accounts.lockForUpdate(8L)).thenReturn(Optional.of(8L));
+        when(staffProfiles.findStaffRow(8L)).thenReturn(Optional.empty());
+
+        assertThat(service.findStaffForUpdate(8L)).isEmpty();
+    }
+
+    @Test
+    void findStaffForUpdateReportsALockedOrDisabledStaffMemberAsInactive() {
+        when(accounts.lockForUpdate(2L)).thenReturn(Optional.of(2L));
+        when(accounts.lockForUpdate(3L)).thenReturn(Optional.of(3L));
+        when(staffProfiles.findStaffRow(2L)).thenReturn(Optional.of(row(2L, AccountStatus.ACTIVE, true, null)));
+        when(staffProfiles.findStaffRow(3L)).thenReturn(Optional.of(row(3L, AccountStatus.DISABLED, false, null)));
+
+        assertThat(service.findStaffForUpdate(2L).orElseThrow().active()).isFalse();
+        assertThat(service.findStaffForUpdate(3L).orElseThrow().active()).isFalse();
+    }
+
+    @Test
+    void findStaffForUpdateRefusesAReadOnlyTransaction() {
+        TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
+        try {
+            assertThatThrownBy(() -> service.findStaffForUpdate(1L)).isInstanceOf(IllegalStateException.class);
+        } finally {
+            TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
+        }
+        verifyNoInteractions(staffProfiles);
+        verify(accounts, never()).lockForUpdate(1L);
+    }
+
+    @Test
+    void findStaffForUpdateJoinsTheCallersWriteTransactionAndTheLockQueryIsMandatory() throws Exception {
+        Transactional method = StaffDirectoryService.class.getMethod("findStaffForUpdate", Long.class)
+                .getAnnotation(Transactional.class);
+        assertThat(method.propagation()).isEqualTo(Propagation.MANDATORY);
+        assertThat(method.readOnly()).as("ghi đè readOnly của class").isFalse();
+        Transactional lock = AccountRepository.class.getMethod("lockForUpdate", Long.class)
+                .getAnnotation(Transactional.class);
+        assertThat(lock.propagation()).isEqualTo(Propagation.MANDATORY);
+    }
+
     private StaffSummary summaryOf(StaffRow row) {
         when(staffProfiles.findStaffRow(row.accountId())).thenReturn(Optional.of(row));
         return service.findStaff(row.accountId()).orElseThrow();

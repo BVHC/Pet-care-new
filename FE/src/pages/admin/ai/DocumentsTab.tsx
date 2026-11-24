@@ -24,7 +24,7 @@ import { formatDateTimeVn } from '../articles/format';
 import { TableState } from '../articles/TableState';
 import { DocumentForm } from './DocumentForm';
 import { ImportDocumentDialog } from './ImportDocumentDialog';
-import { INDEX_LABELS, INDEX_VARIANT, SOURCE_LABELS, SPECIES_LABELS, STATUS_LABELS, STATUS_VARIANT, TOPIC_LABELS } from './labels';
+import { INDEX_LABELS, INDEX_VARIANT, RISK_LABELS, RISK_VARIANT, SOURCE_LABELS, SPECIES_LABELS, STATUS_LABELS, STATUS_VARIANT, TOPIC_LABELS } from './labels';
 
 const PAGE_SIZE = 20;
 
@@ -149,6 +149,7 @@ export function DocumentsTab() {
                             #{d.documentId} · {SOURCE_LABELS[d.sourceType]} · phiên bản {d.version}
                           </span>
                           {d.externalId?.startsWith('ARTICLE-') && <StatusBadge status="Từ bài viết" variant="info" />}
+                          {d.riskLevel && <StatusBadge status={`Rủi ro ${RISK_LABELS[d.riskLevel].toLowerCase()}`} variant={RISK_VARIANT[d.riskLevel]} />}
                         </p>
                       </td>
                       <td className="px-3!">

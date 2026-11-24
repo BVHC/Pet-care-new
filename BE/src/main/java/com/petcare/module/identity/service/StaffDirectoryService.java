@@ -67,6 +67,25 @@ public class StaffDirectoryService implements StaffDirectoryApi {
         return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, now));
     }
 
+    /**
+     * Như {@link #findStaffForShare} nhưng khóa độc quyền ({@code FOR NO KEY UPDATE}): hai thao tác workforce trên cùng
+     * một nhân viên xếp hàng thay vì cùng đọc (docs/adr/0123 mục 8). Cùng hai bước tách rời: khóa vô hướng trước, đọc sau
+     * để câu đọc lấy snapshot mới sau khi đã chờ khóa (READ COMMITTED).
+     */
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<StaffSummary> findStaffForUpdate(Long accountId) {
+        Objects.requireNonNull(accountId, "accountId");
+        if (TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            throw new IllegalStateException("StaffDirectoryApi.findStaffForUpdate cần transaction ghi, không được readOnly");
+        }
+        if (accounts.lockForUpdate(accountId).isEmpty()) {
+            return Optional.empty();
+        }
+        Instant now = Instant.now(clock);
+        return staffProfiles.findStaffRow(accountId).map(row -> toSummary(row, now));
+    }
+
     /** BR-TN-05, 06: người online trước, cùng nhóm thì theo họ tên rồi {@code accountId} (thứ tự của câu query). */
     @Override
     public List<StaffSummary> findAssignableStaff(Long branchId, Role role) {

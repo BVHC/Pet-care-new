@@ -77,7 +77,7 @@ class Tier3Be1SchemaIT {
             long staff = account("RECEPTIONIST");
             long shift = shiftDefinition(branch, "Ca sáng", 8, 12);
             Map<String, Object> base = row("branch_id", branch, "staff_id", staff, "shift_definition_id", shift,
-                    "work_date", DAY, "status", "SCHEDULED");
+                    "work_date", DAY, "status", "SCHEDULED", "source", "MANAGER");
 
             insert("shift_assignments", base);
             rejects("ck_shift_assignments_status", () -> insert("shift_assignments",
@@ -102,6 +102,13 @@ class Tier3Be1SchemaIT {
             insert("shift_assignments", with(base, "work_date", DAY.plusDays(3), "status", "CANCELLED",
                     "reason", "Đổi lịch", "status_changed_at", OffsetDateTime.now()));
             insert("shift_assignments", with(base, "work_date", DAY.plusDays(3)));
+
+            // ADR-0123: source chỉ nhận SELF | MANAGER; cả hai nguồn dùng chung ux_shift_assignments_scheduled
+            rejects("ck_shift_assignments_source", () -> insert("shift_assignments",
+                    with(base, "work_date", DAY.plusDays(4), "source", "ADMIN")));
+            insert("shift_assignments", with(base, "work_date", DAY.plusDays(4), "source", "SELF"));
+            rejects("ux_shift_assignments_scheduled", () -> insert("shift_assignments",
+                    with(base, "work_date", DAY.plusDays(4), "source", "MANAGER")));
         });
     }
 
@@ -114,9 +121,16 @@ class Tier3Be1SchemaIT {
             long morning = shiftDefinition(branch, "Ca sáng", 8, 12);
             long evening = shiftDefinition(branch, "Ca chiều", 13, 17);
             long assignment = insert("shift_assignments", row("branch_id", branch, "staff_id", staff,
-                    "shift_definition_id", morning, "work_date", DAY, "status", "SCHEDULED"));
+                    "shift_definition_id", morning, "work_date", DAY, "status", "SCHEDULED", "source", "MANAGER"));
             Map<String, Object> pending = row("assignment_id", assignment, "requester_id", staff,
-                    "request_type", "LEAVE", "reason", "Việc gia đình", "status", "PENDING");
+                    "current_shift_definition_id", morning, "request_type", "LEAVE", "reason", "Việc gia đình",
+                    "status", "PENDING");
+
+            // V60: ca lúc gửi bắt buộc; SWAP không được trỏ ca đích trùng ca lúc gửi (cũng là kiểm điều kiện của V60)
+            rejects("current_shift_definition_id", () -> insert("shift_requests",
+                    with(pending, "current_shift_definition_id", null)));
+            rejects("ck_shift_requests_swap_differs", () -> insert("shift_requests",
+                    with(pending, "request_type", "SWAP", "target_shift_definition_id", morning)));
 
             insert("shift_requests", pending);
             // Tối đa 1 yêu cầu PENDING mỗi phân ca (BR-NS-04)

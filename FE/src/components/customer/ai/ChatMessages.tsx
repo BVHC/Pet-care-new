@@ -46,7 +46,8 @@ function SourceFooter({ r }: { r: ChatResponse }) {
           {badge.text}
         </p>
       )}
-      {sources && <p>Nguồn: {sources}</p>}
+      {/* BR-AI-05: BE trả 3 tài liệu truy hồi gần câu hỏi nhất, không phải tài liệu mô hình đã dùng; nên gọi là "liên quan", không gọi là "nguồn". */}
+      {sources && <p>Tài liệu liên quan: {sources}</p>}
       {disclaimer && <p className="italic">{disclaimer}</p>}
     </div>
   )

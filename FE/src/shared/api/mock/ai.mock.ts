@@ -32,6 +32,8 @@
 //      tồn khả dụng > 0 ở ≥ 1 chi nhánh ACTIVE; loại chuồng đúng loài, đủ sức chứa cân nặng và (như dịch vụ) bật ở ≥ 1 chi nhánh. Không cache (BR-AI-23 cho phép).
 //  A11 Hồ sơ gợi ý: danh sách sắp dịch vụ trước sản phẩm, rồi id tăng dần (hợp đồng không nêu thứ tự); từ khóa giống được chuẩn hóa chữ thường không dấu, bỏ trùng; hồ sơ toàn trường rỗng = xóa (`hasProfile` false);
 //      mục ngừng kinh doanh vẫn ghi được hồ sơ nếu tồn tại. Dịch vụ khám / tiêm, loại chuồng, thuốc, vaccine, sản phẩm kê đơn → 400 BR-AI-18.
+//  A13 T89 (BR-AI-29, 30; V59, ADR-0147): #14 đọc trần cỡ từ [CFG] `ai.ingest.max_file_kb` mỗi lần nạp (màn tham số của mock identity); nạp lại cùng byte file (kể cả tài liệu đã lưu trữ) → 409 CONCURRENCY_CONFLICT "File này đã được nạp trước đó thành tài liệu #<mã> (BR-AI-30)",
+//      `externalId` = FILE-<16 hex>-<n> (mock dùng FNV-1a thay SHA-256). Mock KHÔNG mô phỏng hết giờ trích 20 giây (400) và hết luồng trích (429): BE thật mới có. `riskLevel` (LOW / MODERATE / HIGH, tùy chọn) ở #6, #8 và hai response; PATCH vắng = giữ nguyên, không xóa về trống; tám topic.
 //  A12 T93 (BR-AI-31, 33, 34): hai công tắc [CFG] BOOL `ai.chat.business_intent_enabled` và `ai.chat.general_knowledge_enabled` (mặc định tắt) đọc mỗi lượt hỏi từ màn tham số của mock identity; cả hai tắt thì chatbot chạy y hệt trước T93.
 //      BUSINESS (sau cấp cứu, bệnh án, ý định cá nhân; trước hai lớp kiến thức chung và truy hồi): giá dịch vụ / chi nhánh dựng từ catalog.mock / branch.mock, `sourceType = DATABASE`, không nguồn, không lời nhắc, không nhúng, không LLM.
 //      Kiến thức chung: lời chào và cụm rủi ro y khoa trả câu mẫu tất định; không có đoạn đạt τ vẫn tới bước "LLM" (tốn một lệnh sinh), câu nói về thú trả `GENERAL_KNOWLEDGE` bằng chữ GIẢ LẬP (mock không có mô hình), câu có đoạn và xin "ngoài ra / bổ sung"
@@ -56,11 +58,12 @@ import type {
   RecoGroup,
   RecommendedItem,
   RecommendationResponse,
+  RiskLevel,
   VaccinationItem,
   VaccinationStatus,
   VaccinationSummary,
 } from '../../types/ai';
-import { AI_IMPORT_EXTENSIONS, AI_IMPORT_MAX_BYTES, AI_LIMITS, DOCUMENT_SPECIES, DOCUMENT_STATUSES, DOCUMENT_TOPICS, ITEM_TYPES, PROFILE_SPECIES, RECO_GROUPS } from '../../types/ai';
+import { AI_IMPORT_EXTENSIONS, AI_LIMITS, DOCUMENT_SPECIES, DOCUMENT_STATUSES, DOCUMENT_TOPICS, ITEM_TYPES, PROFILE_SPECIES, RECO_GROUPS, RISK_LEVELS } from '../../types/ai';
 import type { Appointment } from '../../types/appointment';
 import type { Booking } from '../../types/boarding';
 import { SPECIES_LABELS, type Species, type VaccinationProtocol, type VaccineType } from '../../types/catalog';
@@ -168,6 +171,7 @@ function catalogDocuments(firstId: number, now: number): DocRow[] {
         publishedAt: at,
         updatedAt: at,
         externalId: null,
+        riskLevel: null,
         served: { title, content },
       };
     });
@@ -206,6 +210,7 @@ function normalizeDoc(d: Partial<DocRow>, fallbackId: number): DocRow {
     publishedAt: d.publishedAt ?? null,
     updatedAt: typeof d.updatedAt === 'string' ? d.updatedAt : nowIso(),
     externalId: typeof d.externalId === 'string' ? d.externalId : null,
+    riskLevel: RISK_LEVELS.includes(d.riskLevel as RiskLevel) ? (d.riskLevel as RiskLevel) : null,
     served: d.served ?? (indexedVersion > 0 ? { title, content } : null),
   };
 }
@@ -301,6 +306,7 @@ const summaryOf = (d: DocRow): AiDocumentSummary => ({
   indexStatus: d.indexStatus,
   updatedAt: d.updatedAt,
   externalId: d.externalId,
+  riskLevel: d.riskLevel ?? null,
 });
 const documentOf = ({ served: _served, ...d }: DocRow): AiDocument => d;
 const newestFirst = (a: DocRow, b: DocRow) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || b.documentId - a.documentId;
@@ -355,6 +361,7 @@ function documentBodyTypesOk(b: Record<string, unknown>): boolean {
     optString(b.reviewerName) &&
     optEnum(b.topic, DOCUMENT_TOPICS) &&
     optEnum(b.species, DOCUMENT_SPECIES) &&
+    optEnum(b.riskLevel, RISK_LEVELS) &&
     optDate(b.reviewedOn)
   );
 }
@@ -402,6 +409,7 @@ const createDocument: MockHandler = (req) => {
     publishedAt: null,
     updatedAt: at,
     externalId: null,
+    riskLevel: (b.riskLevel as RiskLevel | null | undefined) ?? null,
     served: null,
   };
   s.documents.push(doc);
@@ -409,7 +417,23 @@ const createDocument: MockHandler = (req) => {
   return ok(documentOf(doc), 201, 'Đã tạo tài liệu nháp');
 };
 
-/** #14 (BR-AI-29). Mock chỉ đọc được `.md` / `.txt`; `.docx` / `.pdf` thành nháp có chữ giả định (BE thật mới trích văn bản). */
+const INGEST_LIMIT = 'ai.ingest.max_file_kb';
+
+/**
+ * 16 ký tự hex định danh byte file (BE: 16 hex đầu của SHA-256). Handler đồng bộ không gọi được `crypto.subtle`, nên mock dùng hai
+ * FNV-1a 32 bit: không phải SHA-256, chỉ giữ tính chất cần cho BR-AI-30 là cùng byte thì cùng mã, khác byte thì (gần như chắc) khác mã.
+ */
+function fileHash(bytes: Uint8Array): string {
+  let a = 0x811c9dc5;
+  let c = 0x9747b28c;
+  for (const byte of bytes) {
+    a = Math.imul(a ^ byte, 0x01000193);
+    c = Math.imul(c ^ byte, 0x85ebca6b);
+  }
+  return [a, c].map((n) => (n >>> 0).toString(16).padStart(8, '0')).join('');
+}
+
+/** #14 (BR-AI-29, BR-AI-30). Mock chỉ đọc được `.md` / `.txt`; `.docx` / `.pdf` thành nháp có chữ giả định (BE thật mới trích văn bản). */
 const importDocument: MockHandler = (req) => {
   const b = req.body;
   if (!isObject(b) || (b.fileName != null && typeof b.fileName !== 'string') || (b.contentBase64 != null && typeof b.contentBase64 !== 'string')) return malformed();
@@ -425,7 +449,10 @@ const importDocument: MockHandler = (req) => {
   const fileName = b.fileName as string;
   const dot = fileName.lastIndexOf('.');
   const ext = dot < 0 ? '' : fileName.slice(dot + 1).toLowerCase();
-  if (!AI_IMPORT_EXTENSIONS.includes(ext)) return ruleFail('BR-AI-29', 'File có định dạng không được hỗ trợ (chỉ .md, .txt, .docx, .pdf)');
+  // Trần cỡ là [CFG] `ai.ingest.max_file_kb`, đọc mỗi lần nạp (BE: KnowledgeImportService). Thứ tự kiểm theo mã BE: cỡ base64 → base64 hợp lệ → rỗng → cỡ → phần mở rộng.
+  const maxKb = aiConfig(INGEST_LIMIT);
+  const tooBig = () => ruleFail('BR-AI-29', `File vượt quá tối đa ${maxKb} kB`);
+  if ((b.contentBase64 as string).length > Math.floor((maxKb * 1024 * 4) / 3) + 16) return tooBig();
   let bytes: Uint8Array;
   try {
     bytes = Uint8Array.from(atob(b.contentBase64 as string), (c) => c.charCodeAt(0));
@@ -433,7 +460,8 @@ const importDocument: MockHandler = (req) => {
     return ruleFail('BR-AI-29', 'Nội dung file không phải base64 hợp lệ');
   }
   if (bytes.length === 0) return ruleFail('BR-AI-29', 'File rỗng');
-  if (bytes.length > AI_IMPORT_MAX_BYTES) return ruleFail('BR-AI-29', 'File vượt quá tối đa 2048 kB');
+  if (bytes.length > maxKb * 1024) return tooBig();
+  if (!AI_IMPORT_EXTENSIONS.includes(ext)) return ruleFail('BR-AI-29', 'File có định dạng không được hỗ trợ (chỉ .md, .txt, .docx, .pdf)');
   const text = (ext === 'md' || ext === 'txt' ? new TextDecoder().decode(bytes) : `Nội dung trích từ ${fileName} (mock).`).replace(/\r\n/g, '\n').trim();
   if (!text) return ruleFail('BR-AI-29', 'File không có chữ để nạp');
   const stem = (dot > 0 ? fileName.slice(0, dot) : fileName).trim().slice(0, AI_LIMITS.title - 20);
@@ -441,6 +469,10 @@ const importDocument: MockHandler = (req) => {
   const parts: string[] = [];
   for (let i = 0; i < text.length; i += AI_LIMITS.content) parts.push(text.slice(i, i + AI_LIMITS.content));
   const s = load();
+  const hash = fileHash(bytes);
+  // BR-AI-30: cùng byte file (kể cả tài liệu đã lưu trữ) thì 409, không tạo gì; BE trả CONCURRENCY_CONFLICT và nêu mã tài liệu đã có.
+  const existing = parts.map((_, i) => s.documents.find((d) => d.externalId === `FILE-${hash}-${i + 1}`)).find((d) => d !== undefined);
+  if (existing) return fail('CONCURRENCY_CONFLICT', `File này đã được nạp trước đó thành tài liệu #${existing.documentId} (BR-AI-30)`, 409);
   const at = nowIso();
   const note = isBlank(b.sourceNote) ? `Nạp từ file ${stem} (${ext.toUpperCase()}, ${Math.max(1, Math.round(bytes.length / 1024))} kB)` : (b.sourceNote as string).trim();
   const created = parts.map((content, i) => {
@@ -462,7 +494,8 @@ const importDocument: MockHandler = (req) => {
       chunkCount: 0,
       publishedAt: null,
       updatedAt: at,
-      externalId: null,
+      externalId: `FILE-${hash}-${i + 1}`,
+      riskLevel: null,
       served: null,
     };
     s.documents.push(doc);
@@ -486,6 +519,7 @@ const updateDocument = withDocument(
       sourceNote: has(b.sourceNote) ? optional(b.sourceNote) : doc.sourceNote,
       reviewerName: has(b.reviewerName) ? optional(b.reviewerName) : doc.reviewerName,
       reviewedOn: (b.reviewedOn as string | null | undefined) ?? doc.reviewedOn,
+      riskLevel: (b.riskLevel as RiskLevel | null | undefined) ?? doc.riskLevel ?? null,
     };
     if (has(b.title) && next.title === '') return ruleFail('BR-AI-14', 'Tiêu đề không được để trống');
     if (next.title.length > AI_LIMITS.title) return ruleFail('BR-AI-14', `Tiêu đề tối đa ${AI_LIMITS.title} ký tự`);

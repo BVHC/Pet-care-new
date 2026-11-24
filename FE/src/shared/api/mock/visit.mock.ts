@@ -6,6 +6,7 @@
 // docs/testcases/T36-fe.md. Không mô phỏng: audit (BE ghi VISIT_REASSIGNED), `visit_assignments`, khóa đồng thời, Care Task#6 (chưa nối ở BE),
 // cờ needsReassign tự bật khi ADMIN khóa tài khoản (mock chỉ có dữ liệu mẫu cho cờ này; gán lại dùng điều kiện "người cũ không còn đủ điều kiện").
 import type { Role } from '../../types/auth';
+import type { PendingWorkItem } from '../../types/identity';
 import type { QuotaGroup } from '../../types/branch';
 import type { PriorityClass, Visit, VisitServiceGroup, VisitStatus } from '../../types/visit';
 import { OPEN_VISIT_STATUSES, VISIT_STATUSES } from '../../types/visit';
@@ -701,6 +702,22 @@ export function updateVisitRow(visitId: number, patch: Partial<VisitRow>): Visit
   Object.assign(row, patch);
   save(s);
   return row;
+}
+
+/**
+ * Khóa tài khoản nhân viên (BR-QT-11, ADR-0035): việc dở lấy từ các lượt được gán chưa xong, lượt đã gọi (`IN_PROGRESS`) trước rồi theo `visitId`,
+ * `needsReassign` chỉ với lượt đã gọi; listener của visit đồng thời đánh dấu "cần gán lại" các lượt đó (BR-TN-08). Ca thu ngân mở của BE chưa dựng ở đây.
+ */
+export function pendingWorkOfLockedStaff(accountId: number): PendingWorkItem[] {
+  const s = load();
+  const mine = s.visits.filter((v) => v.assigneeId === accountId && (v.status === 'IN_PROGRESS' || v.status === 'WAITING'));
+  if (mine.some((v) => v.status === 'IN_PROGRESS')) {
+    for (const v of mine) if (v.status === 'IN_PROGRESS') v.needsReassign = true;
+    save(s);
+  }
+  return mine
+    .map((v): PendingWorkItem => ({ type: v.status === 'IN_PROGRESS' ? 'VISIT_IN_PROGRESS' : 'VISIT_WAITING', entityId: v.visitId, branchId: v.branchId, needsReassign: v.status === 'IN_PROGRESS' }))
+    .sort((a, b) => Number(b.needsReassign) - Number(a.needsReassign) || a.entityId - b.entityId);
 }
 
 /** Các lượt đã hoàn tất của một thú (hồ sơ sức khỏe, visit-v1 #21). */

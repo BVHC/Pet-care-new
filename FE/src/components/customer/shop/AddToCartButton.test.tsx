@@ -64,7 +64,8 @@ describe('AddToCartButton (UC61)', () => {
     await loginAs();
     const { user } = renderButton({ productId: 5 });
     await user.click(screen.getByRole('button', { name: 'Thêm vào giỏ' }));
-    expect(await screen.findByText(/Thuốc và vaccine không bán online/)).toBeInTheDocument();
+    // Nguyên văn BE thật (đo 17/11, cùng thông báo cho thuốc kê đơn, thuốc thường và vaccine); /shop thật vẫn liệt kê vitamin và vaccine vì BE công khai không có `productType`.
+    expect(await screen.findByText('Chỉ bán online hàng hóa thường, không bán thuốc hay vaccine')).toBeInTheDocument();
     expect(await quantityOf(5)).toBeUndefined();
   });
 

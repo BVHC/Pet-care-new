@@ -2,7 +2,7 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { AccountSummary } from '../types/auth'
 import { ruleIdOf } from './api-error'
 import { installHybridMockApi, installMockApi } from './mock/mock-api'
-import { parseMockOnly } from './mock/mock-scope'
+import { cancelFailedClosedForRealOrders, parseMockOnly, paymentClosedForRealOrders } from './mock/mock-scope'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081'
 
@@ -29,6 +29,12 @@ const MOCK_ONLY = parseMockOnly(import.meta.env.VITE_API_MOCK_ONLY)
 
 /** Nguồn dữ liệu của phiên này: `main.tsx` hiện nó ở góc màn hình lúc dev để biết đang xem dữ liệu thật hay mock. */
 export const API_MODE: 'mock' | 'hybrid' | 'real' = API_MOCK ? 'mock' : MOCK_ONLY.length > 0 ? 'hybrid' : 'real'
+
+/** Cổng thanh toán đóng cho đơn thật (T67, chờ payment T65): đặt đơn đi BE thật mà `pay` còn mock. Trang gọi hàm này; test trang thay nó bằng `vi.mock`. */
+export const paymentGatewayClosed = (): boolean => paymentClosedForRealOrders(API_MOCK, MOCK_ONLY)
+
+/** Hủy đơn sau giao thất bại đóng cho đơn thật (T68, chờ task 138): danh sách đơn đi BE thật mà `cancel-failed` còn mock. Trang gọi hàm này; test trang thay nó bằng `vi.mock`. */
+export const cancelFailedClosed = (): boolean => cancelFailedClosedForRealOrders(API_MOCK, MOCK_ONLY)
 
 if (API_MOCK) {
   installMockApi(apiClient)

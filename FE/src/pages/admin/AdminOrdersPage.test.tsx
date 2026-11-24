@@ -2,7 +2,8 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { apiClient } from '../../shared/api/axios';
+import { ApiError } from '../../shared/api/api-error';
+import { apiClient, cancelFailedClosed } from '../../shared/api/axios';
 import { installMockApi } from '../../shared/api/mock/mock-api';
 import { shopApi } from '../../shared/api/shop.api';
 import { pinClock, signInAs } from '../../test/cashier-harness';
@@ -14,9 +15,12 @@ vi.mock('../../shared/constants/realtime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../shared/constants/realtime')>()),
   retryDelay: () => 0,
 }));
+// Vitest luôn chạy VITE_API_MOCK=true nên điều kiện thật không đổi được ở đây; ba chế độ được kiểm ở hàm thuần `cancelFailedClosedForRealOrders` (mock-scope.test.ts).
+vi.mock('../../shared/api/axios', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../shared/api/axios')>()), cancelFailedClosed: vi.fn(() => false) }));
 
 beforeAll(() => installMockApi(apiClient));
 beforeEach(async () => {
+  vi.mocked(cancelFailedClosed).mockReturnValue(false);
   pinClock('2026-10-27T10:00:00+07:00');
   await signInAs('reception@store1.vn');
 });
@@ -121,14 +125,61 @@ describe('thao tác theo trạng thái', () => {
   });
 });
 
+// T68: BE chưa có `cancel-failed` (#19, task 138). Hỗn hợp: danh sách đơn thật mà hủy còn mock → nút khóa, không gọi mock (tránh hủy nhầm đơn mock trùng id).
+describe('hủy đơn sau giao thất bại khi BE chưa có (T68)', () => {
+  it('hỗn hợp: nút "Hủy đơn" khóa kèm lời giải thích, "Giao lại" vẫn mở, bấm không mở hộp thoại', async () => {
+    vi.mocked(cancelFailedClosed).mockReturnValue(true);
+    const user = renderPage();
+    await openRow(user, 1); // #7 DELIVERY_FAILED, chưa giao lại lần nào
+    const cancel = await within(panel()).findByRole('button', { name: 'Hủy đơn' });
+    expect(cancel).toBeDisabled();
+    expect(cancel).toHaveAccessibleDescription(/Hủy đơn sau giao thất bại chưa mở \(BE chưa có, task 138\)/);
+    // Chỉ đơn hết lượt giao lại mới kẹt hẳn: câu giải thích không khẳng định đơn nào cũng hết lượt.
+    expect(cancel).toHaveAccessibleDescription(/Nếu đơn đã hết lượt giao lại/);
+    expect(within(panel()).getByRole('button', { name: 'Giao lại' })).toBeEnabled();
+    await user.click(cancel);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('toàn mock: nút "Hủy đơn" mở và không có lời giải thích (T57 giữ nguyên)', async () => {
+    const user = renderPage();
+    await openRow(user, 1); // #7
+    const cancel = await within(panel()).findByRole('button', { name: 'Hủy đơn' });
+    expect(cancel).toBeEnabled();
+    expect(within(panel()).queryByText(/chưa mở \(BE chưa có/)).not.toBeInTheDocument();
+  });
+
+  it('quản lý chi nhánh (chỉ xem): đơn giao thất bại không có nút ghi nào và không có lời giải thích về hủy đơn', async () => {
+    vi.mocked(cancelFailedClosed).mockReturnValue(true);
+    await signInAs('manager@store1.vn');
+    const user = renderPage();
+    await openRow(user, 1); // #7
+    await within(panel()).findByText('J&T · JT2611123');
+    expect(within(panel()).queryByRole('button', { name: /Giao lại|Hủy đơn/ })).not.toBeInTheDocument();
+    expect(within(panel()).queryByText(/chưa mở \(BE chưa có/)).not.toBeInTheDocument();
+  });
+});
+
 describe('lỗi từ máy chủ', () => {
-  it('giao lại quá số lần tối đa (400 BR-BH-11) hiện ngay trong hộp thoại, không đóng', async () => {
+  it('giao lại quá số lần tối đa (400 BR-BH-11) hiện ngay trong hộp thoại (câu của BE thật, không kèm mã rule), không đóng', async () => {
     const user = renderPage();
     await openRow(user, 0); // #6, đã giao lại 2 lần
     await user.click(await within(panel()).findByRole('button', { name: 'Giao lại' }));
     await user.type(within(dialog()).getByLabelText('Mã vận đơn'), 'GHN0001');
     await user.click(within(dialog()).getByRole('button', { name: 'Giao lại' }));
-    expect(await within(dialog()).findByRole('alert')).toHaveTextContent('Đơn đã giao lại tối đa 2 lần, hãy hủy đơn');
+    const alert = await within(dialog()).findByRole('alert');
+    expect(alert).toHaveTextContent('Đơn đã giao lại tối đa 2 lần, không giao lại thêm được');
+    expect(alert).not.toHaveTextContent('BR-BH-11');
+  });
+
+  it('403 từ máy chủ hiện thành thông báo lỗi và nút không bị treo', async () => {
+    const user = renderPage();
+    await openRow(user, 3); // #5 PAID
+    const spy = vi.spyOn(shopApi, 'startProcessing').mockRejectedValueOnce(new ApiError('ACCESS_DENIED', 'Không có quyền thực hiện thao tác này', 403));
+    await user.click(await within(panel()).findByRole('button', { name: 'Bắt đầu xử lý' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không có quyền thực hiện thao tác này');
+    await waitFor(() => expect(within(panel()).getByRole('button', { name: 'Bắt đầu xử lý' })).toBeEnabled());
+    spy.mockRestore();
   });
 
   it('đơn đã đổi trạng thái ở nơi khác (409) hiện thành thông báo lỗi', async () => {

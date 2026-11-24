@@ -63,13 +63,13 @@ describe('mở khung chat', () => {
 });
 
 describe('khách vãng lai (endpoint công khai)', () => {
-  it('ANSWERED: câu trả lời kèm nguồn trích dẫn và lời nhắc tham khảo', async () => {
+  it('ANSWERED: câu trả lời kèm tài liệu liên quan và lời nhắc tham khảo', async () => {
     const publicAsk = vi.spyOn(aiApi, 'ask');
     const meAsk = vi.spyOn(aiApi, 'askAsCustomer');
     const user = renderMascot();
     const chat = await openChat(user);
     await ask(user, chat, 'Chó con tiêm phòng dại lúc mấy tuần?');
-    expect(await within(chat).findByText(/^Nguồn:/)).toBeInTheDocument();
+    expect(await within(chat).findByText(/^Tài liệu liên quan:/)).toBeInTheDocument();
     expect(within(chat).getByText(/không thay thế khám thú y/i)).toBeInTheDocument();
     expect(publicAsk.mock.calls[0][0]).toEqual({ question: 'Chó con tiêm phòng dại lúc mấy tuần?' });
     expect(meAsk).not.toHaveBeenCalled();
@@ -82,7 +82,7 @@ describe('khách vãng lai (endpoint công khai)', () => {
     await ask(user, chat, 'Giá vàng hôm nay là bao nhiêu?');
     expect(await within(chat).findByText(/Mình chưa có thông tin cho câu hỏi này/)).toBeInTheDocument();
     expect(within(chat).getByRole('link', { name: /Đặt lịch khám/ })).toHaveAttribute('href', '/booking');
-    expect(within(chat).queryByText(/^Nguồn:/)).not.toBeInTheDocument();
+    expect(within(chat).queryByText(/^Tài liệu liên quan:/)).not.toBeInTheDocument();
   });
 
   it('MEDICAL_REFUSAL: từ chối liều thuốc, hướng dẫn đặt lịch', async () => {
@@ -197,7 +197,7 @@ describe('đổi tài khoản', () => {
     expect(within(chat).queryAllByText('Sắp tới tôi có lịch hẹn không?').filter((el) => !el.closest('button'))).toHaveLength(0);
 
     await ask(user, chat, 'Chó con tiêm phòng dại lúc mấy tuần?');
-    await within(chat).findByText(/^Nguồn:/);
+    await within(chat).findByText(/^Tài liệu liên quan:/);
     expect(publicAsk.mock.calls[0][0]).toEqual({ question: 'Chó con tiêm phòng dại lúc mấy tuần?' });
   });
 });
@@ -210,7 +210,7 @@ describe('nhân viên đăng nhập', () => {
     const user = renderMascot();
     const chat = await openChat(user);
     await ask(user, chat, 'Chó con tiêm phòng dại lúc mấy tuần?');
-    expect(await within(chat).findByText(/^Nguồn:/)).toBeInTheDocument();
+    expect(await within(chat).findByText(/^Tài liệu liên quan:/)).toBeInTheDocument();
     expect(publicAsk).toHaveBeenCalledTimes(1);
     expect(meAsk).not.toHaveBeenCalled();
   });

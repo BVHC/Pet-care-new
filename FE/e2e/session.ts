@@ -40,6 +40,15 @@ export async function signIn(page: Page, account: DemoAccount) {
   }, persistedSession(account));
 }
 
+/**
+ * The mock seeds today's appointments at fixed clock times (Mochi 11:00), so a run at the wrong hour finds them late or already
+ * no-show (BR-LH-08) and the desk list changes. Pin the browser clock to 11:00 on a Thursday; time still flows from there.
+ * Call it before the first `goto`.
+ */
+export async function pinClock(page: Page) {
+  await page.clock.install({ time: new Date('2026-11-19T11:00:00+07:00') });
+}
+
 /** One role per account (v16): hand a visit to the next person by signing in as them. */
 export async function switchTo(page: Page, account: DemoAccount, path: string) {
   if (page.url() === 'about:blank') await page.goto('/');

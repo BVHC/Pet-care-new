@@ -54,6 +54,17 @@ test('ánh xạ topic / species / sourceNote đúng bảng README', () => {
   assert.equal(toCreateRequest({ ...base, species: ['cat'] }).species, 'CAT');
 });
 
+test('nhóm an toàn → SAFETY, nhóm lối sống → LIFESTYLE (V59), phần còn lại giữ như cũ', () => {
+  for (const t of ['emergency_triage', 'first_aid', 'poisoning_safety', 'family_safety']) assert.equal(toCreateRequest({ ...base, topic: t }).topic, 'SAFETY', t);
+  for (const t of ['adoption', 'travel', 'multi_pet_household', 'senior_care']) assert.equal(toCreateRequest({ ...base, topic: t }).topic, 'LIFESTYLE', t);
+  for (const t of ['basic_care', 'dog_care', 'cat_care', 'puppy_care', 'kitten_care', 'cat_environment']) assert.equal(toCreateRequest({ ...base, topic: t }).topic, 'CARE', t);
+});
+
+test('risk_level hợp lệ được gửi qua #6 dưới tên riskLevel; giá trị khác hoặc vắng thì không gửi', () => {
+  for (const v of ['LOW', 'MODERATE', 'HIGH']) assert.equal(toCreateRequest({ ...base, riskLevel: v }).riskLevel, v);
+  for (const v of ['UNSET', 'high', 'EXTREME', '']) assert.equal('riskLevel' in toCreateRequest({ ...base, riskLevel: v }), false, v);
+});
+
 test('topic lạ thì không đoán', () => {
   assert.throws(() => toCreateRequest({ ...base, topic: 'blockchain' }), /topic/);
 });
@@ -132,3 +143,27 @@ test('indexByTitle: trùng tiêu đề thì ưu tiên tài liệu chưa lưu tr�
 });
 
 test('KEEP_TITLES là 4 tài liệu riêng của Pet Care', () => { assert.equal(KEEP_TITLES.length, 4); });
+
+// ---- bù topic / riskLevel cho tài liệu đã nạp trước V59 (ADR-0147, phương án B của Hiến 19/11/2026) --------------------------------
+import { backfillPatch } from './load-docs-rag.mjs';
+
+test('backfillPatch: tài liệu cũ còn CARE và rủi ro rỗng → bù cả topic mới lẫn riskLevel', () => {
+  assert.deepEqual(backfillPatch({ status: 'PUBLISHED', topic: 'CARE', riskLevel: null }, { topic: 'SAFETY', riskLevel: 'HIGH' }), { topic: 'SAFETY', riskLevel: 'HIGH' });
+  assert.deepEqual(backfillPatch({ status: 'DRAFT', topic: 'CARE' }, { topic: 'LIFESTYLE', riskLevel: 'LOW' }), { topic: 'LIFESTYLE', riskLevel: 'LOW' });
+});
+
+test('backfillPatch: không ghi đè sửa tay (topic đã đổi khỏi CARE, riskLevel đã đặt)', () => {
+  assert.deepEqual(backfillPatch({ status: 'PUBLISHED', topic: 'BEHAVIOR', riskLevel: null }, { topic: 'SAFETY', riskLevel: 'HIGH' }), { riskLevel: 'HIGH' });
+  assert.deepEqual(backfillPatch({ status: 'PUBLISHED', topic: 'CARE', riskLevel: 'MODERATE' }, { topic: 'SAFETY', riskLevel: 'HIGH' }), { topic: 'SAFETY' });
+  assert.equal(backfillPatch({ status: 'PUBLISHED', topic: 'SAFETY', riskLevel: 'LOW' }, { topic: 'SAFETY', riskLevel: 'HIGH' }), null);
+});
+
+test('backfillPatch: bảng mới vẫn là CARE thì không đổi topic; thiếu riskLevel hợp lệ thì không gửi riskLevel', () => {
+  assert.deepEqual(backfillPatch({ status: 'PUBLISHED', topic: 'CARE', riskLevel: null }, { topic: 'CARE', riskLevel: 'LOW' }), { riskLevel: 'LOW' });
+  assert.equal(backfillPatch({ status: 'PUBLISHED', topic: 'CARE', riskLevel: null }, { topic: 'CARE' }), null);
+  assert.equal('riskLevel' in (backfillPatch({ status: 'PUBLISHED', topic: 'CARE', riskLevel: null }, { topic: 'SAFETY' }) ?? {}), false);
+});
+
+test('backfillPatch: tài liệu ARCHIVED bỏ qua (PATCH lưu trữ là 409)', () => {
+  assert.equal(backfillPatch({ status: 'ARCHIVED', topic: 'CARE', riskLevel: null }, { topic: 'SAFETY', riskLevel: 'HIGH' }), null);
+});
