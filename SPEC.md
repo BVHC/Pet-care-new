@@ -21,6 +21,8 @@ Each command must exit zero and run the named tests. The verification script als
 
 On this Windows host use `& 'C:/Program Files/Git/bin/bash.exe' ./verify.sh <classes>` from PowerShell. The system Bash launcher targets WSL.
 
+For a disposable local environment using the fake adapter, enable the ST21 schedule at launch with `--app.jobs.gateway-refund.cron="0 */5 * * * *"`. The gateway worker leaves real provider handling gated pending sandbox verification.
+
 ## Scope and constraints
 
 Write workflow files in the repo root, Java backend code under the assigned module paths, new tests, and a new Flyway migration if needed. In each brief narrow the write scope to named files. Preserve existing tests and migrations, dependency manifests, frontend, `app/auth/`, `app/payments/`, `app/core/config.py`, `.env*`, `.github/`, and all Dockerfiles. Preserve existing local edits. No worktree, push, merge, deployment, or skipped commit hooks.

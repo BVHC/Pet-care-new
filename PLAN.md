@@ -13,8 +13,8 @@ Use one checkout and a separate `codex/be2-<slice>` branch for each API or job. 
 | L7 | payment-reconcile-list | Payment controller/DTO/read query, new `PaymentReconciliationListIT`. | L6 | Verified locally |
 | L8 | payment-reconcile-items | Payment controller/DTO/read query, new `PaymentReconciliationItemsIT`. | L6, shared L7 controller | Verified locally |
 | L9 | payment-reconcile-resolve | Payment controller/DTO/write service, new `PaymentReconciliationResolveIT`. | L6, shared L7 controller | Verified locally |
-| L10 | gateway-refund-job | Returns worker/service/repository and existing payment gateway interface, new `GatewayRefundJobIT`. | L2 and T127 for reachable flow; scripted adapter and fixture rows for worker tests | Pending local slice; sandbox blocked |
+| L10 | gateway-refund-job | Returns worker/service/repository and existing payment gateway interface, new `GatewayRefundJobIT`. | L2 and T127 for reachable flow; scripted adapter and fixture rows for worker tests | Verified locally; sandbox blocked |
 | L11 | paid-online-cancel | Existing shop cancellation routes/services and returns refund creation, new `PaidOnlineOrderCancelIT`. | T127, schema compatibility and immutable shop parity | Blocked |
-| L12 | return-refund-fsm | New `ReturnRefundFsmIT` using PostgreSQL and fixed clock. | L1–L4, L10 for documented edges | Pending reachable tests; full coverage blocked by L2 |
+| L12 | return-refund-fsm | New `ReturnRefundFsmIT` using PostgreSQL and fixed clock. | L1–L4, L10 for documented edges | In progress for reachable edges; full coverage blocked by L2 |
 
 Run each slice command from SPEC.md, check tracked and untracked paths against the brief and inspect the diff for audit, transaction boundaries and branch permissions. Record command output in PROGRESS.md. If a slice remains blocked, record the exact failing dependency and continue with independent slices. Phase C runs local HTTP probes against a disposable database and an independent review.
