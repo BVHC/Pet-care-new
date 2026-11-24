@@ -1,5 +1,8 @@
 package com.petcare.module.catalog.dto;
 
+import java.util.List;
+
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -32,6 +35,11 @@ public record UpdateProductRequest(
 
         @Size(max = 500, message = "Đường dẫn ảnh tối đa 500 ký tự")
         String imageUrl,
+
+        /** {@code null} = không đổi; {@code []} = xóa hết; mảng khác = thay cả danh sách (docs/adr/0151). */
+        @Size(max = 8, message = "Tối đa 8 ảnh phụ")
+        List<@NotBlank(message = "Đường dẫn ảnh phụ không được để trống")
+                @Size(max = 500, message = "Đường dẫn ảnh phụ tối đa 500 ký tự") String> galleryUrls,
 
         Boolean isActive) {
 }

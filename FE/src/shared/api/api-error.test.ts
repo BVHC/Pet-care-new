@@ -78,6 +78,14 @@ describe('fieldErrorsOf (BE GlobalExceptionHandler: "field: message; field: mess
     });
   });
 
+  it('reads a field name with an array index (galleryUrls[0]) and keeps it apart from the list-level error', () => {
+    const err = new ApiError('VALIDATION_FAILED', 'galleryUrls: Tối đa 8 ảnh phụ; galleryUrls[2]: Đường dẫn ảnh phụ không được để trống', 400);
+    expect(fieldErrorsOf(err)).toEqual({
+      galleryUrls: 'Tối đa 8 ảnh phụ',
+      'galleryUrls[2]': 'Đường dẫn ảnh phụ không được để trống',
+    });
+  });
+
   it('returns nothing for a validation error that names no field', () => {
     expect(fieldErrorsOf(new ApiError('VALIDATION_FAILED', 'SKU đã tồn tại', 400))).toEqual({});
   });
@@ -97,6 +105,11 @@ describe('plainMessage', () => {
   it('lists validation messages without the field names', () => {
     const err = new ApiError('VALIDATION_FAILED', 'sku: SKU không được để trống; price: Thiếu giá', 400);
     expect(plainMessage(err)).toBe('SKU không được để trống. Thiếu giá');
+  });
+
+  it('shows an array element error without its path, and the same sentence for several elements only once', () => {
+    const err = new ApiError('VALIDATION_FAILED', 'galleryUrls[0]: Đường dẫn ảnh phụ không được để trống; galleryUrls[3]: Đường dẫn ảnh phụ không được để trống', 400);
+    expect(plainMessage(err)).toBe('Đường dẫn ảnh phụ không được để trống');
   });
 
   it('keeps other messages as they are', () => {

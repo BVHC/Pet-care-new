@@ -1,5 +1,11 @@
 package com.petcare.module.catalog.entity;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.petcare.module.catalog.api.ProductType;
 import com.petcare.platform.model.TimestampedEntity;
 
@@ -72,6 +78,12 @@ public class Product extends TimestampedEntity {
     @Setter
     @Column(name = "image_url")
     private String imageUrl;
+
+    /** Ảnh phụ có thứ tự, tối đa 8 (V62, docs/adr/0151); {@code imageUrl} vẫn là ảnh bìa. */
+    @Setter
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "gallery_urls", nullable = false)
+    private List<String> galleryUrls = new ArrayList<>();
 
     @Setter
     @Column(name = "is_active", nullable = false)

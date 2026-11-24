@@ -65,7 +65,7 @@ def emit(obj, indent=0):
 
 # ---------------------------------------------------------------- property DSL
 def prop(spec):
-    """'int64|mô tả', 'string:200?|…', 'enum:A,B|…', 'ref:X', 'array:ref:X', 'array:int64'."""
+    """'int64|mô tả', 'string:200?|…', 'enum:A,B|…', 'ref:X', 'array:ref:X', 'array:int64', 'array<=8:url' (maxItems)."""
     typ, _, desc = spec.partition("|")
     nullable = typ.endswith("?")
     typ = typ.rstrip("?")
@@ -80,8 +80,14 @@ def prop(spec):
 
 
 def _type(t):
-    if t.startswith("array:"):
-        return {"type": "array", "items": _type(t[6:])}
+    if t.startswith("array"):
+        # 'array:X' hoặc 'array<=8:X' (thêm maxItems)
+        head, _, item = t.partition(":")
+        s = {"type": "array"}
+        if head.startswith("array<="):
+            s["maxItems"] = int(head[7:])
+        s["items"] = _type(item)
+        return s
     if t.startswith("ref:"):
         return {"$ref": f"#/components/schemas/{t[4:]}"}
     if t.startswith("enum:"):

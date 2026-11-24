@@ -98,6 +98,163 @@ describe('products', () => {
   });
 });
 
+// catalog-v1 galleryUrls (ảnh phụ có thứ tự). PATCH: vắng / null = giữ nguyên, [] = xóa hết, mảng khác = THAY cả danh sách.
+// Bean Validation chạy trên thân thô (trước khi cắt khoảng trắng và bỏ trùng); BE rồi mới chuẩn hóa: trim, giữ lần xuất hiện đầu.
+describe('product gallery (galleryUrls)', () => {
+  const create = async (galleryUrls?: unknown) => {
+    const auth = await manager();
+    const sku = `GAL-${Math.random().toString(36).slice(2, 8)}`;
+    const res = await client.post('/api/products', { ...NEW_PRODUCT, sku, ...(galleryUrls === undefined ? {} : { galleryUrls }) }, auth);
+    return { auth, id: res.data.data.productId as number, product: res.data.data };
+  };
+  const readGallery = async (auth: Awaited<ReturnType<typeof manager>>, id: number) => (await client.get(`/api/products/${id}`, auth)).data.data.galleryUrls;
+  const message = (res: AxiosResponse) => res.data.message as string;
+  const LONG = (n: number) => `/${'a'.repeat(n - 1)}`;
+
+  it('dữ liệu mẫu: sản phẩm 1 có 2 ảnh phụ, sản phẩm 3 không có; danh sách và chi tiết đều có trường', async () => {
+    const auth = await manager();
+    const one = (await client.get('/api/products/1', auth)).data.data;
+    expect(one.galleryUrls).toEqual(['/imgs/prod2.jpg', '/imgs/prod3.jpg']);
+    expect((await client.get('/api/products/3', auth)).data.data.galleryUrls).toEqual([]);
+    const list = (await client.get('/api/products', { params: { size: 100 }, ...auth })).data.data.content as { galleryUrls: string[] }[];
+    expect(list.every((p) => Array.isArray(p.galleryUrls))).toBe(true);
+  });
+
+  it('POST không gửi galleryUrls thì lưu []; gửi mảng thì lưu đã cắt khoảng trắng, bỏ trùng, giữ thứ tự', async () => {
+    expect((await create()).product.galleryUrls).toEqual([]);
+    const { product } = await create([' /b.jpg ', '/a.jpg', '/b.jpg', '/c.jpg']);
+    expect(product.galleryUrls).toEqual(['/b.jpg', '/a.jpg', '/c.jpg']);
+  });
+
+  it('PATCH: vắng hoặc null giữ nguyên; [] xóa hết; mảng khác THAY cả danh sách (không cộng dồn) theo thứ tự gửi', async () => {
+    const { auth, id } = await create(['/a.jpg', '/b.jpg']);
+    await client.patch(`/api/products/${id}`, { name: 'Đổi tên' }, auth);
+    expect(await readGallery(auth, id)).toEqual(['/a.jpg', '/b.jpg']);
+    await client.patch(`/api/products/${id}`, { galleryUrls: null }, auth);
+    expect(await readGallery(auth, id)).toEqual(['/a.jpg', '/b.jpg']);
+    const replaced = await client.patch(`/api/products/${id}`, { galleryUrls: ['/c.jpg', '/b.jpg'] }, auth);
+    expect(replaced.data.data.galleryUrls).toEqual(['/c.jpg', '/b.jpg']);
+    expect(await readGallery(auth, id)).toEqual(['/c.jpg', '/b.jpg']);
+    await client.patch(`/api/products/${id}`, { galleryUrls: [] }, auth);
+    expect(await readGallery(auth, id)).toEqual([]);
+  });
+
+  it('đủ 8 ảnh được; 9 ảnh bị 400 VALIDATION_FAILED "Tối đa 8 ảnh phụ"; sản phẩm không đổi', async () => {
+    const eight = Array.from({ length: 8 }, (_, i) => `/p${i}.jpg`);
+    const { auth, id } = await create(eight);
+    expect(await readGallery(auth, id)).toEqual(eight);
+    const res = await failure(client.patch(`/api/products/${id}`, { galleryUrls: [...eight, '/p8.jpg'] }, auth));
+    expect(res.status).toBe(400);
+    expect(res.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', message: 'galleryUrls: Tối đa 8 ảnh phụ' });
+    expect(await readGallery(auth, id)).toEqual(eight);
+  });
+
+  it('giới hạn 8 tính trên thân thô: 9 phần tử trùng nhau (chuẩn hóa còn 1) vẫn bị từ chối, còn 8 phần tử trùng nhau thì được', async () => {
+    const { auth, id } = await create();
+    const nine = await failure(client.patch(`/api/products/${id}`, { galleryUrls: Array(9).fill('/same.jpg') }, auth));
+    expect(message(nine)).toBe('galleryUrls: Tối đa 8 ảnh phụ');
+    await client.patch(`/api/products/${id}`, { galleryUrls: Array(8).fill('/same.jpg') }, auth);
+    expect(await readGallery(auth, id)).toEqual(['/same.jpg']);
+  });
+
+  it('phần tử rỗng, chỉ khoảng trắng hoặc null bị 400 kèm đường dẫn trường galleryUrls[i]; không được bỏ im lặng', async () => {
+    const { auth, id } = await create(['/a.jpg']);
+    for (const [bad, index] of [
+      [['/x.jpg', ''], 1],
+      [['   '], 0],
+      [[null, '/x.jpg'], 0],
+    ] as const) {
+      const res = await failure(client.patch(`/api/products/${id}`, { galleryUrls: bad }, auth));
+      expect(res.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', message: `galleryUrls[${index}]: Đường dẫn ảnh phụ không được để trống` });
+    }
+    const post = await failure(client.post('/api/products', { ...NEW_PRODUCT, sku: 'GAL-BLANK', galleryUrls: [' '] }, auth));
+    expect(message(post)).toBe('galleryUrls[0]: Đường dẫn ảnh phụ không được để trống');
+    expect(await readGallery(auth, id)).toEqual(['/a.jpg']);
+  });
+
+  it('mỗi phần tử tối đa 500 ký tự (tính trên chuỗi thô, trước khi cắt); 500 được, 501 bị 400', async () => {
+    const { auth, id } = await create();
+    await client.patch(`/api/products/${id}`, { galleryUrls: [LONG(500)] }, auth);
+    const res = await failure(client.patch(`/api/products/${id}`, { galleryUrls: ['/ok.jpg', LONG(501)] }, auth));
+    expect(res.data).toMatchObject({ errorCode: 'VALIDATION_FAILED', message: 'galleryUrls[1]: Đường dẫn ảnh phụ tối đa 500 ký tự' });
+    expect(await readGallery(auth, id)).toEqual([LONG(500)]);
+  });
+
+  // BE trả các vi phạm cùng lúc thành MỘT chuỗi nối bằng "; " nhưng THỨ TỰ KHÔNG ỔN ĐỊNH (Bean Validation trả tập hợp; đo 24/11/2026
+  // trên BE thật: 4 thứ tự khác nhau trong 5 lần). Nên chỉ so tập hợp các đoạn; mock giữ một thứ tự cố định (số lượng trước, rồi theo chỉ số).
+  it('nhiều lỗi cùng lúc được nối bằng "; " trong MỘT thông báo (so theo tập hợp, không so thứ tự)', async () => {
+    const { auth, id } = await create();
+    const list = ['', null, LONG(501), ...Array(6).fill('/x.jpg')];
+    const res = await failure(client.patch(`/api/products/${id}`, { galleryUrls: list }, auth));
+    expect(res.data.errorCode).toBe('VALIDATION_FAILED');
+    expect(new Set(message(res).split('; '))).toEqual(
+      new Set([
+        'galleryUrls: Tối đa 8 ảnh phụ',
+        'galleryUrls[0]: Đường dẫn ảnh phụ không được để trống',
+        'galleryUrls[1]: Đường dẫn ảnh phụ không được để trống',
+        'galleryUrls[2]: Đường dẫn ảnh phụ tối đa 500 ký tự',
+      ]),
+    );
+  });
+
+  it('lỗi gallery đi cùng lỗi trường khác trong cùng một thông báo (tên sản phẩm rỗng, giá âm, 9 ảnh)', async () => {
+    const { auth, id } = await create();
+    const res = await failure(client.patch(`/api/products/${id}`, { name: ' ', price: -1, galleryUrls: Array.from({ length: 9 }, (_, i) => `/p${i}.jpg`) }, auth));
+    expect(new Set(message(res).split('; '))).toEqual(
+      new Set(['name: Tên sản phẩm không được để trống', 'price: Giá không được âm', 'galleryUrls: Tối đa 8 ảnh phụ']),
+    );
+  });
+
+  // Đo trên BE thật (24/11/2026): 401 trước, rồi 400 (thân sai) TRƯỚC 403 (sai vai) TRƯỚC 404 (không có sản phẩm); POST cũng vậy.
+  it('thứ tự lỗi như BE thật: 400 (thân sai) trước 403 (không phải SUPER_MANAGER) trước 404; gallery hợp lệ bởi bác sĩ vẫn 403', async () => {
+    const { id } = await create();
+    const vet = await as('doctor@store1.vn');
+    const nine = Array.from({ length: 9 }, (_, i) => `/p${i}.jpg`);
+    const badPatch = await failure(client.patch(`/api/products/${id}`, { galleryUrls: nine }, vet));
+    expect(badPatch.data).toMatchObject({ statusCode: 400, errorCode: 'VALIDATION_FAILED', message: 'galleryUrls: Tối đa 8 ảnh phụ' });
+    const badPost = await failure(client.post('/api/products', { ...NEW_PRODUCT, sku: 'GAL-VET', galleryUrls: nine }, vet));
+    expect(badPost.data).toMatchObject({ statusCode: 400, errorCode: 'VALIDATION_FAILED' });
+    const okPatch = await failure(client.patch(`/api/products/${id}`, { galleryUrls: ['/a.jpg'] }, vet));
+    expect(okPatch.data).toMatchObject({ statusCode: 403, errorCode: 'ACCESS_DENIED', message: 'Không có quyền thực hiện thao tác này' });
+
+    const auth = await manager();
+    const missingBad = await failure(client.patch('/api/products/999999999', { galleryUrls: nine }, auth));
+    expect(missingBad.data).toMatchObject({ statusCode: 400, errorCode: 'VALIDATION_FAILED' });
+    const missing = await failure(client.patch('/api/products/999999999', { galleryUrls: ['/a.jpg'] }, auth));
+    expect(missing.data).toMatchObject({ statusCode: 404, errorCode: 'RESOURCE_NOT_FOUND', message: 'Không tìm thấy Sản phẩm #999999999' });
+  });
+
+  it('không đăng nhập thì 401 dù thân sai', async () => {
+    const res = await failure(client.patch('/api/products/1', { galleryUrls: Array(9).fill('/a.jpg') }));
+    expect(res.status).toBe(401);
+  });
+
+  it.each([
+    ['một chuỗi', '/a.jpg'],
+    ['một đối tượng', { url: '/a.jpg' }],
+    ['mảng có phần tử là đối tượng', ['/a.jpg', { url: '/b.jpg' }]],
+  ])('galleryUrls là %s: 400 MALFORMED_REQUEST (sai kiểu JSON, không phải VALIDATION_FAILED), cả POST lẫn PATCH', async (_case, galleryUrls) => {
+    const { auth, id } = await create();
+    const expected = { statusCode: 400, errorCode: 'MALFORMED_REQUEST', message: 'Nội dung request không đúng định dạng JSON hoặc sai kiểu dữ liệu' };
+    expect((await failure(client.patch(`/api/products/${id}`, { galleryUrls }, auth))).data).toMatchObject(expected);
+    expect((await failure(client.post('/api/products', { ...NEW_PRODUCT, sku: 'GAL-BAD-TYPE', galleryUrls }, auth))).data).toMatchObject(expected);
+  });
+
+  it('PATCH sản phẩm trả message "Đã cập nhật sản phẩm" như BE thật', async () => {
+    const { auth, id } = await create();
+    expect((await client.patch(`/api/products/${id}`, { galleryUrls: ['/a.jpg'] }, auth)).data.message).toBe('Đã cập nhật sản phẩm');
+  });
+
+  it('state cũ lưu từ trước (chưa có galleryUrls) vẫn đọc ra []', async () => {
+    const { auth, id } = await create();
+    const stored = JSON.parse(localStorage.getItem('petcare-mock-catalog')!);
+    for (const p of stored.products) delete p.galleryUrls;
+    localStorage.setItem('petcare-mock-catalog', JSON.stringify(stored));
+    expect(await readGallery(auth, id)).toEqual([]);
+    expect((await client.get('/api/public/products/2')).data.data.galleryUrls).toEqual([]);
+  });
+});
+
 describe('services', () => {
   it('requires EXAM or VACCINE for a MEDICAL service (BR-SP-06)', async () => {
     const res = await failure(client.post('/api/services', { name: 'Siêu âm', group: 'MEDICAL', price: 300_000 }, await manager()));

@@ -27,6 +27,7 @@ m = Module(
         ("A2", "Ngừng kinh doanh / ngừng sử dụng = PATCH `isActive = false`; không xóa sản phẩm, dịch vụ, danh mục", "04 nguyên tắc 2 (không xóa cứng); chỉ loại vaccine có rule xóa (BR-SP-07)"),
         ("A3", "Phác đồ: sửa `intervalDays`, `minAgeWeeks`, `requiredForBoarding`, `isActive`; loài, loại vaccine, mũi thứ không đổi", "Bộ ba này là khóa duy nhất (05 `vaccination_protocols`); BR-SP-03"),
         ("A4", "Danh sách sản phẩm cho nhân viên có bộ lọc `retailOnly` (bỏ thuốc kê đơn) để dùng ở POS", "BR-SP-01: thuốc kê đơn không bán lẻ"),
+        ("A5", "Ảnh phụ của sản phẩm là `galleryUrls`: danh sách URL có thứ tự, tối đa 8, lưu JSONB `products.gallery_urls` (V62); `imageUrl` vẫn là ảnh bìa; PATCH `galleryUrls` thay cả danh sách (null = không đổi); BE trim và bỏ trùng giữ lần đầu; không kiểm giao thức URL", "Trang chi tiết cần nhiều ảnh; chưa có kho tệp nên chỉ nhận URL (Q1); docs/adr/0151"),
     ],
     questions=[
         ("Q1", "Ảnh sản phẩm tải lên bằng cơ chế nào? Contract chỉ nhận URL.", "TBD (BE + FE)", "05 `products.image_url`"),
@@ -50,7 +51,9 @@ m.schema("Product", {
     "productId": "int64", "categoryId": "int64", "sku": "string:50", "name": "string:200",
     "productType": "ref:ProductType", "isPrescription": "bool", "tracksExpiry": "bool",
     "vaccineTypeId": "int64?", "unit": "string:20", "price": "money", "description": "string?",
-    "imageUrl": "url?", "isActive": "bool",
+    "imageUrl": "url?",
+    "galleryUrls": "array<=8:url|Ảnh phụ có thứ tự đã chuẩn hóa (trim, bỏ trùng); sản phẩm chưa có ảnh phụ trả `[]`, không bao giờ null. Ảnh bìa là `imageUrl`",
+    "isActive": "bool",
 })
 m.schema("CreateProductRequest", {
     "categoryId": "int64", "sku": "string:50", "name": "string:200", "productType": "ref:ProductType",
@@ -58,11 +61,14 @@ m.schema("CreateProductRequest", {
     "tracksExpiry": "bool|Bắt buộc true với thuốc kê đơn và vaccine (BR-SP-05)",
     "vaccineTypeId": "int64?|Bắt buộc với VACCINE (BR-SP-07)",
     "unit": "string:20", "price": "money", "description": "string?", "imageUrl": "url?",
+    "galleryUrls": "array<=8:url?|Ảnh phụ CÓ THỨ TỰ, tối đa 8 phần tử; mỗi URL không rỗng, tối đa 500 ký tự, không kiểm giao thức (như `imageUrl`). `imageUrl` vẫn là ảnh bìa; ảnh ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Chuẩn hóa khi lưu: `trim()` từng URL rồi bỏ trùng, giữ lần xuất hiện đầu (không báo lỗi). Kiểm số lượng và độ dài chạy TRƯỚC chuẩn hóa, nên 9 phần tử trùng nhau còn 8 vẫn là 400. Vắng hoặc null = `[]`",
 })
 m.schema("UpdateProductRequest", {
     "categoryId": "int64?", "name": "string:200?", "isPrescription": "bool?", "tracksExpiry": "bool?",
     "vaccineTypeId": "int64?", "unit": "string:20?", "price": "money?", "description": "string?",
-    "imageUrl": "url?", "isActive": "bool?|false = ngừng kinh doanh (A2)",
+    "imageUrl": "url?",
+    "galleryUrls": "array<=8:url?|Ảnh phụ CÓ THỨ TỰ, tối đa 8 phần tử; mỗi URL không rỗng, tối đa 500 ký tự, không kiểm giao thức (như `imageUrl`). `imageUrl` vẫn là ảnh bìa; ảnh ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Chuẩn hóa khi lưu: `trim()` từng URL rồi bỏ trùng, giữ lần xuất hiện đầu (không báo lỗi). Kiểm số lượng và độ dài chạy TRƯỚC chuẩn hóa, nên 9 phần tử trùng nhau còn 8 vẫn là 400. Vắng hoặc null = KHÔNG đổi; `[]` = xóa hết ảnh phụ; mảng khác = THAY cả danh sách (giữ thứ tự gửi)",
+    "isActive": "bool?|false = ngừng kinh doanh (A2)",
 }, required=[])
 m.schema("KennelTypeSpec", {"species": "ref:Species", "maxWeightKg": "decimal|> 0"},
          desc="Chỉ với dịch vụ nhóm BOARDING (BR-SP-04)")
@@ -103,6 +109,7 @@ m.schema("PublicService", {
 m.schema("PublicProduct", {
     "productId": "int64", "name": "string", "categoryId": "int64", "categoryName": "string", "price": "money",
     "unit": "string", "description": "string?", "imageUrl": "url?",
+    "galleryUrls": "array<=8:url|Ảnh phụ có thứ tự (tối đa 8); ảnh hiển thị ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Cùng một DTO cho danh sách và chi tiết; chưa có ảnh phụ trả `[]`",
     "inStockBranchIds": "array:int64|Chi nhánh có tồn khả dụng > 0, không kèm số lượng (BR-CK-03)",
 })
 
@@ -123,14 +130,14 @@ m.op("get", "/products", "listProducts", "Danh sách sản phẩm", "Products", 
             "vaccineTypeId=int64", "isActive=bool", "retailOnly=bool|Bỏ thuốc kê đơn, dùng ở POS (A4)", "page", "size"])
 m.op("post", "/products", "createProduct", "Tạo sản phẩm", "Products", "UC29", "BR-SP-01, 05, 07", "A04", A04,
      body="CreateProductRequest", resp="Product", status=201, errors=(400, 401, 403),
-     err_desc={400: "SKU trùng · `BR-SP-01` cờ kê đơn trên loại khác DRUG · `BR-SP-05` thuốc kê đơn / vaccine tắt quản lý hạn dùng · `BR-SP-07` vaccine chưa gắn loại vaccine"})
+     err_desc={400: "SKU trùng · `BR-SP-01` cờ kê đơn trên loại khác DRUG · `BR-SP-05` thuốc kê đơn / vaccine tắt quản lý hạn dùng · `BR-SP-07` vaccine chưa gắn loại vaccine · `VALIDATION_FAILED` `galleryUrls` quá 8 phần tử, phần tử rỗng / null hoặc quá 500 ký tự (A5)"})
 m.op("get", "/products/{productId}", "getProduct", "Chi tiết sản phẩm", "Products", "UC29", "—", "A04–A08", STAFF_READ,
      resp="Product", path_params=["ProductId"], errors=(401, 403, 404))
 m.op("patch", "/products/{productId}", "updateProduct", "Sửa sản phẩm / đổi giá / ngừng kinh doanh", "Products", "UC29",
      "BR-SP-01, 05, 07, BR-BH-03, BR-QT-15", "A04", A04, body="UpdateProductRequest", resp="Product",
      path_params=["ProductId"], errors=(400, 401, 403, 404),
-     err_desc={400: "`BR-SP-05` tắt quản lý hạn dùng khi còn tồn ở bất kỳ chi nhánh nào · `BR-SP-01`, `BR-SP-07` như khi tạo"},
-     notes="Đổi giá ghi audit, không ảnh hưởng dòng Order đã có.")
+     err_desc={400: "`BR-SP-05` tắt quản lý hạn dùng khi còn tồn ở bất kỳ chi nhánh nào · `BR-SP-01`, `BR-SP-07` như khi tạo · `VALIDATION_FAILED` `galleryUrls` như khi tạo (A5)"},
+     notes="Đổi giá ghi audit, không ảnh hưởng dòng Order đã có. `galleryUrls`: vắng / null = không đổi, `[]` = xóa hết, mảng = thay cả danh sách (A5); đổi ảnh không ghi audit.")
 
 m.op("get", "/services", "listServices", "Danh sách dịch vụ", "Services", "UC30", "BR-SP-04, 06", "A04–A08",
      STAFF_READ, resp="array:Service", query=["group=enum:MEDICAL,GROOMING,BOARDING", "isActive=bool"],

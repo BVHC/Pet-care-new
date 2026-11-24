@@ -63,11 +63,12 @@ export class ApiError extends Error implements ErrorResponse {
  */
 export function plainMessage(error: ApiError): string {
   if (error.ruleId) return error.message.replace(` (${error.ruleId})`, '');
-  const fields = Object.values(fieldErrorsOf(error));
-  return fields.length ? fields.join('. ') : error.message;
+  const fields = new Set(Object.values(fieldErrorsOf(error))); // cùng một câu cho nhiều phần tử của mảng chỉ hiện một lần
+  return fields.size ? [...fields].join('. ') : error.message;
 }
 
-const FIELD_ERROR = /^([A-Za-z][\w.]*): (.+)$/;
+// Tên trường có thể kèm chỉ số phần tử của mảng, vd `galleryUrls[0]`.
+const FIELD_ERROR = /^([A-Za-z][\w.[\]]*): (.+)$/;
 
 /** Lỗi theo trường của VALIDATION_FAILED; BE ghép dạng `"email: …; phone: …"`. */
 export function fieldErrorsOf(error: ApiError): Record<string, string> {

@@ -424,9 +424,11 @@ Quota riêng của một khung giờ cụ thể, ghi đè quota mặc định (B
 | unit | VARCHAR(20) | NN | `hộp`, `lọ`, `viên`, `liều`… |
 | price | BIGINT | NN, CHECK ≥ 0 | Giá bán hiện tại, thống nhất toàn chuỗi |
 | description | TEXT | ? | |
-| image_url | VARCHAR(500) | ? | |
+| image_url | VARCHAR(500) | ? | Ảnh bìa (thẻ cửa hàng, giỏ hàng, AI) |
+| gallery_urls | JSONB | NN, DEFAULT '[]' | Ảnh phụ có thứ tự, tối đa 8 (V62, docs/adr/0151); chuẩn hóa trim + bỏ trùng giữ lần đầu ở ứng dụng; không kiểm giao thức URL |
 | is_active | BOOLEAN | NN, DEFAULT true | Ngừng kinh doanh |
 
+- `CHECK (jsonb_typeof(gallery_urls) = 'array' AND jsonb_array_length(gallery_urls) <= 8)` — `chk_products_gallery_urls` (V62); độ dài / rỗng của từng URL kiểm ở ứng dụng
 - `CHECK ((product_type = 'VACCINE') = (vaccine_type_id IS NOT NULL))`
 - `CHECK (NOT is_prescription OR product_type = 'DRUG')`
 - `CHECK (NOT (is_prescription OR product_type = 'VACCINE') OR tracks_expiry)` — BR-SP-05

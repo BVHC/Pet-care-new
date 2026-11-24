@@ -35,7 +35,10 @@ export interface Product {
   /** VND */
   price: number;
   description?: string | null;
+  /** Ảnh bìa: thẻ ở cửa hàng, giỏ hàng, AI. */
   imageUrl?: string | null;
+  /** Ảnh phụ có thứ tự (tối đa 8, không trùng); BE luôn gửi, `[]` khi chưa có. */
+  galleryUrls: string[];
   isActive: boolean;
 }
 
@@ -51,6 +54,8 @@ export interface CreateProductRequest {
   price: number;
   description?: string;
   imageUrl?: string;
+  /** Bỏ qua = `[]`. Ở PATCH: vắng / null = giữ nguyên, `[]` = xóa hết, mảng khác = thay cả danh sách. */
+  galleryUrls?: string[];
 }
 
 /** `productType` và `sku` không đổi sau khi tạo (catalog-v1 A1). */

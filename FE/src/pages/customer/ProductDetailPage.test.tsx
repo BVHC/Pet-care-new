@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -123,6 +123,66 @@ describe('ProductDetailPage (UC16)', () => {
     renderPage('1');
     expect(await screen.findByText('Hạt khô cho chó nhỏ trưởng thành.')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Hạt Royal Canin Mini Adult 2kg' })).toHaveAttribute('src', 'https://cdn.example.com/royal.jpg');
+  });
+
+  // Ảnh bìa + ảnh phụ (galleryUrls). Seed mock: id 1 có bìa và 2 ảnh phụ, id 2 có bìa và 1 ảnh phụ.
+  it('có ảnh phụ: dải ảnh nhỏ gồm ảnh bìa rồi các ảnh phụ theo thứ tự; bấm ảnh nhỏ đổi ảnh lớn', async () => {
+    const user = renderPage('1');
+    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    const name = 'Hạt Royal Canin Mini Adult 2kg';
+    const buttons = screen.getAllByRole('button', { name: /^Xem ảnh \d+ trên 3$/ });
+    expect(buttons).toHaveLength(3);
+    expect(screen.getByRole('img', { name })).toHaveAttribute('src', '/imgs/prod1.jpg');
+    expect(buttons[2]).not.toHaveAttribute('aria-current');
+    await user.click(buttons[2]);
+    expect(screen.getByRole('img', { name })).toHaveAttribute('src', '/imgs/prod3.jpg');
+    expect(buttons[2]).toHaveAttribute('aria-current', 'true');
+    expect(buttons[0]).not.toHaveAttribute('aria-current');
+  });
+
+  it('chỉ có ảnh bìa (không ảnh phụ): ảnh lớn, không có dải ảnh nhỏ, không có nút Trước / Sau', async () => {
+    vi.spyOn(catalogApi, 'getPublicProduct').mockResolvedValue({
+      productId: 1,
+      name: 'Hạt Royal Canin Mini Adult 2kg',
+      categoryId: 1,
+      categoryName: 'Thức ăn',
+      price: 450_000,
+      unit: 'túi',
+      imageUrl: '/imgs/prod1.jpg',
+      galleryUrls: [],
+      inStockBranchIds: [1],
+    });
+    renderPage('1');
+    await screen.findByRole('heading', { level: 1, name: 'Hạt Royal Canin Mini Adult 2kg' });
+    expect(screen.getByRole('img', { name: 'Hạt Royal Canin Mini Adult 2kg' })).toHaveAttribute('src', '/imgs/prod1.jpg');
+    expect(screen.queryByRole('button', { name: /^Xem ảnh/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ảnh sau' })).not.toBeInTheDocument();
+  });
+
+  it('chưa có ảnh bìa nhưng có ảnh phụ: ảnh phụ vẫn hiện; ảnh phụ trùng ảnh bìa không hiện hai lần', async () => {
+    vi.spyOn(catalogApi, 'getPublicProduct').mockResolvedValue({
+      productId: 4,
+      name: 'Vitamin tổng hợp PetCare',
+      categoryId: 2,
+      categoryName: 'Thuốc',
+      price: 120_000,
+      unit: 'lọ',
+      imageUrl: null,
+      galleryUrls: ['/imgs/prod4.jpg', '/imgs/prod5.jpg', '/imgs/prod4.jpg'],
+      inStockBranchIds: [],
+    });
+    renderPage('4');
+    await screen.findByRole('heading', { level: 1, name: 'Vitamin tổng hợp PetCare' });
+    expect(screen.getAllByRole('button', { name: /^Xem ảnh \d+ trên 2$/ })).toHaveLength(2);
+    expect(screen.getByRole('img', { name: 'Vitamin tổng hợp PetCare' })).toHaveAttribute('src', '/imgs/prod4.jpg');
+  });
+
+  it('ảnh lớn của ảnh bìa tải lỗi: chuyển sang ảnh phụ, không để khung vỡ', async () => {
+    renderPage('2');
+    await screen.findByRole('heading', { level: 1, name: 'Pate Whiskas 85g' });
+    fireEvent.error(screen.getByRole('img', { name: 'Pate Whiskas 85g' }));
+    expect(screen.getByRole('img', { name: 'Pate Whiskas 85g' })).toHaveAttribute('src', '/imgs/prod7.jpg');
+    expect(screen.queryByRole('button', { name: /^Xem ảnh/ })).not.toBeInTheDocument(); // còn một ảnh tốt nên không còn dải
   });
 
   it('chưa có ảnh: khối thay thế, không có thẻ ảnh vỡ', async () => {

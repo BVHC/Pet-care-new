@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { MapPin, PawPrint, RotateCw, Store, WifiOff } from 'lucide-react'
 import { AddToCartButton } from '@/components/customer/shop/AddToCartButton'
+import { ProductGallery } from '@/components/customer/shop/ProductGallery'
 import { toApiError } from '@/shared/api/api-error'
 import { usePublicBranches, usePublicProduct } from '@/shared/hooks/usePublicSite'
 import { useAccount } from '@/shared/stores/session.store'
@@ -49,30 +50,6 @@ function Notice({ icon, children }: { icon: React.ReactNode; children: React.Rea
       </span>
       {children}
     </div>
-  )
-}
-
-/* ================================================================
-   Pieces.
-   ================================================================ */
-
-/** Ảnh sản phẩm; chưa có ảnh hoặc ảnh tải lỗi thì hiện khối thay thế cùng khung. */
-function ProductImage({ product }: { product: PublicProduct }) {
-  const [broken, setBroken] = useState(false)
-  if (!product.imageUrl || broken) {
-    return (
-      <div aria-hidden className="grid h-full w-full place-items-center bg-(--color-surface-2)">
-        <PawPrint size={88} strokeWidth={1.25} className="text-accent/25" />
-      </div>
-    )
-  }
-  return (
-    <img
-      src={product.imageUrl}
-      alt={product.name}
-      onError={() => setBroken(true)}
-      className="h-full w-full object-contain p-4 mix-blend-multiply"
-    />
   )
 }
 
@@ -167,9 +144,8 @@ function ProductView({
       </nav>
 
       <article className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-        <div className="aspect-square overflow-hidden rounded-2xl border border-(--color-border-default) bg-(--color-surface-1)">
-          <ProductImage product={p} />
-        </div>
+        {/* Ảnh bìa trước, rồi ảnh phụ. Ảnh đang chọn nhớ theo URL nên không dính sang sản phẩm khác khi đổi trang bằng bộ nhớ đệm. */}
+        <ProductGallery name={p.name} urls={[p.imageUrl, ...(p.galleryUrls ?? [])]} />
 
         <div>
           <p className="text-[12px] font-semibold tracking-widest text-(--color-text-secondary) uppercase">{p.categoryName}</p>

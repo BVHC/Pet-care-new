@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Edit, Eye, EyeOff, Plus, Search } from 'lucide-react';
+import { useId, useState } from 'react';
+import { ArrowDown, ArrowUp, Edit, Eye, EyeOff, ImageOff, Plus, Search, Trash2 } from 'lucide-react';
 import { Badge } from '../../../components/ui/badge';
 import { Button } from '../../../components/ui/button';
 import { Card, CardContent } from '../../../components/ui/card';
@@ -10,6 +10,7 @@ import { catalogApi } from '../../../shared/api/catalog.api';
 import { plainMessage, toApiError } from '../../../shared/api/api-error';
 import { useCatalogMutation, useCategories, useProducts, useVaccineTypes } from '../../../shared/hooks/useCatalog';
 import { useDebounce } from '../../../shared/hooks/useDebounce';
+import { uniqueUrls } from '../../../shared/utils/gallery';
 import {
   PRODUCT_TYPE_LABELS,
   SPECIES_LABELS,
@@ -21,6 +22,9 @@ import {
 import { ActiveBadge, Checkbox, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from '../../../components/admin/form-ui';
 
 const PAGE_SIZE = 20;
+/** Giới hạn ảnh phụ của BE (`galleryUrls`, tối đa 8) và độ dài mỗi đường dẫn (như `imageUrl`). */
+const GALLERY_MAX = 8;
+const URL_MAX = 500;
 const TYPES = Object.keys(PRODUCT_TYPE_LABELS) as ProductType[];
 
 /** UC29 — sản phẩm: lọc, tạo, sửa, đổi giá, ngừng / mở bán (BR-SP-01, 05, 07). */
@@ -206,6 +210,8 @@ interface ProductDraft {
   unit: string;
   price: string;
   description: string;
+  /** Mỗi phần tử là một ô nhập; ô trống bị bỏ khi lưu. */
+  gallery: string[];
 }
 
 const draftOf = (p: Product | null): ProductDraft => ({
@@ -219,6 +225,7 @@ const draftOf = (p: Product | null): ProductDraft => ({
   unit: p?.unit ?? '',
   price: p ? String(p.price) : '',
   description: p?.description ?? '',
+  gallery: p?.galleryUrls ?? [], // BE cũ chưa có trường thì vắng
 });
 
 function ProductForm({
@@ -247,6 +254,9 @@ function ProductForm({
     // PATCH: BE giữ nguyên khi vắng / null, chỉ xóa khi nhận "" → sửa mà xóa trắng ô mô tả phải gửi "" (T49 nhóm 2, hàng 4).
     // Mô tả không đổi thì không gửi (null cũ không bị ghi thành ""); tạo mới mà để trống thì bỏ trường.
     const description = f.description.trim();
+    // Ảnh phụ: gửi mảng ĐẦY ĐỦ (BE thay cả danh sách; [] là xóa hết, vắng là giữ nguyên). Sửa mà chưa đụng tới thì không gửi; tạo mới luôn gửi.
+    const gallery = uniqueUrls(f.gallery);
+    const galleryUnchanged = product && JSON.stringify(gallery) === JSON.stringify(uniqueUrls(product.galleryUrls ?? []));
     const body = {
       categoryId: Number(f.categoryId),
       name: f.name.trim(),
@@ -256,6 +266,7 @@ function ProductForm({
       unit: f.unit.trim(),
       price: Number(f.price),
       description: product ? (description === (product.description ?? '') ? undefined : description) : description || undefined,
+      galleryUrls: galleryUnchanged ? undefined : gallery,
     };
     return product
       ? catalogApi.updateProduct(product.productId, body)
@@ -384,7 +395,70 @@ function ProductForm({
           />
         )}
       </Field>
+      <GalleryField urls={form.gallery} onChange={(gallery) => set({ gallery })} />
       <FormError message={error} />
     </FormModal>
+  );
+}
+
+/** Ảnh xem trước nhỏ; đường dẫn trống hoặc ảnh tải lỗi thì hiện khung trống (đổi đường dẫn thì thử lại nhờ `key`). */
+function Thumb({ url }: { url: string }) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <span className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-md border border-(--color-border-default) bg-(--bg-tertiary)">
+      {url && !broken ? (
+        <img src={url} alt="" onError={() => setBroken(true)} className="h-full w-full object-cover" />
+      ) : (
+        <ImageOff className="h-4 w-4 text-(--text-tertiary)" aria-hidden />
+      )}
+    </span>
+  );
+}
+
+/** Ảnh phụ (catalog-v1 `galleryUrls`): các ô nhập URL có thứ tự; thêm (tối đa 8), xóa, đưa lên / xuống (không kéo thả). */
+function GalleryField({ urls, onChange }: { urls: string[]; onChange: (urls: string[]) => void }) {
+  const labelId = useId();
+  const swap = (i: number, j: number) => {
+    const next = [...urls];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+  return (
+    <div role="group" aria-labelledby={labelId} className="space-y-2">
+      <div className="flex items-center justify-between">
+        <span id={labelId} className="text-sm font-medium text-(--text-primary)">
+          Ảnh phụ
+        </span>
+        <span className="text-xs text-(--text-tertiary)">
+          {urls.length}/{GALLERY_MAX}
+        </span>
+      </div>
+      {urls.map((url, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <Thumb key={url.trim()} url={url.trim()} />
+          <Input
+            aria-label={`Đường dẫn ảnh phụ ${i + 1}`}
+            value={url}
+            maxLength={URL_MAX}
+            placeholder="/imgs/anh.jpg hoặc https://…"
+            onChange={(e) => onChange(urls.map((u, k) => (k === i ? e.target.value : u)))}
+          />
+          <Button type="button" size="sm" variant="ghost" disabled={i === 0} onClick={() => swap(i, i - 1)} aria-label={`Đưa ảnh phụ ${i + 1} lên`} title="Đưa lên">
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+          <Button type="button" size="sm" variant="ghost" disabled={i === urls.length - 1} onClick={() => swap(i, i + 1)} aria-label={`Đưa ảnh phụ ${i + 1} xuống`} title="Đưa xuống">
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => onChange(urls.filter((_, k) => k !== i))} aria-label={`Xóa ảnh phụ ${i + 1}`} title="Xóa">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
+      <Button type="button" size="sm" variant="outline" disabled={urls.length >= GALLERY_MAX} onClick={() => onChange([...urls, ''])}>
+        <Plus className="h-4 w-4" />
+        Thêm ảnh phụ
+      </Button>
+      <p className="text-xs text-(--text-tertiary)">Hiện ở trang chi tiết sản phẩm, sau ảnh bìa. Dán đường dẫn ảnh; dòng trống bị bỏ khi lưu.</p>
+    </div>
   );
 }

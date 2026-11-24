@@ -66,11 +66,36 @@ describe('sản phẩm công khai (public, UC16; BR-CK-01, BR-CK-03)', () => {
   it('mỗi sản phẩm chỉ có đúng các trường của PublicProduct: không lộ số lượng tồn, SKU, cờ kê đơn (BR-CK-03)', async () => {
     const first = (await products()).content[0];
     expect(Object.keys(first).sort()).toEqual(
-      ['categoryId', 'categoryName', 'description', 'imageUrl', 'inStockBranchIds', 'name', 'price', 'productId', 'unit'].sort(),
+      ['categoryId', 'categoryName', 'description', 'galleryUrls', 'imageUrl', 'inStockBranchIds', 'name', 'price', 'productId', 'unit'].sort(),
     );
     expect(first).toMatchObject({ productId: 1, name: 'Hạt Royal Canin Mini Adult 2kg', categoryName: 'Thức ăn', price: 450_000, unit: 'túi' });
     const detail = (await client.get('/api/public/products/1')).data.data;
     expect(JSON.stringify(detail)).not.toMatch(/quantity|sku|isPrescription|isActive|productType/i);
+  });
+
+  describe('ảnh phụ (galleryUrls)', () => {
+    const detail = async (productId: number) => (await client.get(`/api/public/products/${productId}`)).data.data as PublicProduct;
+
+    it('danh sách và chi tiết cùng một DTO: sản phẩm mẫu 1 có 2 ảnh phụ, 2 có 1, sản phẩm chưa có ảnh phụ trả [] (không bao giờ vắng)', async () => {
+      const list = (await products()).content;
+      expect(list.map((p) => [p.productId, p.galleryUrls])).toEqual([
+        [1, ['/imgs/prod2.jpg', '/imgs/prod3.jpg']],
+        [2, ['/imgs/prod7.jpg']],
+        [6, []],
+        [5, []],
+        [4, []],
+      ]);
+      expect((await detail(1)).galleryUrls).toEqual(['/imgs/prod2.jpg', '/imgs/prod3.jpg']);
+      expect((await detail(4)).galleryUrls).toEqual([]);
+    });
+
+    it('sửa ảnh phụ ở quản trị (thay cả danh sách, giữ thứ tự gửi) thì trang công khai thấy ngay; xóa hết thì []', async () => {
+      const auth = await chain();
+      await client.patch('/api/products/2', { galleryUrls: ['/imgs/prod8.jpg', '/imgs/prod7.jpg'] }, auth);
+      expect((await detail(2)).galleryUrls).toEqual(['/imgs/prod8.jpg', '/imgs/prod7.jpg']);
+      await client.patch('/api/products/2', { galleryUrls: [] }, auth);
+      expect((await detail(2)).galleryUrls).toEqual([]);
+    });
   });
 
   describe('chi nhánh còn hàng (inStockBranchIds)', () => {

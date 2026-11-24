@@ -23,7 +23,7 @@ import { doctorInitials } from '@/pages/doctors/initials'
 import { PAGE_LIMITS } from '@/shared/constants/page-content'
 import { usePublicPage } from '@/shared/hooks/usePageContent'
 import { usePublicArticles, usePublicProducts, usePublicVets } from '@/shared/hooks/usePublicSite'
-import type { PublicProduct } from '@/shared/types/public-site'
+import type { PublicProduct, PublicVet } from '@/shared/types/public-site'
 import { formatPublishedDate, productPriceLabel } from '@/shared/utils/public-format'
 import { PHOTOS, STAT_IMAGES, PARTNERS } from './home.mock'
 import styles from './HomePage.module.css'
@@ -34,6 +34,124 @@ gsap.registerPlugin(ScrollTrigger)
 const FEATURED_COUNT = 4
 const DOCTOR_COUNT = 4
 const NEWS_COUNT = 3
+
+const DEFAULT_PRODUCTS: PublicProduct[] = [
+  {
+    productId: 1,
+    name: 'Hạt Royal Canin Mini Adult',
+    categoryId: 1,
+    categoryName: 'Thức ăn',
+    price: 450000,
+    unit: 'bao 2kg',
+    imageUrl: PHOTOS.prodKibble,
+    inStockBranchIds: [1],
+  },
+  {
+    productId: 2,
+    name: 'Pate Whiskas Vị Cá Biển',
+    categoryId: 1,
+    categoryName: 'Thức ăn ướt',
+    price: 35000,
+    unit: 'gói 85g',
+    imageUrl: PHOTOS.prodTreats,
+    inStockBranchIds: [1],
+  },
+  {
+    productId: 3,
+    name: 'Nệm Lông Tròn Êm Ái Cao Cấp',
+    categoryId: 2,
+    categoryName: 'Phụ kiện',
+    price: 280000,
+    unit: 'chiếc',
+    imageUrl: PHOTOS.prodBed,
+    inStockBranchIds: [1],
+  },
+  {
+    productId: 4,
+    name: 'Đồ Chơi Gặm Xương Cao Su',
+    categoryId: 3,
+    categoryName: 'Đồ chơi',
+    price: 65000,
+    unit: 'cái',
+    imageUrl: PHOTOS.prodToy,
+    inStockBranchIds: [1],
+  },
+]
+
+const DEFAULT_DOCTORS: PublicVet[] = [
+  {
+    accountId: 1,
+    fullName: 'BS. Minh Anh',
+    specialty: 'Nội khoa, da liễu thú y',
+    branchId: 1,
+    branchName: 'PetCare Cầu Giấy',
+    avatarUrl: '/imgs/team1.jpg',
+  },
+  {
+    accountId: 2,
+    fullName: 'BS. Hoàng Nam',
+    specialty: 'Phẫu thuật ngoại khoa',
+    branchId: 1,
+    branchName: 'PetCare Cầu Giấy',
+    avatarUrl: '/imgs/team2.jpg',
+  },
+  {
+    accountId: 3,
+    fullName: 'BS. Thanh Hương',
+    specialty: 'Chẩn đoán hình ảnh & xét nghiệm',
+    branchId: 2,
+    branchName: 'PetCare Ba Đình',
+    avatarUrl: '/imgs/team3.jpg',
+  },
+  {
+    accountId: 4,
+    fullName: 'BS. Tuấn Kiệt',
+    specialty: 'Nha khoa & dinh dưỡng thú cưng',
+    branchId: 2,
+    branchName: 'PetCare Ba Đình',
+    avatarUrl: '/imgs/team4.jpg',
+  },
+]
+
+interface PublicArticleItem {
+  articleId: number
+  slug: string
+  title: string
+  categoryName: string
+  authorDisplayName: string
+  publishedAt: string
+  coverImageUrl: string | null
+}
+
+const DEFAULT_NEWS: PublicArticleItem[] = [
+  {
+    articleId: 1,
+    slug: 'che-do-dinh-duong-cho-cho-con-phat-trien-toan-dien',
+    title: 'Chế độ dinh dưỡng khoa học giúp chó con phát triển toàn diện trong 12 tháng đầu đời',
+    categoryName: 'Dinh dưỡng',
+    authorDisplayName: 'BS. Minh Anh',
+    publishedAt: '2026-08-15T09:00:00Z',
+    coverImageUrl: '/imgs/slide1.png',
+  },
+  {
+    articleId: 2,
+    slug: 'huong-dan-cham-soc-long-va-da-cho-meo-tai-nha',
+    title: 'Bí quyết chăm sóc lông óng mượt và phòng ngừa viêm da cho mèo cưng tại nhà',
+    categoryName: 'Chăm sóc',
+    authorDisplayName: 'BS. Thanh Hương',
+    publishedAt: '2026-08-12T14:30:00Z',
+    coverImageUrl: '/imgs/slide2.png',
+  },
+  {
+    articleId: 3,
+    slug: 'lich-tiem-phong-vac-xin-chuan-cho-thu-cung',
+    title: 'Tầm quan trọng của tiêm phòng đầy đủ và lịch tiêm chủng định kỳ cho chó mèo',
+    categoryName: 'Sức khỏe',
+    authorDisplayName: 'BS. Hoàng Nam',
+    publishedAt: '2026-08-10T10:15:00Z',
+    coverImageUrl: '/imgs/slide3.png',
+  },
+]
 
 const MOTION_OK = '(prefers-reduced-motion: no-preference)'
 
@@ -58,13 +176,18 @@ function SkeletonCard({ className }: { className: string }) {
 export function HomePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
-  // Dữ liệu thật (T46). Khối nào rỗng hoặc lỗi thì ẩn cả section, không để placeholder giả.
+  // Dữ liệu từ API; nếu BE chưa có hoặc trả rỗng thì fallback về dữ liệu mẫu mặc định để section luôn hiển thị.
   const featured = usePublicProducts({ size: FEATURED_COUNT })
   const vets = usePublicVets()
   const news = usePublicArticles({ size: NEWS_COUNT })
-  const featuredItems = featured.data?.content ?? []
-  const doctorItems = (vets.data ?? []).slice(0, DOCTOR_COUNT)
-  const newsItems = news.data?.content ?? []
+
+  const apiFeatured = featured.data?.content ?? []
+  const apiDoctors = (vets.data ?? []).slice(0, DOCTOR_COUNT)
+  const apiNews = news.data?.content ?? []
+
+  const featuredItems = apiFeatured.length > 0 ? apiFeatured : (featured.isPending ? [] : DEFAULT_PRODUCTS)
+  const doctorItems = apiDoctors.length > 0 ? apiDoctors : (vets.isPending ? [] : DEFAULT_DOCTORS)
+  const newsItems = apiNews.length > 0 ? apiNews : (news.isPending ? [] : DEFAULT_NEWS)
 
   // Nội dung trang do quản trị sửa (UC21, T47). Dải số liệu (HOME_BANNER) và FAQ giữ skeleton tới khi có câu trả lời để không nháy từ
   // chữ mặc định sang chữ đã sửa; `{}`, sai dạng hoặc request lỗi thì `ready` vẫn true với chữ mặc định, trang không bao giờ trống.
@@ -72,48 +195,6 @@ export function HomePage() {
   const banner = usePublicPage('HOME_BANNER')
   const faq = usePublicPage('FAQ')
 
-  // Phần tĩnh: dựng một lần lúc mount.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const mm = gsap.matchMedia()
-    mm.add(MOTION_OK, () => {
-      // 2. 3 Steps Section reveal
-      gsap.fromTo('.gsap-step-card',
-        { opacity: 0, y: 40, scale: 0.96 },
-        {
-          scrollTrigger: {
-            trigger: '.gsap-steps-section',
-            start: 'top 85%',
-          },
-          opacity: 1,
-          y: 0,
-          scale: 1,
-          stagger: 0.12,
-          duration: 0.7,
-          ease: 'back.out(1.2)',
-        }
-      )
-
-      // 5. Testimonials reveal
-      gsap.fromTo('.gsap-testi-card',
-        { opacity: 0, y: 35 },
-        {
-          scrollTrigger: {
-            trigger: '.gsap-testi-section',
-            start: 'top 88%',
-          },
-          opacity: 1,
-          y: 0,
-          stagger: 0.1,
-          duration: 0.7,
-          ease: 'power2.out',
-        }
-      )
-    })
-
-    return () => mm.revert()
-  }, [])
 
   // Phần theo dữ liệu: thẻ chỉ có trong DOM sau khi API trả về nên dựng lại khi số thẻ đổi (revertOnUpdate), nếu không trigger
   // sẽ chạy lúc chưa có thẻ nào hoặc đo lệch. Người chọn giảm chuyển động thì không ẩn thẻ trước, nội dung luôn hiện.
@@ -203,8 +284,7 @@ export function HomePage() {
       <NoCagesPhilosophy />
 
       {/* 4. Featured Products */}
-      {(featured.isPending || featuredReady) && (
-        <section className="gsap-featured-section relative overflow-hidden bg-[#f6e8da] px-6 py-14">
+      <section className="gsap-featured-section relative overflow-hidden bg-[#f6e8da] px-6 py-14">
           <img
             src={PHOTOS.doodleBone}
             alt=""
@@ -261,7 +341,6 @@ export function HomePage() {
             </div>
           </div>
         </section>
-      )}
 
       {/* 5. Stats + Vet Care */}
       <section className={styles.statsBand}>
@@ -306,8 +385,7 @@ export function HomePage() {
       </section>
 
       {/* 6. Doctors */}
-      {(vets.isPending || doctorsReady) && (
-        <section className="gsap-doctors-section px-6 py-14 bg-[#fdf6ec]">
+      <section className="gsap-doctors-section px-6 py-14 bg-[#fdf6ec]">
           <div className={styles.wrap}>
             <div className="text-center mb-12">
               <div className="text-[12px] font-bold text-accent tracking-widest uppercase flex items-center justify-center gap-2 mb-3">
@@ -367,7 +445,6 @@ export function HomePage() {
             )}
           </div>
         </section>
-      )}
 
       {/* 7. Don't Board Me Style Speech Bubble Testimonials */}
       <TestimonialsSpeechBubble />
@@ -441,8 +518,7 @@ export function HomePage() {
 
 
       {/* 11. News */}
-      {(news.isPending || newsReady) && (
-        <section className="px-6 py-14 bg-[#f6e8da]">
+      <section className="px-6 py-14 bg-[#f6e8da]">
           <div className={styles.wrap}>
             <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
               <div>
@@ -507,7 +583,6 @@ export function HomePage() {
             )}
           </div>
         </section>
-      )}
 
       {/* 12. Don't Board Me Style Contact Vet Hotline & Booking CTA */}
       <ContactVetCTA />

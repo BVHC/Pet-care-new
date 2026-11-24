@@ -15,5 +15,6 @@ public record PublicProductResponse(
         String unit,
         String description,
         String imageUrl,
+        List<String> galleryUrls,
         List<Long> inStockBranchIds) {
 }

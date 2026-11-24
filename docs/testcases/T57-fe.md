@@ -1,7 +1,7 @@
 # T57 (FE): Màn hình tầng 3 và AI: ma trận test tay (22 UC tầng 3, 5 UC AI, ST07)
 
 > Phạm vi: màn hình của 12 module tầng 3 (`workforce`, `inpatient`, `shop`, `payment`, `returns`, `stockops`, `materialuse`, `fees`, `branchlife`, `custmerge`, `articlex`, `ai`) theo danh mục `docs/10-t54-t57-checklists.md` §2.1. Mỗi mục có bảng màn hình, dữ liệu mẫu, cách đặt lại và bảng ca.
-> **Trạng thái BE:** BE chưa có controller nào của 12 module này (chỉ có migration V34–V48 và interface chéo), nên **mọi ca chạy trên mock** (`FE/src/shared/api/mock/<module>.mock.ts`). Hợp đồng: `docs/api/<module>-v1.md`; đặc tả `docs/07` đến `docs/09`. Từ 17–18/11/2026 `shop` #1–#18 đã có BE thật và FE ghép (T67 phía khách, T68 phía lễ tân; đầu mục TM và DH nói rõ ca nào chạy được với BE thật); riêng `shop` #19 (hủy đơn sau giao thất bại) BE chưa có (task 138). Từ 23/11/2026 `workforce` #1–#17 đã có BE thật và FE ghép (T66; đầu mục NS nói rõ ca nào chạy được với BE thật).
+> **Trạng thái BE:** BE chưa có controller nào của 12 module này (chỉ có migration V34–V48 và interface chéo), nên **mọi ca chạy trên mock** (`FE/src/shared/api/mock/<module>.mock.ts`). Hợp đồng: `docs/api/<module>-v1.md`; đặc tả `docs/07` đến `docs/09`. Từ 17–18/11/2026 `shop` #1–#18 đã có BE thật và FE ghép (T67 phía khách, T68 phía lễ tân; đầu mục TM và DH nói rõ ca nào chạy được với BE thật); riêng `shop` #19 (hủy đơn sau giao thất bại) BE chưa có (task 138). Từ 23/11/2026 `workforce` #1–#17 đã có BE thật và FE ghép (T66; đầu mục NS nói rõ ca nào chạy được với BE thật). Từ 24/11/2026 mục SP-GAL (ảnh phụ của sản phẩm, catalog-v1 `galleryUrls`) đã có mock và test tự động, BE thật chờ tích hợp; mục này thuộc module `catalog` của giai đoạn 1 nên không nằm trong 12 module nói trên.
 > **Không có kết quả nào trong file này đã được chạy.** Cột J để Hiến tự điền sau khi chạy tay; tất cả bắt đầu ở "Chưa test".
 
 ## 0. Khung chung
@@ -89,7 +89,7 @@ Chuỗi này chọn tự động theo mẫu "Mong đợi bắt đầu bằng th�
 
 **Kiểm nhãn khi soạn (bằng chương trình, không phải chạy giao diện).** Trong 581 nhãn đi sau "Bấm", "nút", "tab", "Mở", "Chọn" ở cột Bước, 565 có nguyên văn trong `FE/src`; 16 còn lại là nhãn ghép từ dữ liệu (tùy chọn của ô chọn, `aria-label` có tên sản phẩm hoặc tên chi nhánh). Ở các chuỗi trong ngoặc kép khác (giá trị người chạy gõ vào, thông báo có biến) khoảng 14% không có nguyên văn vì là giá trị gõ vào hoặc thông báo ghép biến; chưa đối chiếu từng chuỗi.
 
-**Mã ca.** Tiền tố theo module: `NS` nhân sự, `NT` nội trú, `TM` cửa hàng online của khách, `DH` xử lý đơn online, `TH` trả hàng, `KH` kho mở rộng, `VT` vật tư tiêu hao, `PH` phí và định mức, `CN` vòng đời chi nhánh, `GH` gộp hồ sơ khách, `BV` bài viết và bình luận, `AI` phân hệ AI.
+**Mã ca.** Tiền tố theo module: `NS` nhân sự, `NT` nội trú, `TM` cửa hàng online của khách, `DH` xử lý đơn online, `TH` trả hàng, `KH` kho mở rộng, `VT` vật tư tiêu hao, `PH` phí và định mức, `SP-GAL` ảnh sản phẩm (gallery), `CN` vòng đời chi nhánh, `GH` gộp hồ sơ khách, `BV` bài viết và bình luận, `AI` phân hệ AI.
 
 ## Bản đồ mã ca
 
@@ -103,11 +103,12 @@ Chuỗi này chọn tự động theo mẫu "Mong đợi bắt đầu bằng th�
 | KH | Kho mở rộng | 40 |
 | VT | Vật tư tiêu hao | 13 |
 | PH | Phí và định mức | 16 |
+| SP-GAL | Ảnh sản phẩm (gallery ảnh phụ) | 17 |
 | CN | Vòng đời chi nhánh | 16 |
 | GH | Gộp hồ sơ | 19 |
 | BV | Bài viết và bình luận | 26 |
 | AI | AI | 37 |
-| | Tổng | 344 |
+| | Tổng | 361 |
 
 ## NS. Nhân sự (UC34–38)
 
@@ -614,6 +615,53 @@ Xóa `petcare-mock-fees` (phí vận chuyển, định mức). Các ca PH-20 và
 | PH-21 | ADMIN · admin@petcare.vn | [UC32] 1) Gõ thẳng `/admin/catalog/fees`; 2) gõ thẳng `/admin/branches/1/services` | Cả hai hiện trang 403 "Bạn không có quyền vào trang này" (ADMIN chỉ quản trị kỹ thuật, không cấu hình phí) | Mock + BE | Chưa test |
 
 Không đưa vào ca vì giao diện không tới được: 400 BR-SP-10 "sản phẩm là vaccine" và "trùng sản phẩm" (ô chọn đã loại), 404 dịch vụ hoặc chi nhánh không tồn tại, và tác động của phí lên đơn / lịch đã chốt (BR-SP-11) thuộc nhóm shop.
+
+## SP-GAL. Ảnh sản phẩm: gallery ảnh phụ (UC16, UC29)
+
+Nguồn: `FE/src/components/customer/shop/ProductGallery.tsx` (ảnh lớn, dải ảnh nhỏ), `FE/src/pages/customer/ProductDetailPage.tsx`, `FE/src/pages/admin/catalog/ProductsTab.tsx` (mục "Ảnh phụ" của hộp tạo / sửa); mock `FE/src/shared/api/mock/catalog.mock.ts` và `public.mock.ts`; hợp đồng catalog-v1 thêm trường `galleryUrls` (không thêm endpoint, vẫn 22/22; ghi chú ở `docs/be-fe-integration.md` mục 9). **Trạng thái BE (24/11/2026): mock đã xong và có test tự động; BE thật chờ tích hợp** (migration `V62__product_gallery_urls`, chưa áp lên DB demo), nên mọi ca dưới đây chạy trên mock. Ảnh hiện ở trang chi tiết là `[imageUrl, ...galleryUrls]` (bỏ giá trị rỗng và trùng); `imageUrl` vẫn là ảnh bìa duy nhất ở thẻ cửa hàng `/shop`, giỏ hàng và AI. Chưa làm: tải tệp ảnh lên (BE chưa có kho tệp, hợp đồng chỉ nhận URL), chọn ảnh bìa từ gallery, chú thích ảnh; form quản trị cũng chưa có ô sửa ảnh bìa.
+
+### Màn hình
+
+| UC | Route | Vai trò thấy | `<h1>` / tiêu đề | Vào từ đâu |
+|---|---|---|---|---|
+| UC16 | `/shop/:id` | Mọi người, kể cả chưa đăng nhập | Tên sản phẩm | Bấm thẻ sản phẩm ở `/shop` |
+| UC29 | `/admin/catalog/products`, hộp "Thêm sản phẩm" / "Sửa sản phẩm" (mục "Ảnh phụ" nằm cuối hộp) | SUPER_MANAGER | "Sản phẩm & dịch vụ", tab "Sản phẩm" | Menu "Sản phẩm & dịch vụ" |
+
+### Dữ liệu mẫu
+
+- "Hạt Royal Canin Mini Adult 2kg" (id 1): ảnh bìa `/imgs/prod1.jpg` và 2 ảnh phụ `/imgs/prod2.jpg`, `/imgs/prod3.jpg` (3 ảnh ở trang chi tiết).
+- "Pate Whiskas 85g" (id 2): ảnh bìa `/imgs/prod6.jpg` và 1 ảnh phụ `/imgs/prod7.jpg` (2 ảnh).
+- "Amoxicillin 250mg" (id 3, thuốc kê đơn, không bán online), "Vitamin tổng hợp PetCare" (id 4), hai vaccine (id 5, 6): không có ảnh bìa lẫn ảnh phụ.
+- Mọi ảnh mẫu nằm ở `FE/public/imgs`.
+- **Khi chạy trên BE thật (cột Áp dụng "Mock + BE"):** URL ảnh, số ảnh (`2/8`, `3 ảnh`) và id sản phẩm trong cột Bước / Mong đợi là của dữ liệu mẫu MOCK; sau V62 mọi sản phẩm có sẵn của BE đều có `galleryUrls = []` cho tới khi có dữ liệu seed ảnh phụ riêng, nên đối chiếu theo CẤU TRÚC, không theo con số: ảnh bìa đứng đầu và thứ tự ảnh phụ được giữ; đếm `n/8` đúng và nút "Thêm ảnh phụ" khóa ở 8; ảnh tải lỗi bị ẩn và bị bỏ qua khi chuyển; lưu `[]` xóa hết (BE thật xóa, còn bỏ trường thì giữ nguyên); lưu danh sách mới THAY cả danh sách cũ; URL trùng và dòng trống không thành lỗi.
+
+### Đặt lại
+
+Xóa khóa localStorage `petcare-mock-catalog` (sản phẩm, ảnh phụ). Dữ liệu lưu từ trước ngày 24/11/2026 chưa có ảnh phụ mẫu (đọc ra mảng rỗng), nên phải xóa khóa này mới thấy ảnh mẫu. Các ca SP-GAL-08 đến SP-GAL-17 thay đổi dữ liệu: xóa khóa trước mỗi ca, trừ khi ô Bước ghi "Điều kiện".
+
+### Ca kiểm thử
+
+| Mã | Vai trò · tài khoản | Bước | Mong đợi | Áp dụng | J |
+|---|---|---|---|---|---|
+| SP-GAL-01 | Khách vãng lai (chưa đăng nhập) | [UC16] 1) Mở `/shop/1` | h1 "Hạt Royal Canin Mini Adult 2kg". Bên trái là ảnh lớn = ảnh bìa (`/imgs/prod1.jpg`). Dưới ảnh lớn có dải 3 ảnh nhỏ (nút "Xem ảnh 1 trên 3", "Xem ảnh 2 trên 3", "Xem ảnh 3 trên 3"); ảnh nhỏ thứ 1 có viền đậm màu nhấn (đang xem), hai ảnh còn lại viền nhạt. Trên ảnh lớn có hai nút tròn mũi tên "Ảnh trước" (bên trái) và "Ảnh sau" (bên phải). Không có emoji nào trong khối ảnh | Mock + BE | Chưa test |
+| SP-GAL-02 | Khách vãng lai | [UC16] 1) Mở `/shop/1`; 2) bấm ảnh nhỏ thứ 3 ("Xem ảnh 3 trên 3"); 3) bấm ảnh nhỏ thứ 2 | Bước 2: ảnh lớn đổi sang `/imgs/prod3.jpg`, viền đậm chuyển sang ảnh nhỏ thứ 3. Bước 3: ảnh lớn `/imgs/prod2.jpg`, viền đậm ở ảnh nhỏ thứ 2. Phần bên phải (giá, chi nhánh còn hàng, số lượng đặt) không đổi | Mock + BE | Chưa test |
+| SP-GAL-03 | Khách vãng lai | [UC16] 1) Mở `/shop/1`; 2) bấm "Ảnh sau" 2 lần; 3) bấm "Ảnh sau" lần nữa; 4) bấm "Ảnh trước" | Bước 2: ảnh lớn là ảnh thứ 3. Bước 3: vòng về ảnh thứ 1 (nút không bị khóa ở ảnh cuối). Bước 4: vòng ngược về ảnh thứ 3. Viền đậm ở ảnh nhỏ luôn theo ảnh đang xem | Mock + BE | Chưa test |
+| SP-GAL-04 | Khách vãng lai | [UC16] 1) Mở `/shop/1`; 2) bấm Tab cho tới khi tiêu điểm nằm ở ảnh nhỏ thứ 1; 3) bấm phím mũi tên phải 2 lần; 4) bấm mũi tên phải lần nữa; 5) bấm mũi tên trái | Mỗi lần bấm, ảnh lớn đổi và tiêu điểm bàn phím (viền tiêu điểm) chuyển sang ảnh nhỏ mới. Bước 3: ảnh thứ 3. Bước 4: vòng về ảnh thứ 1. Bước 5: vòng ngược về ảnh thứ 3 | Mock + BE | Chưa test |
+| SP-GAL-05 | Khách vãng lai | [UC16] 1) Mở `/shop/2` ("Pate Whiskas 85g") | Hai ảnh: bìa `/imgs/prod6.jpg` và ảnh phụ `/imgs/prod7.jpg`; dải có "Xem ảnh 1 trên 2" và "Xem ảnh 2 trên 2"; nút "Ảnh trước" / "Ảnh sau" vẫn hiện (hiện từ 2 ảnh trở lên) | Mock + BE | Chưa test |
+| SP-GAL-06 | Khách vãng lai | [UC16] 1) Mở `/shop/4` ("Vitamin tổng hợp PetCare", không có ảnh nào) | Khung ảnh vuông với hình bàn chân mờ (khung dự phòng); không có ảnh vỡ, không có dải ảnh nhỏ, không có nút "Ảnh trước" / "Ảnh sau"; tên, giá, "Tạm hết hàng tại các chi nhánh" vẫn hiện | Mock + BE | Chưa test |
+| SP-GAL-07 | CUSTOMER · khach@petcare.vn | [UC16] 1) Mở `/shop`, tìm thẻ "Hạt Royal Canin Mini Adult 2kg"; 2) mở `/cart` (giỏ mẫu có hạt) | Thẻ ở `/shop` và dòng trong giỏ chỉ dùng ảnh bìa `/imgs/prod1.jpg`; ảnh phụ không xuất hiện ở hai nơi này, thẻ không có dải ảnh nhỏ | Mock + BE | Chưa test |
+| SP-GAL-08 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Menu "Sản phẩm & dịch vụ", tab "Sản phẩm"; 2) bấm nút sửa "Sửa Hạt Royal Canin Mini Adult 2kg" | Hộp "Sửa sản phẩm" có mục "Ảnh phụ" ở cuối (trên khung báo lỗi), góc phải của mục ghi "2/8". Hai dòng, mỗi dòng gồm ảnh xem trước nhỏ, ô "Đường dẫn ảnh phụ 1" = `/imgs/prod2.jpg` và "Đường dẫn ảnh phụ 2" = `/imgs/prod3.jpg`, rồi 3 nút biểu tượng mũi tên lên, mũi tên xuống, thùng rác (nhãn truy cập "Đưa ảnh phụ 1 lên", "Đưa ảnh phụ 1 xuống", "Xóa ảnh phụ 1", …). Nút "Đưa ảnh phụ 1 lên" và "Đưa ảnh phụ 2 xuống" bị khóa; nút "Thêm ảnh phụ" bật. Hộp không có ô sửa ảnh bìa | Mock + BE | Chưa test |
+| SP-GAL-09 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Hạt Royal Canin Mini Adult 2kg"; 2) bấm "Thêm ảnh phụ"; 3) nhập `/imgs/prod4.jpg` vào "Đường dẫn ảnh phụ 3"; 4) bấm "Lưu thay đổi"; 5) mở `/shop/1` | Bước 2: đếm "3/8", thêm một dòng trống (ảnh xem trước là khung trống có biểu tượng ảnh gạch chéo). Bước 3: ảnh xem trước hiện ảnh thật. Bước 4: hộp đóng, thanh thông báo xanh "Đã lưu Hạt Royal Canin Mini Adult 2kg". Bước 5: dải 4 ảnh theo thứ tự bìa, `prod2`, `prod3`, `prod4` ("Xem ảnh 1 trên 4" … "Xem ảnh 4 trên 4") | Mock + BE | Chưa test |
+| SP-GAL-10 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Hạt Royal Canin Mini Adult 2kg"; 2) bấm "Đưa ảnh phụ 1 xuống"; 3) bấm "Lưu thay đổi"; 4) mở `/shop/1` | Bước 2: ô 1 thành `/imgs/prod3.jpg`, ô 2 thành `/imgs/prod2.jpg` (ảnh xem trước đổi theo); nút "Đưa ảnh phụ 1 lên" khóa, "Đưa ảnh phụ 2 xuống" khóa. Bước 4: ảnh nhỏ thứ 1 vẫn là ảnh bìa, thứ 2 là `prod3`, thứ 3 là `prod2` (thứ tự gửi đi được giữ nguyên) | Mock + BE | Chưa test |
+| SP-GAL-11 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Hạt Royal Canin Mini Adult 2kg"; 2) bấm "Xóa ảnh phụ 1"; 3) bấm "Lưu thay đổi"; 4) mở `/shop/1` | Bước 2: còn một dòng `/imgs/prod3.jpg`, đếm "1/8". Bước 4: dải 2 ảnh (bìa và `prod3`); `prod2` biến mất (lưu là THAY cả danh sách, không cộng dồn) | Mock + BE | Chưa test |
+| SP-GAL-12 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Pate Whiskas 85g"; 2) bấm "Xóa ảnh phụ 1"; 3) bấm "Lưu thay đổi"; 4) sửa lại "Pate Whiskas 85g"; 5) mở `/shop/2` | Bước 2: không còn dòng nào, đếm "0/8". Bước 3: lưu thành công (FE gửi mảng rỗng chứ không bỏ trường, nên BE xóa thật). Bước 4: mục "Ảnh phụ" vẫn "0/8", không dòng nào. Bước 5: chỉ ảnh bìa `/imgs/prod6.jpg`, không có dải ảnh nhỏ, không có nút "Ảnh trước" / "Ảnh sau" | Mock + BE | Chưa test |
+| SP-GAL-13 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Amoxicillin 250mg" (chưa có ảnh phụ); 2) bấm "Thêm ảnh phụ" 8 lần; 3) thử bấm lần thứ 9; 4) bấm "Xóa ảnh phụ 8"; 5) bấm "Hủy" (không lưu) | Sau bước 2: đếm "8/8" và 8 ô nhập; nút "Thêm ảnh phụ" bị khóa nên bước 3 không thêm được dòng nào. Bước 4: "7/8", nút "Thêm ảnh phụ" bật lại | Mock + BE | Chưa test |
+| SP-GAL-14 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Pate Whiskas 85g" (1 ảnh phụ `/imgs/prod7.jpg`); 2) bấm "Thêm ảnh phụ", nhập `/imgs/prod7.jpg` (trùng ảnh đã có); 3) bấm "Thêm ảnh phụ" lần nữa, để trống; 4) bấm "Lưu thay đổi"; 5) mở `/shop/2` | Bước 4: lưu được, không báo lỗi (dòng trống bị bỏ, URL trùng bị loại, giữ lần đầu). Bước 5: vẫn đúng 2 ảnh (bìa và `prod7`), không lặp | Mock + BE | Chưa test |
+| SP-GAL-15 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Hạt Royal Canin Mini Adult 2kg", chỉ đổi "Tên sản phẩm" thành "Hạt Royal Canin Mini Adult 2kg (mới)"; 2) bấm "Lưu thay đổi"; 3) mở `/shop/1` (dọn: đổi tên lại như cũ) | Lưu được; trang `/shop/1` vẫn đủ 3 ảnh (không đụng tới mục "Ảnh phụ" thì FE không gửi `galleryUrls`, BE giữ nguyên) | Mock + BE | Chưa test |
+| SP-GAL-16 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Bấm "Thêm sản phẩm"; 2) chọn "Danh mục" = "Phụ kiện", SKU `DAY-GAL-1`, "Tên sản phẩm" = "Dây dắt gallery", "Đơn vị tính" = "cái", "Giá (đ)" = 75000; 3) bấm "Thêm ảnh phụ" 2 lần, nhập `/imgs/prod5.jpg` và `https://cdn.example.com/b.jpg`; 4) bấm "Tạo sản phẩm"; 5) tìm "Dây dắt gallery", bấm "Sửa Dây dắt gallery" | Bước 4: thanh thông báo xanh "Đã thêm sản phẩm Dây dắt gallery". Bước 5: mục "Ảnh phụ" ghi "2/8" với đúng 2 ô theo thứ tự đã nhập. Tạo mà không thêm ảnh nào cũng được (sản phẩm có mảng ảnh phụ rỗng) | Mock + BE | Chưa test |
+| SP-GAL-17 | SUPER_MANAGER · chuoi@petcare.vn | [UC29] 1) Sửa "Hạt Royal Canin Mini Adult 2kg"; 2) đổi "Đường dẫn ảnh phụ 1" thành `/imgs/khong-co.jpg` (tệp không tồn tại); 3) bấm "Lưu thay đổi"; 4) mở `/shop/1` | Bước 2: ảnh xem trước của dòng đó thành khung trống có biểu tượng ảnh gạch chéo (không hiện ảnh vỡ). Bước 3: lưu được (hệ thống không kiểm ảnh có tồn tại, chỉ kiểm không rỗng và tối đa 500 ký tự). Bước 4: dải chỉ còn 2 ảnh nhỏ ("Xem ảnh 1 trên 2", "Xem ảnh 2 trên 2": bìa và `prod3`), ảnh hỏng không hiện, nút "Ảnh sau" chuyển thẳng giữa hai ảnh còn lại (lúc mới mở, dải có thể thoáng hiện 3 ảnh rồi mất ảnh hỏng khi trình duyệt tải lỗi) | Mock + BE | Chưa test |
+
+Không đưa vào ca vì giao diện không tới được: 400 "Tối đa 8 ảnh phụ" (hộp chặn ở 8 dòng), phần tử rỗng (dòng trống bị bỏ khi lưu) và quá 500 ký tự (ô nhập chặn ở 500); các luật này, thứ tự lỗi và thân lỗi được kiểm bằng test tự động của mock (`catalog.mock.test.ts`), khớp số đo BE thật 24/11/2026 (thân lỗi, thứ tự 400 trước 403 trước 404; xem `docs/be-fe-integration.md` mục 9). Ảnh bìa hỏng (cần đổi `imageUrl`, hộp quản trị chưa có ô này) và ảnh lớn đang xem bị lỗi tải cũng chỉ có test tự động (`ProductGallery.test.tsx`).
 
 ## CN. Tạm ngừng, mở lại, đóng cửa chi nhánh (UC13)
 

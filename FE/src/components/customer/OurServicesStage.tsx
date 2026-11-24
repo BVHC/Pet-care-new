@@ -50,6 +50,33 @@ const GROUPS: Record<ServiceGroup, GroupMeta> = {
 const GROUP_ORDER: ServiceGroup[] = ['MEDICAL', 'GROOMING', 'BOARDING']
 const SCROLL_PER = 500 // px per service step
 
+const DEFAULT_SLIDES = [
+  {
+    id: 'MEDICAL' as ServiceGroup,
+    meta: GROUPS.MEDICAL,
+    perk: 'Khám tổng quát · Tiêm phòng · Siêu âm',
+    price: 'Tiêm phòng · Từ 50.000 đ',
+    doctorNote: true,
+    num: '01',
+  },
+  {
+    id: 'GROOMING' as ServiceGroup,
+    meta: GROUPS.GROOMING,
+    perk: 'Tắm spa khử mùi · Cắt tỉa tạo kiểu · Vệ sinh tai móng',
+    price: 'Tắm & sấy · Từ 120.000 đ',
+    doctorNote: true,
+    num: '02',
+  },
+  {
+    id: 'BOARDING' as ServiceGroup,
+    meta: GROUPS.BOARDING,
+    perk: 'Phòng điều hòa riêng · Camera Live 24/7 · Sân chơi ngoài trời',
+    price: 'Khách sạn lưu trú · Từ 150.000 đ/đêm',
+    doctorNote: false,
+    num: '03',
+  },
+]
+
 export const OurServicesStage: React.FC = () => {
   const services = usePublicServiceList()
   const [activeIndex, setActiveIndex] = useState<number>(0)
@@ -65,10 +92,10 @@ export const OurServicesStage: React.FC = () => {
   const descRef = useRef<HTMLParagraphElement>(null)
   const perkRef = useRef<HTMLDivElement>(null)
 
-  // Nhóm nào có dịch vụ thì thành một bước; giá ghi dịch vụ rẻ nhất của nhóm kèm tên, các dịch vụ còn lại nằm ở dòng "perk".
+  // Nhóm nào có dịch vụ thì thành một bước; nếu API chưa có hoặc rỗng thì dùng các bước trang trí mặc định để sân khấu luôn hiện.
   const slides = useMemo(
-    () =>
-      GROUP_ORDER.flatMap((group) => {
+    () => {
+      const fromApi = GROUP_ORDER.flatMap((group) => {
         const list = (services.data ?? []).filter((s) => s.group === group)
         if (list.length === 0) return []
         const cheapest = list.reduce((a, b) => (b.price < a.price ? b : a))
@@ -83,7 +110,11 @@ export const OurServicesStage: React.FC = () => {
             doctorNote: group !== 'BOARDING',
           },
         ]
-      }).map((slide, i) => ({ ...slide, num: String(i + 1).padStart(2, '0') })),
+      }).map((slide, i) => ({ ...slide, num: String(i + 1).padStart(2, '0') }))
+
+      if (fromApi.length > 0) return fromApi
+      return DEFAULT_SLIDES
+    },
     [services.data],
   )
   const count = slides.length
@@ -131,8 +162,7 @@ export const OurServicesStage: React.FC = () => {
     )
   }, [activeIndex])
 
-  // ScrollTrigger: pin section and scrub through the services (first pass only). Dựng lại khi số bước đổi: dữ liệu API về
-  // sau lúc mount nên lúc đầu chưa có section để pin; dưới 2 bước thì không pin (snap và tiến độ chia cho count - 1).
+  // ScrollTrigger: pin section và cuộn lướt qua các dịch vụ. Dựng lại khi slides hoặc số bước đổi.
   useEffect(() => {
     const section = sectionRef.current
     if (!section || count < 2) return
@@ -142,13 +172,14 @@ export const OurServicesStage: React.FC = () => {
     const mm = gsap.matchMedia()
 
     mm.add('(min-width: 769px) and (prefers-reduced-motion: no-preference)', () => {
-      // Desktop: enable pin + scrub
+      // Desktop: bật pin + scrub liên tục
       stRef.current = ScrollTrigger.create({
         trigger: section,
         start: 'top top',
         end: `+=${total}`,
         pin: true,
         scrub: 0.5,
+        anticipatePin: 1,
         snap: {
           snapTo: 1 / (count - 1),
           duration: { min: 0.2, max: 0.45 },
@@ -158,17 +189,6 @@ export const OurServicesStage: React.FC = () => {
         onUpdate: (self) => {
           const idx = Math.min(count - 1, Math.round(self.progress * (count - 1)))
           setActiveIndex((prev) => (prev !== idx ? idx : prev))
-        },
-        onLeave: () => {
-          // First pass complete — unlock click mode
-          stRef.current?.kill()
-          stRef.current = null
-          setUnlocked(true)
-          setActiveIndex(count - 1)
-          // Wait for pin spacer removal + React re-render before refreshing downstream STs
-          requestAnimationFrame(() => {
-            ScrollTrigger.refresh()
-          })
         },
       })
       return () => {
@@ -190,39 +210,22 @@ export const OurServicesStage: React.FC = () => {
       return () => {}
     })
 
+    requestAnimationFrame(() => {
+      ScrollTrigger.refresh()
+    })
+
     return () => {
       stRef.current?.kill()
       stRef.current = null
       mm.revert()
     }
-  }, [count])
+  }, [count, slides])
 
   // Có / mất section (hoặc đổi số bước) làm đổi bố cục phía dưới: đo lại mọi ScrollTrigger, kể cả các pin khác của trang chủ.
   useEffect(() => {
     const frame = requestAnimationFrame(() => ScrollTrigger.refresh())
     return () => cancelAnimationFrame(frame)
   }, [services.status, count])
-
-  // Lỗi hoặc chưa có dịch vụ nào thì ẩn cả sân khấu, không để bước giả.
-  if (services.isError || (services.isSuccess && count === 0)) return null
-
-  if (count === 0) {
-    // Đang tải: giữ đúng chiều cao 100vh của sân khấu để các trigger phía dưới đo đúng.
-    return (
-      <section
-        role="status"
-        aria-label="Đang tải dịch vụ"
-        className="relative w-full bg-[#fdf6ec]"
-        style={{ height: '100vh', minHeight: '660px' }}
-      >
-        <div aria-hidden className="flex h-full flex-col items-center justify-center gap-8 px-4">
-          <div className="h-9 w-72 max-w-full animate-pulse rounded-full bg-[#faebe4] motion-reduce:animate-none" />
-          <div className="h-[180px] w-[180px] animate-pulse rounded-full bg-[#faebe4] motion-reduce:animate-none sm:h-[240px] sm:w-[240px] lg:h-[320px] lg:w-[320px]" />
-          <div className="h-12 w-64 max-w-full animate-pulse rounded-full bg-[#faebe4] motion-reduce:animate-none" />
-        </div>
-      </section>
-    )
-  }
 
   const index = Math.min(activeIndex, count - 1)
   const service = slides[index]
@@ -302,14 +305,13 @@ export const OurServicesStage: React.FC = () => {
                   <button
                     key={s.id}
                     onClick={() => {
-                      if (unlocked) {
+                      if (unlocked || !stRef.current) {
                         prevIndexRef.current = activeIndex
                         setActiveIndex(idx)
                       } else {
-                        const section = sectionRef.current
-                        if (!section) return
-                        const sectionTop = section.getBoundingClientRect().top + window.scrollY
-                        window.scrollTo({ top: sectionTop + idx * SCROLL_PER, behavior: 'smooth' })
+                        const st = stRef.current
+                        const targetScroll = st.start + (idx / (count - 1)) * (st.end - st.start)
+                        window.scrollTo({ top: targetScroll, behavior: 'smooth' })
                       }
                     }}
                     aria-label={`Dịch vụ ${s.meta.title}`}

@@ -1,0 +1,338 @@
+[
+ {
+  "sku": "RC-MINI-2KG",
+  "file": "rc-mini-2kg-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/3182550831383",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-MINI-2KG",
+  "file": "rc-mini-2kg-3.jpg",
+  "kind": "ảnh đóng góp 2",
+  "page": "https://world.openpetfoodfacts.org/product/3182550831383",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-MINI-2KG",
+  "file": "rc-mini-2kg-4.jpg",
+  "kind": "ảnh đóng góp 3",
+  "page": "https://world.openpetfoodfacts.org/product/3182550831383",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "WK-PATE-85",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/0112215703451",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "RC-MINI-PUPPY-2KG",
+  "file": "rc-mini-puppy-2kg-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/3182550793001",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-MINI-PUPPY-2KG",
+  "file": "rc-mini-puppy-2kg-3.jpg",
+  "kind": "ảnh đóng góp 1",
+  "page": "https://world.openpetfoodfacts.org/product/3182550793001",
+  "author": "kiliweb",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-MINI-PUPPY-2KG",
+  "file": "rc-mini-puppy-2kg-4.jpg",
+  "kind": "ảnh đóng góp 3",
+  "page": "https://world.openpetfoodfacts.org/product/3182550793001",
+  "author": "openfoodfacts-contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-MEDIUM-ADULT-4KG",
+  "file": "rc-medium-adult-4kg-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/3182550760324",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-MEDIUM-ADULT-4KG",
+  "file": "rc-medium-adult-4kg-3.jpg",
+  "kind": "ảnh đóng góp 2",
+  "page": "https://world.openpetfoodfacts.org/product/3182550760324",
+  "author": "openfoodfacts-contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-MAXI-ADULT-4KG",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/3182551065411",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "RC-POODLE-ADULT-500G",
+  "file": "rc-poodle-adult-500g-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/0030111450913",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-POODLE-ADULT-500G",
+  "file": "rc-poodle-adult-500g-3.jpg",
+  "kind": "dinh dưỡng",
+  "page": "https://world.openpetfoodfacts.org/product/0030111450913",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "PED-PUPPY-CHICKEN-1.5KG",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/8906002483006",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "PED-POUCH-CHICKEN-130G",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/0023100117973",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "RC-KITTEN-2KG",
+  "file": "rc-kitten-2kg-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/3182550702423",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-KITTEN-2KG",
+  "file": "rc-kitten-2kg-3.jpg",
+  "kind": "dinh dưỡng",
+  "page": "https://world.openpetfoodfacts.org/product/3182550702423",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-KITTEN-2KG",
+  "file": "rc-kitten-2kg-4.jpg",
+  "kind": "ảnh đóng góp 1",
+  "page": "https://world.openpetfoodfacts.org/product/3182550702423",
+  "author": "kiliweb",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-STERILISED-2KG",
+  "file": "rc-sterilised-2kg-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/9003579311301",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-STERILISED-2KG",
+  "file": "rc-sterilised-2kg-3.jpg",
+  "kind": "ảnh đóng góp 1",
+  "page": "https://world.openpetfoodfacts.org/product/9003579311301",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-STERILISED-2KG",
+  "file": "rc-sterilised-2kg-4.jpg",
+  "kind": "ảnh đóng góp 4",
+  "page": "https://world.openpetfoodfacts.org/product/9003579311301",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-PERSIAN-2KG",
+  "file": "rc-persian-2kg-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/3182550702621",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-PERSIAN-2KG",
+  "file": "rc-persian-2kg-3.jpg",
+  "kind": "ảnh đóng góp 3",
+  "page": "https://world.openpetfoodfacts.org/product/3182550702621",
+  "author": "openfoodfacts-contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "WK-ADULT-TUNA-1.2KG",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/10175582",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "WK-KITTEN-1.1KG",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/5000166067799",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "WK-PATE-SALMON-85",
+  "file": "wk-pate-salmon-85-2.jpg",
+  "kind": "ảnh đóng góp 1",
+  "page": "https://world.openpetfoodfacts.org/product/8853301550079",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "WK-PATE-SALMON-85",
+  "file": "wk-pate-salmon-85-3.jpg",
+  "kind": "ảnh đóng góp 2",
+  "page": "https://world.openpetfoodfacts.org/product/8853301550079",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "WK-PATE-SALMON-85",
+  "file": "wk-pate-salmon-85-4.jpg",
+  "kind": "ảnh đóng góp 3",
+  "page": "https://world.openpetfoodfacts.org/product/8853301550079",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "WK-PATE-TUNA-85",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/0112215703451",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "MEO-TUNA-1.2KG",
+  "file": "meo-tuna-1.2kg-2.jpg",
+  "kind": "ảnh đóng góp 1",
+  "page": "https://world.openpetfoodfacts.org/product/8994125000408",
+  "author": "openfoodfacts-contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "MEO-TUNA-1.2KG",
+  "file": "meo-tuna-1.2kg-3.jpg",
+  "kind": "ảnh đóng góp 2",
+  "page": "https://world.openpetfoodfacts.org/product/8994125000408",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "MEO-TUNA-1.2KG",
+  "file": "meo-tuna-1.2kg-4.jpg",
+  "kind": "ảnh đóng góp 3",
+  "page": "https://world.openpetfoodfacts.org/product/8994125000408",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-FIT32-2KG",
+  "file": "rc-fit32-2kg-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/02542874",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "RC-FIT32-2KG",
+  "file": "rc-fit32-2kg-3.jpg",
+  "kind": "dinh dưỡng",
+  "page": "https://world.openpetfoodfacts.org/product/02542874",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "PED-DENTASTIX-S",
+  "file": "ped-dentastix-s-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/5998749108093",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "PED-DENTASTIX-M",
+  "file": "ped-dentastix-m-2.jpg",
+  "kind": "thành phần",
+  "page": "https://world.openpetfoodfacts.org/product/5998749108093",
+  "author": "Open Pet Food Facts contributors",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "SH-PUPPY-3KG",
+  "file": "",
+  "kind": "không có ảnh phụ",
+  "page": "https://world.openpetfoodfacts.org/product/8850477017764",
+  "author": "",
+  "license": ""
+ },
+ {
+  "sku": "MEO-KITTEN-1.1KG",
+  "file": "meo-kitten-1.1kg-2.jpg",
+  "kind": "ảnh đóng góp 1",
+  "page": "https://world.openpetfoodfacts.org/product/8994125000545",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "MEO-KITTEN-1.1KG",
+  "file": "meo-kitten-1.1kg-3.jpg",
+  "kind": "ảnh đóng góp 2",
+  "page": "https://world.openpetfoodfacts.org/product/8994125000545",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "MEO-KITTEN-1.1KG",
+  "file": "meo-kitten-1.1kg-4.jpg",
+  "kind": "ảnh đóng góp 3",
+  "page": "https://world.openpetfoodfacts.org/product/8994125000545",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "MEO-GOLD-INDOOR-1.2KG",
+  "file": "meo-gold-indoor-1.2kg-2.jpg",
+  "kind": "ảnh đóng góp 1",
+  "page": "https://world.openpetfoodfacts.org/product/8850477002746",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "MEO-GOLD-INDOOR-1.2KG",
+  "file": "meo-gold-indoor-1.2kg-3.jpg",
+  "kind": "ảnh đóng góp 2",
+  "page": "https://world.openpetfoodfacts.org/product/8850477002746",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ },
+ {
+  "sku": "MEO-GOLD-INDOOR-1.2KG",
+  "file": "meo-gold-indoor-1.2kg-4.jpg",
+  "kind": "ảnh đóng góp 3",
+  "page": "https://world.openpetfoodfacts.org/product/8850477002746",
+  "author": "foodless",
+  "license": "CC BY-SA 3.0"
+ }
+]

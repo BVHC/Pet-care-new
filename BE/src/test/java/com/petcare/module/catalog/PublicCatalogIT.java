@@ -300,6 +300,28 @@ class PublicCatalogIT extends InventoryItSupport {
 
         assertThat(number(page.get("size"))).isEqualTo(100);
         assertThat(found).containsOnlyKeys("productId", "name", "categoryId", "categoryName", "price", "unit",
-                "description", "imageUrl", "inStockBranchIds");
+                "description", "imageUrl", "galleryUrls", "inStockBranchIds");
+    }
+
+    /** docs/adr/0151: cùng một DTO cho danh sách và chi tiết; sản phẩm chưa có ảnh phụ trả {@code []}, không bao giờ null. */
+    @Test
+    void galleryUrlsDefaultToEmptyAndKeepTheStoredOrderInListAndDetail() {
+        long plain = named(newProduct("GOODS", false), "plain");
+        long withGallery = named(newProduct("GOODS", false), "gallery");
+        jdbc.update("UPDATE products SET image_url = '/imgs/cover.jpg', gallery_urls = ?::jsonb WHERE id = ?",
+                "[\"/imgs/b.jpg\", \"/imgs/a.jpg\", \"/imgs/c.jpg\"]", withGallery);
+
+        List<Map<String, Object>> page = productPage("?size=100&q=pub-" + tag);
+
+        assertThat(page).filteredOn(p -> number(p.get("productId")) == plain)
+                .singleElement().satisfies(p -> assertThat(p).containsEntry("galleryUrls", List.of()));
+        assertThat(page).filteredOn(p -> number(p.get("productId")) == withGallery)
+                .singleElement().satisfies(p -> assertThat(p)
+                        .containsEntry("galleryUrls", List.of("/imgs/b.jpg", "/imgs/a.jpg", "/imgs/c.jpg"))
+                        .containsEntry("imageUrl", "/imgs/cover.jpg"));
+        assertThat(data(call(HttpMethod.GET, "/api/public/products/" + withGallery, null, null), HttpStatus.OK))
+                .containsEntry("galleryUrls", List.of("/imgs/b.jpg", "/imgs/a.jpg", "/imgs/c.jpg"));
+        assertThat(data(call(HttpMethod.GET, "/api/public/products/" + plain, null, null), HttpStatus.OK))
+                .containsEntry("galleryUrls", List.of());
     }
 }

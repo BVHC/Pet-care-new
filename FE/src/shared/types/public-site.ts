@@ -23,6 +23,8 @@ export interface PublicProduct {
   unit: string;
   description?: string | null;
   imageUrl?: string | null;
+  /** Ảnh phụ có thứ tự; BE luôn gửi (cùng DTO cho danh sách và chi tiết), để `?` cho fixture cũ còn biên dịch. */
+  galleryUrls?: string[];
   /** Chi nhánh ACTIVE còn tồn khả dụng; ghép tên bằng `branchNamesByIds`. */
   inStockBranchIds: number[];
 }

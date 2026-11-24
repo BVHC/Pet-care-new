@@ -242,7 +242,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "SKU trùng · `BR-SP-01` cờ kê đơn trên loại khác DRUG · `BR-SP-05` thuốc kê đơn / vaccine tắt quản lý hạn dùng · `BR-SP-07` vaccine chưa gắn loại vaccine"
+          description: "SKU trùng · `BR-SP-01` cờ kê đơn trên loại khác DRUG · `BR-SP-05` thuốc kê đơn / vaccine tắt quản lý hạn dùng · `BR-SP-07` vaccine chưa gắn loại vaccine · `VALIDATION_FAILED` `galleryUrls` quá 8 phần tử, phần tử rỗng / null hoặc quá 500 ký tự (A5)"
           content:
             "application/json":
               schema:
@@ -286,7 +286,7 @@ paths:
     patch:
       tags: [Products]
       summary: "Sửa sản phẩm / đổi giá / ngừng kinh doanh"
-      description: "UC29 · BR-SP-01, 05, 07, BR-BH-03, BR-QT-15. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Đổi giá ghi audit, không ảnh hưởng dòng Order đã có."
+      description: "UC29 · BR-SP-01, 05, 07, BR-BH-03, BR-QT-15. Actor: A04. Quyền: Chỉ SUPER_MANAGER. Chuyển trạng thái: —. Đổi giá ghi audit, không ảnh hưởng dòng Order đã có. `galleryUrls`: vắng / null = không đổi, `[]` = xóa hết, mảng = thay cả danh sách (A5); đổi ảnh không ghi audit."
       operationId: updateProduct
       security:
         - bearerAuth: []
@@ -315,7 +315,7 @@ paths:
                     type: integer
                     description: "HTTP status của kết quả, ví dụ 200, 201"
         "400":
-          description: "`BR-SP-05` tắt quản lý hạn dùng khi còn tồn ở bất kỳ chi nhánh nào · `BR-SP-01`, `BR-SP-07` như khi tạo"
+          description: "`BR-SP-05` tắt quản lý hạn dùng khi còn tồn ở bất kỳ chi nhánh nào · `BR-SP-01`, `BR-SP-07` như khi tạo · `VALIDATION_FAILED` `galleryUrls` như khi tạo (A5)"
           content:
             "application/json":
               schema:
@@ -1041,7 +1041,7 @@ components:
           type: [boolean, "null"]
     Product:
       type: object
-      required: [productId, categoryId, sku, name, productType, isPrescription, tracksExpiry, unit, price, isActive]
+      required: [productId, categoryId, sku, name, productType, isPrescription, tracksExpiry, unit, price, galleryUrls, isActive]
       properties:
         productId:
           type: integer
@@ -1077,6 +1077,13 @@ components:
         imageUrl:
           type: [string, "null"]
           maxLength: 500
+        galleryUrls:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            maxLength: 500
+          description: "Ảnh phụ có thứ tự đã chuẩn hóa (trim, bỏ trùng); sản phẩm chưa có ảnh phụ trả `[]`, không bao giờ null. Ảnh bìa là `imageUrl`"
         isActive:
           type: boolean
     CreateProductRequest:
@@ -1117,6 +1124,13 @@ components:
         imageUrl:
           type: [string, "null"]
           maxLength: 500
+        galleryUrls:
+          type: [array, "null"]
+          maxItems: 8
+          items:
+            type: string
+            maxLength: 500
+          description: "Ảnh phụ CÓ THỨ TỰ, tối đa 8 phần tử; mỗi URL không rỗng, tối đa 500 ký tự, không kiểm giao thức (như `imageUrl`). `imageUrl` vẫn là ảnh bìa; ảnh ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Chuẩn hóa khi lưu: `trim()` từng URL rồi bỏ trùng, giữ lần xuất hiện đầu (không báo lỗi). Kiểm số lượng và độ dài chạy TRƯỚC chuẩn hóa, nên 9 phần tử trùng nhau còn 8 vẫn là 400. Vắng hoặc null = `[]`"
     UpdateProductRequest:
       type: object
       properties:
@@ -1146,6 +1160,13 @@ components:
         imageUrl:
           type: [string, "null"]
           maxLength: 500
+        galleryUrls:
+          type: [array, "null"]
+          maxItems: 8
+          items:
+            type: string
+            maxLength: 500
+          description: "Ảnh phụ CÓ THỨ TỰ, tối đa 8 phần tử; mỗi URL không rỗng, tối đa 500 ký tự, không kiểm giao thức (như `imageUrl`). `imageUrl` vẫn là ảnh bìa; ảnh ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Chuẩn hóa khi lưu: `trim()` từng URL rồi bỏ trùng, giữ lần xuất hiện đầu (không báo lỗi). Kiểm số lượng và độ dài chạy TRƯỚC chuẩn hóa, nên 9 phần tử trùng nhau còn 8 vẫn là 400. Vắng hoặc null = KHÔNG đổi; `[]` = xóa hết ảnh phụ; mảng khác = THAY cả danh sách (giữ thứ tự gửi)"
         isActive:
           type: [boolean, "null"]
           description: "false = ngừng kinh doanh (A2)"
@@ -1355,7 +1376,7 @@ components:
           description: "Chi nhánh ACTIVE đang bật dịch vụ (BR-CK-01)"
     PublicProduct:
       type: object
-      required: [productId, name, categoryId, categoryName, price, unit, inStockBranchIds]
+      required: [productId, name, categoryId, categoryName, price, unit, galleryUrls, inStockBranchIds]
       properties:
         productId:
           type: integer
@@ -1379,6 +1400,13 @@ components:
         imageUrl:
           type: [string, "null"]
           maxLength: 500
+        galleryUrls:
+          type: array
+          maxItems: 8
+          items:
+            type: string
+            maxLength: 500
+          description: "Ảnh phụ có thứ tự (tối đa 8); ảnh hiển thị ở trang chi tiết = `[imageUrl, ...galleryUrls]` (bỏ rỗng và trùng). Cùng một DTO cho danh sách và chi tiết; chưa có ảnh phụ trả `[]`"
         inStockBranchIds:
           type: array
           items:

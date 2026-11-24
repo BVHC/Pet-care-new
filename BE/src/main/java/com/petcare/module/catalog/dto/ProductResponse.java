@@ -1,5 +1,7 @@
 package com.petcare.module.catalog.dto;
 
+import java.util.List;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.petcare.module.catalog.api.ProductType;
 
@@ -17,5 +19,6 @@ public record ProductResponse(
         long price,
         String description,
         String imageUrl,
+        List<String> galleryUrls,
         @JsonProperty("isActive") boolean isActive) {
 }

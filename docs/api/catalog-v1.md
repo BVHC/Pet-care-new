@@ -53,7 +53,7 @@
 | Danh sách sản phẩm | A04–A08 | Mọi nhân viên | — | — | — |
 | Tạo sản phẩm | A04 | Chỉ SUPER_MANAGER | — | — | — |
 | Chi tiết sản phẩm | A04–A08 | Mọi nhân viên | — | — | — |
-| Sửa sản phẩm / đổi giá / ngừng kinh doanh | A04 | Chỉ SUPER_MANAGER | — | — | Đổi giá ghi audit, không ảnh hưởng dòng Order đã có. |
+| Sửa sản phẩm / đổi giá / ngừng kinh doanh | A04 | Chỉ SUPER_MANAGER | — | — | Đổi giá ghi audit, không ảnh hưởng dòng Order đã có. `galleryUrls`: vắng / null = không đổi, `[]` = xóa hết, mảng = thay cả danh sách (A5); đổi ảnh không ghi audit. |
 | Danh sách dịch vụ | A04–A08 | Mọi nhân viên | — | — | — |
 | Tạo dịch vụ / loại chuồng | A04 | Chỉ SUPER_MANAGER | — | — | — |
 | Chi tiết dịch vụ | A04–A08 | Mọi nhân viên | — | — | — |
@@ -82,9 +82,9 @@
 ### Products
 
 - **`GET /products`** — Danh sách sản phẩm. Query: `q?`, `categoryId?`, `productType?`, `vaccineTypeId?`, `isActive?`, `retailOnly?`, `page?`, `size?`. Response `200` trang `Product`. Lỗi: `401` · `403`.
-- **`POST /products`** — Tạo sản phẩm. Request `CreateProductRequest`. Response `201` `Product`. Lỗi: `400` SKU trùng · `BR-SP-01` cờ kê đơn trên loại khác DRUG · `BR-SP-05` thuốc kê đơn / vaccine tắt quản lý hạn dùng · `BR-SP-07` vaccine chưa gắn loại vaccine · `401` · `403`.
+- **`POST /products`** — Tạo sản phẩm. Request `CreateProductRequest`. Response `201` `Product`. Lỗi: `400` SKU trùng · `BR-SP-01` cờ kê đơn trên loại khác DRUG · `BR-SP-05` thuốc kê đơn / vaccine tắt quản lý hạn dùng · `BR-SP-07` vaccine chưa gắn loại vaccine · `VALIDATION_FAILED` `galleryUrls` quá 8 phần tử, phần tử rỗng / null hoặc quá 500 ký tự (A5) · `401` · `403`.
 - **`GET /products/{productId}`** — Chi tiết sản phẩm. Response `200` `Product`. Lỗi: `401` · `403` · `404`.
-- **`PATCH /products/{productId}`** — Sửa sản phẩm / đổi giá / ngừng kinh doanh. Request `UpdateProductRequest`. Response `200` `Product`. Lỗi: `400` `BR-SP-05` tắt quản lý hạn dùng khi còn tồn ở bất kỳ chi nhánh nào · `BR-SP-01`, `BR-SP-07` như khi tạo · `401` · `403` · `404`.
+- **`PATCH /products/{productId}`** — Sửa sản phẩm / đổi giá / ngừng kinh doanh. Request `UpdateProductRequest`. Response `200` `Product`. Lỗi: `400` `BR-SP-05` tắt quản lý hạn dùng khi còn tồn ở bất kỳ chi nhánh nào · `BR-SP-01`, `BR-SP-07` như khi tạo · `VALIDATION_FAILED` `galleryUrls` như khi tạo (A5) · `401` · `403` · `404`.
 ### Services
 
 - **`GET /services`** — Danh sách dịch vụ. Query: `group?`, `isActive?`. Response `200` mảng `Service`. Lỗi: `401` · `403`.
@@ -118,9 +118,9 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`ProductCategory`** — {`categoryId`: int64, `name`: string, `isActive`: boolean}
 - **`ProductCategoryRequest`** — {`name`: string}
 - **`UpdateProductCategoryRequest`** — {`name?`: string, `isActive?`: boolean}
-- **`Product`** — {`productId`: int64, `categoryId`: int64, `sku`: string, `name`: string, `productType`: ProductType, `isPrescription`: boolean, `tracksExpiry`: boolean, `vaccineTypeId?`: int64, `unit`: string, `price`: int64, `description?`: string, `imageUrl?`: string, `isActive`: boolean}
-- **`CreateProductRequest`** — {`categoryId`: int64, `sku`: string, `name`: string, `productType`: ProductType, `isPrescription`: boolean, `tracksExpiry`: boolean, `vaccineTypeId?`: int64, `unit`: string, `price`: int64, `description?`: string, `imageUrl?`: string}
-- **`UpdateProductRequest`** — {`categoryId?`: int64, `name?`: string, `isPrescription?`: boolean, `tracksExpiry?`: boolean, `vaccineTypeId?`: int64, `unit?`: string, `price?`: int64, `description?`: string, `imageUrl?`: string, `isActive?`: boolean}
+- **`Product`** — {`productId`: int64, `categoryId`: int64, `sku`: string, `name`: string, `productType`: ProductType, `isPrescription`: boolean, `tracksExpiry`: boolean, `vaccineTypeId?`: int64, `unit`: string, `price`: int64, `description?`: string, `imageUrl?`: string, `galleryUrls`: [string], `isActive`: boolean}
+- **`CreateProductRequest`** — {`categoryId`: int64, `sku`: string, `name`: string, `productType`: ProductType, `isPrescription`: boolean, `tracksExpiry`: boolean, `vaccineTypeId?`: int64, `unit`: string, `price`: int64, `description?`: string, `imageUrl?`: string, `galleryUrls?`: [string]}
+- **`UpdateProductRequest`** — {`categoryId?`: int64, `name?`: string, `isPrescription?`: boolean, `tracksExpiry?`: boolean, `vaccineTypeId?`: int64, `unit?`: string, `price?`: int64, `description?`: string, `imageUrl?`: string, `galleryUrls?`: [string], `isActive?`: boolean}
 - **`KennelTypeSpec`** — {`species`: Species, `maxWeightKg`: number} — Chỉ với dịch vụ nhóm BOARDING (BR-SP-04)
 - **`Service`** — {`serviceId`: int64, `name`: string, `group`: ServiceGroup, `medicalType?`: MedicalType, `price`: int64, `priceIsFrom`: boolean, `description?`: string, `isActive`: boolean, `kennelType?`: KennelTypeSpec}
 - **`CreateServiceRequest`** — {`name`: string, `group`: ServiceGroup, `medicalType?`: MedicalType, `price`: int64, `priceIsFrom?`: boolean, `description?`: string, `kennelType?`: KennelTypeSpec}
@@ -132,7 +132,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`CreateProtocolRequest`** — {`species`: Species, `vaccineTypeId`: int64, `doseNumber`: int32, `intervalDays`: int32, `minAgeWeeks`: int32, `requiredForBoarding`: boolean}
 - **`UpdateProtocolRequest`** — {`intervalDays?`: int32, `minAgeWeeks?`: int32, `requiredForBoarding?`: boolean, `isActive?`: boolean} — Chỉ áp dụng cho mũi tiêm sau thời điểm sửa (BR-SP-03)
 - **`PublicService`** — {`serviceId`: int64, `name`: string, `group`: ServiceGroup, `price`: int64, `priceIsFrom`: boolean, `description?`: string, `kennelType?`: KennelTypeSpec, `branchIds`: [integer]}
-- **`PublicProduct`** — {`productId`: int64, `name`: string, `categoryId`: int64, `categoryName`: string, `price`: int64, `unit`: string, `description?`: string, `imageUrl?`: string, `inStockBranchIds`: [integer]}
+- **`PublicProduct`** — {`productId`: int64, `name`: string, `categoryId`: int64, `categoryName`: string, `price`: int64, `unit`: string, `description?`: string, `imageUrl?`: string, `galleryUrls`: [string], `inStockBranchIds`: [integer]}
 
 ---
 
@@ -152,6 +152,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 | A2 | Ngừng kinh doanh / ngừng sử dụng = PATCH `isActive = false`; không xóa sản phẩm, dịch vụ, danh mục | 04 nguyên tắc 2 (không xóa cứng); chỉ loại vaccine có rule xóa (BR-SP-07) |
 | A3 | Phác đồ: sửa `intervalDays`, `minAgeWeeks`, `requiredForBoarding`, `isActive`; loài, loại vaccine, mũi thứ không đổi | Bộ ba này là khóa duy nhất (05 `vaccination_protocols`); BR-SP-03 |
 | A4 | Danh sách sản phẩm cho nhân viên có bộ lọc `retailOnly` (bỏ thuốc kê đơn) để dùng ở POS | BR-SP-01: thuốc kê đơn không bán lẻ |
+| A5 | Ảnh phụ của sản phẩm là `galleryUrls`: danh sách URL có thứ tự, tối đa 8, lưu JSONB `products.gallery_urls` (V62); `imageUrl` vẫn là ảnh bìa; PATCH `galleryUrls` thay cả danh sách (null = không đổi); BE trim và bỏ trùng giữ lần đầu; không kiểm giao thức URL | Trang chi tiết cần nhiều ảnh; chưa có kho tệp nên chỉ nhận URL (Q1); docs/adr/0151 |
 
 | ID | Câu hỏi | Trạng thái | Gốc |
 |---|---|---|---|

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -364,7 +366,151 @@ class CatalogAdminIT {
         assertThat(listed).hasSize(2);
     }
 
+    // ------------------------------------------------------------------ gallery ảnh phụ (docs/adr/0151)
+
+    private static final String TOO_MANY = "Tối đa 8 ảnh phụ";
+    private static final String BLANK = "Đường dẫn ảnh phụ không được để trống";
+    private static final String TOO_LONG = "Đường dẫn ảnh phụ tối đa 500 ký tự";
+
+    private ResponseEntity<Map<String, Object>> createWith(long categoryId, String sku, Map<String, Object> extra) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("categoryId", categoryId);
+        body.put("sku", sku);
+        body.put("name", sku);
+        body.put("productType", "GOODS");
+        body.put("isPrescription", false);
+        body.put("tracksExpiry", false);
+        body.put("unit", "hộp");
+        body.put("price", 100_000);
+        body.putAll(extra);
+        return call(HttpMethod.POST, "/api/products", superManager, body);
+    }
+
+    private ResponseEntity<Map<String, Object>> patchProduct(long productId, Map<String, Object> body, String token) {
+        return call(HttpMethod.PATCH, "/api/products/" + productId, token, body);
+    }
+
+    private String storedGallery(long productId) {
+        return jdbc.queryForObject("SELECT gallery_urls::text FROM products WHERE id = ?", String.class, productId);
+    }
+
+    private static List<String> nine() {
+        return java.util.stream.IntStream.rangeClosed(1, 9).mapToObj(i -> "/imgs/" + i + ".jpg").toList();
+    }
+
+    @Test
+    void productGalleryDefaultsToEmptyWhenAbsentOrNullOnCreate() {
+        long categoryId = category();
+        Map<String, Object> withNull = new HashMap<>();
+        withNull.put("galleryUrls", null);
+        withNull.put("imageUrl", "/imgs/cover.jpg");
+
+        Map<String, Object> absent = data(createWith(categoryId, unique("SKU"), Map.of()));
+        Map<String, Object> explicitNull = data(createWith(categoryId, unique("SKU"), withNull));
+
+        assertThat(absent).containsEntry("galleryUrls", List.of());
+        assertThat(explicitNull).containsEntry("galleryUrls", List.of()).containsEntry("imageUrl", "/imgs/cover.jpg");
+        assertThat(storedGallery(((Number) absent.get("productId")).longValue())).isEqualTo("[]");
+        assertThat(storedGallery(((Number) explicitNull.get("productId")).longValue())).isEqualTo("[]");
+    }
+
+    @Test
+    void productGalleryIsTrimmedDeduplicatedAndReadBackInOrderEverywhere() {
+        long categoryId = category();
+        String sku = unique("SKU");
+        List<String> expected = List.of("/imgs/b.jpg", "/imgs/a.jpg", "/imgs/c.jpg");
+
+        Map<String, Object> created = data(createWith(categoryId, sku, Map.of("imageUrl", "/imgs/cover.jpg",
+                "galleryUrls", List.of(" /imgs/b.jpg ", "/imgs/a.jpg", "/imgs/b.jpg", "/imgs/c.jpg"))));
+        long id = ((Number) created.get("productId")).longValue();
+
+        assertThat(created).containsEntry("galleryUrls", expected).containsEntry("imageUrl", "/imgs/cover.jpg");
+        assertThat(storedGallery(id)).isEqualTo("[\"/imgs/b.jpg\", \"/imgs/a.jpg\", \"/imgs/c.jpg\"]");
+        assertThat(data(call(HttpMethod.GET, "/api/products/" + id, vet, null))).containsEntry("galleryUrls", expected);
+        List<Map<String, Object>> listed = dataPage(call(HttpMethod.GET,
+                "/api/products?categoryId=" + categoryId + "&q=" + sku.toLowerCase(), vet, null));
+        assertThat(listed).hasSize(1);
+        assertThat(listed.get(0)).containsEntry("galleryUrls", expected);
+    }
+
+    @Test
+    void patchGalleryNullAndAbsentKeepEmptyClearsAndListReplacesEverything() {
+        long id = ((Number) data(createWith(category(), unique("SKU"), Map.of("galleryUrls",
+                List.of("/imgs/a.jpg", "/imgs/b.jpg")))).get("productId")).longValue();
+        List<String> original = List.of("/imgs/a.jpg", "/imgs/b.jpg");
+
+        assertThat(data(patchProduct(id, Map.of(), superManager))).containsEntry("galleryUrls", original);
+        assertThat(data(patchProduct(id, Map.of("name", "Tên mới"), superManager)))
+                .containsEntry("galleryUrls", original);
+        Map<String, Object> explicitNull = new HashMap<>();
+        explicitNull.put("galleryUrls", null);
+        assertThat(data(patchProduct(id, explicitNull, superManager))).containsEntry("galleryUrls", original);
+        assertThat(storedGallery(id)).isEqualTo("[\"/imgs/a.jpg\", \"/imgs/b.jpg\"]");
+
+        assertThat(data(patchProduct(id, Map.of("galleryUrls", List.of(" /imgs/c.jpg", "/imgs/a.jpg", "/imgs/c.jpg")),
+                superManager))).containsEntry("galleryUrls", List.of("/imgs/c.jpg", "/imgs/a.jpg"));
+        assertThat(storedGallery(id)).isEqualTo("[\"/imgs/c.jpg\", \"/imgs/a.jpg\"]");
+
+        List<String> eight = nine().subList(0, 8);
+        assertThat(data(patchProduct(id, Map.of("galleryUrls", eight), superManager)))
+                .containsEntry("galleryUrls", eight);
+
+        assertThat(data(patchProduct(id, Map.of("galleryUrls", List.of()), superManager)))
+                .containsEntry("galleryUrls", List.of());
+        assertThat(storedGallery(id)).isEqualTo("[]");
+    }
+
+    @Test
+    void galleryViolationsAreValidationFailedOnCreateAndPatchAndLeaveTheRowUntouched() {
+        long categoryId = category();
+        long id = ((Number) data(createWith(categoryId, unique("SKU"), Map.of("galleryUrls",
+                List.of("/imgs/keep.jpg")))).get("productId")).longValue();
+        // Mỗi ca chỉ vi phạm đúng một ràng buộc; 9 phần tử trùng nhau vẫn bị chặn vì kiểm trước khi bỏ trùng.
+        Map<String, Object[]> cases = new java.util.LinkedHashMap<>();
+        cases.put("9 phần tử", new Object[] {TOO_MANY, nine()});
+        cases.put("9 phần tử trùng nhau", new Object[] {TOO_MANY, java.util.Collections.nCopies(9, "/imgs/a.jpg")});
+        cases.put("phần tử rỗng", new Object[] {BLANK, List.of("/imgs/a.jpg", "")});
+        cases.put("phần tử chỉ khoảng trắng", new Object[] {BLANK, List.of("   ")});
+        cases.put("phần tử null", new Object[] {BLANK, Arrays.asList("/imgs/a.jpg", null)});
+        cases.put("phần tử 501 ký tự", new Object[] {TOO_LONG, List.of("a".repeat(501))});
+
+        cases.forEach((label, c) -> {
+            String expected = (String) c[0];
+            Map<String, Object> body = Map.of("galleryUrls", c[1]);
+
+            ResponseEntity<Map<String, Object>> created = createWith(categoryId, unique("SKU"), body);
+            assertError(created, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
+            assertThat((String) created.getBody().get("message")).as("POST %s", label).contains(expected);
+
+            ResponseEntity<Map<String, Object>> patched = patchProduct(id, body, superManager);
+            assertError(patched, HttpStatus.BAD_REQUEST, "VALIDATION_FAILED");
+            assertThat((String) patched.getBody().get("message")).as("PATCH %s", label).contains(expected);
+        });
+        assertThat(storedGallery(id)).isEqualTo("[\"/imgs/keep.jpg\"]");
+    }
+
+    @Test
+    void galleryWriteStaysSuperManagerOnlyAndBodyValidationComesBeforeTheRoleCheck() {
+        long id = ((Number) data(createWith(category(), unique("SKU"), Map.of("galleryUrls",
+                List.of("/imgs/keep.jpg")))).get("productId")).longValue();
+        Map<String, Object> valid = Map.of("galleryUrls", List.of("/imgs/x.jpg"));
+
+        assertError(patchProduct(id, valid, vet), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        assertError(patchProduct(id, valid, customer), HttpStatus.FORBIDDEN, "ACCESS_DENIED");
+        assertError(patchProduct(id, valid, null), HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+        assertThat(storedGallery(id)).isEqualTo("[\"/imgs/keep.jpg\"]");
+
+        // Bean Validation chạy khi gắn tham số, trước @PreAuthorize của phương thức: sai body + sai vai = 400.
+        assertError(patchProduct(id, Map.of("galleryUrls", nine()), vet), HttpStatus.BAD_REQUEST,
+                "VALIDATION_FAILED");
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> dataPage(ResponseEntity<Map<String, Object>> response) {
+        return (List<Map<String, Object>>) data(response).get("content");
+    }
 
     private long category() {
         return ((Number) data(call(HttpMethod.POST, "/api/product-categories", superManager,

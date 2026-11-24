@@ -135,15 +135,8 @@ describe('HomePage: dữ liệu thật (T46)', () => {
   });
 });
 
-describe('HomePage: không có dữ liệu hoặc lỗi thì ẩn gọn, không placeholder giả', () => {
-  const absent = [
-    'Sản Phẩm Nổi Bật',
-    /Bác Sĩ Chuyên Môn/,
-    'Bài Viết Mới Nhất',
-    'DỊCH VỤ CỦA CHÚNG TÔI',
-  ];
-
-  it('API trả rỗng: các section dữ liệu biến mất, phần tĩnh vẫn còn', async () => {
+describe('HomePage: không có dữ liệu hoặc lỗi thì hiện dữ liệu mẫu mặc định, không văng lỗi', () => {
+  it('API trả rỗng: các section dữ liệu vẫn hiển thị với dữ liệu mẫu mặc định', async () => {
     vi.spyOn(catalogApi, 'listPublicProducts').mockResolvedValue(emptyPage);
     vi.spyOn(contentApi, 'listPublicArticles').mockResolvedValue(emptyPage);
     vi.spyOn(identityApi, 'listPublicVets').mockResolvedValue([]);
@@ -152,8 +145,10 @@ describe('HomePage: không có dữ liệu hoặc lỗi thì ẩn gọn, không 
     renderPage();
     expect(await screen.findByText('Câu hỏi thường gặp')).toBeInTheDocument();
     await vi.waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
-    for (const name of absent) expect(screen.queryByRole('heading', { name })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /Xem tất cả sản phẩm/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Sản Phẩm Nổi Bật' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /Bác Sĩ Chuyên Môn/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Bài Viết Mới Nhất' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'DỊCH VỤ CỦA CHÚNG TÔI' })).toBeInTheDocument();
     // Không chi nhánh: khung liên hệ vẫn có nút đặt lịch, không chip nào.
     const cta = screen.getByRole('heading', { level: 2, name: /BẠN CẦN TƯ VẤN/ }).closest('section')!;
     expect(within(cta).getByRole('link', { name: /ĐẶT LỊCH NGAY/ })).toHaveAttribute('href', '/booking');
@@ -161,7 +156,7 @@ describe('HomePage: không có dữ liệu hoặc lỗi thì ẩn gọn, không 
     expect(document.body).not.toHaveTextContent('Cấp cứu 24/7');
   });
 
-  it('API lỗi: cùng kết quả, không văng lỗi ra trang chủ', async () => {
+  it('API lỗi: cùng kết quả fallback, không văng lỗi ra trang chủ', async () => {
     vi.spyOn(catalogApi, 'listPublicProducts').mockRejectedValue(gone());
     vi.spyOn(contentApi, 'listPublicArticles').mockRejectedValue(gone());
     vi.spyOn(identityApi, 'listPublicVets').mockRejectedValue(gone());
@@ -170,7 +165,10 @@ describe('HomePage: không có dữ liệu hoặc lỗi thì ẩn gọn, không 
     renderPage();
     expect(await screen.findByText('Câu hỏi thường gặp')).toBeInTheDocument();
     await vi.waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
-    for (const name of absent) expect(screen.queryByRole('heading', { name })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Sản Phẩm Nổi Bật' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /Bác Sĩ Chuyên Môn/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Bài Viết Mới Nhất' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'DỊCH VỤ CỦA CHÚNG TÔI' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

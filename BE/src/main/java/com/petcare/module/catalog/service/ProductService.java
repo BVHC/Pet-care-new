@@ -105,6 +105,7 @@ public class ProductService {
         Product product = new Product(request.categoryId(), sku, request.name().trim(), request.productType(),
                 request.isPrescription(), request.tracksExpiry(), request.vaccineTypeId(), request.unit().trim(),
                 request.price(), request.description(), request.imageUrl());
+        product.setGalleryUrls(normalizedGallery(request.galleryUrls()));
         return mapper.toResponse(products.save(product));
     }
 
@@ -142,6 +143,9 @@ public class ProductService {
         }
         if (request.imageUrl() != null) {
             product.setImageUrl(request.imageUrl());
+        }
+        if (request.galleryUrls() != null) {
+            product.setGalleryUrls(normalizedGallery(request.galleryUrls()));
         }
         if (request.isActive() != null) {
             product.setActive(request.isActive());
@@ -199,6 +203,14 @@ public class ProductService {
         } else if (vaccineTypeId != null) {
             throw new BusinessRuleViolationException("BR-SP-07", "Chỉ sản phẩm vaccine mới gắn loại vaccine");
         }
+    }
+
+    /** Gallery lưu: trim từng URL, bỏ trùng giữ lần đầu, giữ thứ tự gửi; null = rỗng (docs/adr/0151). */
+    private static List<String> normalizedGallery(List<String> urls) {
+        if (urls == null) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>(urls.stream().map(String::trim).distinct().toList());
     }
 
     private static String escapeLike(String text) {

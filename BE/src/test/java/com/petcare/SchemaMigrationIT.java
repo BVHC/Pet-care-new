@@ -221,11 +221,12 @@ class SchemaMigrationIT {
         // V59 ai_documents.risk_level, topic thêm SAFETY / LIFESTYLE + khóa [CFG] ai.ingest.max_file_kb (docs/adr/0147, T89),
         // V60 shift_requests.current_shift_definition_id (ca lúc gửi, docs/adr/0150 N3-S5b; V57–V59 đã có trên dev, D069),
         // V61 Nhân sự: shift_assignments.source + khóa [CFG] workforce.weekly_required_shifts (docs/adr/0123, T58; đánh số lại từ V55 ngày 23/11/2026 vì V55 đã dùng cho feedbacks),
+        // V62 products.gallery_urls JSONB (ảnh phụ có thứ tự, tối đa 8; docs/adr/0151),
         // V9000 chỉ ở test: baseline session.access_ttl_minutes = 720
         assertThat(rows).extracting(row -> row.get("version"))
                 .containsExactly("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                         "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30",
-                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "9000");
+                        "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "9000");
         assertThat(rows).allSatisfy(row -> assertThat(row).containsEntry("success", true));
     }
 
@@ -268,6 +269,44 @@ class SchemaMigrationIT {
                 "ix_feedbacks_created_at", "ix_feedbacks_branch_created");
         assertThat(indexes.get("ix_feedbacks_created_at")).endsWith("(created_at)");
         assertThat(indexes.get("ix_feedbacks_branch_created")).endsWith("(branch_id, created_at)");
+    }
+
+    /**
+     * V62 (docs/adr/0151): {@code products.gallery_urls} là JSONB NOT NULL mặc định {@code []}; CHECK chỉ nhận mảng JSON
+     * tối đa 8 phần tử. Sản phẩm có từ trước (và mọi INSERT không nêu cột) được {@code []}.
+     */
+    @Test
+    void v62ProductGalleryUrlsIsAJsonArrayOfAtMostEightWithEmptyDefault() {
+        Column info = column("products.gallery_urls");
+        assertThat(info.dataType()).isEqualTo("jsonb");
+        assertThat(info.nullable()).isEqualTo("NO");
+        assertThat(info.defaultValue()).isEqualTo("'[]'::jsonb");
+
+        long category = jdbc.queryForObject("INSERT INTO product_categories (name) VALUES (?) RETURNING id",
+                Long.class, "IT gallery " + SEQ.incrementAndGet());
+        long product = jdbc.queryForObject("""
+                INSERT INTO products (category_id, sku, name, product_type, unit, price)
+                VALUES (?, ?, 'Sản phẩm gallery', 'GOODS', 'hộp', 1000) RETURNING id
+                """, Long.class, category, "GAL-" + SEQ.incrementAndGet());
+        assertThat(jdbc.queryForObject("SELECT gallery_urls::text FROM products WHERE id = ?", String.class, product))
+                .isEqualTo("[]");
+
+        String eight = "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\"]";
+        assertThat(jdbc.update("UPDATE products SET gallery_urls = ?::jsonb WHERE id = ?", eight, product)).isOne();
+
+        for (String bad : List.of("[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\",\"7\",\"8\",\"9\"]", "{\"a\": 1}", "\"x\"",
+                "null", "5")) {
+            assertThatThrownBy(() -> jdbc.update("UPDATE products SET gallery_urls = ?::jsonb WHERE id = ?", bad,
+                    product))
+                    .as("gallery_urls = %s", bad)
+                    .isInstanceOf(DataAccessException.class)
+                    .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23514"));
+        }
+        assertThatThrownBy(() -> jdbc.update("UPDATE products SET gallery_urls = NULL WHERE id = ?", product))
+                .isInstanceOf(DataAccessException.class)
+                .satisfies(ex -> assertThat(sqlState(ex)).isEqualTo("23502"));
+        assertThat(jdbc.queryForObject("SELECT gallery_urls::text FROM products WHERE id = ?", String.class, product))
+                .isEqualTo(jdbc.queryForObject("SELECT ?::jsonb::text", String.class, eight));
     }
 
     /** V16 (docs/adr/0045): 10 chữ số giữ mã lịch hẹn ≤ 20 ký tự; không quay vòng nên hết số thì lỗi, không trùng mã. */

@@ -82,7 +82,7 @@ function visibleProducts(): { product: Product; categoryName: string }[] {
     .map((product) => ({ product, categoryName: categories.get(product.categoryId)! }));
 }
 
-/** Chín trường của hợp đồng, dựng tường minh (không trải `Product` để khỏi lộ SKU, cờ kê đơn…). Không bao giờ có số lượng (BR-CK-03). */
+/** Mười trường của hợp đồng (có `galleryUrls`), dựng tường minh (không trải `Product` để khỏi lộ SKU, cờ kê đơn…). Không bao giờ có số lượng (BR-CK-03). */
 function toPublicProduct({ product: p, categoryName }: { product: Product; categoryName: string }, branches: PublicBranch[]): PublicProduct {
   return {
     productId: p.productId,
@@ -93,6 +93,7 @@ function toPublicProduct({ product: p, categoryName }: { product: Product; categ
     unit: p.unit,
     description: p.description ?? null,
     imageUrl: p.imageUrl ?? null,
+    galleryUrls: p.galleryUrls,
     inStockBranchIds: branches.filter((b) => availableQuantity(b.branchId, p.productId) > 0).map((b) => b.branchId),
   };
 }

@@ -1,5 +1,6 @@
 // Mock module catalog (docs/api/catalog-v1.md #1–18): danh mục sản phẩm, sản phẩm, dịch vụ (gồm loại chuồng),
 // loại vaccine, phác đồ tiêm. Luật và câu báo lỗi chép từ BE (module/catalog). Đọc: nhân viên A04–A08; ghi: SUPER_MANAGER.
+import { uniqueUrls } from '../../utils/gallery';
 import type { Role } from '../../types/auth';
 import type {
   KennelTypeSpec,
@@ -13,7 +14,7 @@ import type {
   VaccinationProtocol,
   VaccineType,
 } from '../../types/catalog';
-import { denied, fail, invalid, isText, noContent, notFound, ok, ruleFail, type Check, type MockHandler, type MockReply } from './envelope';
+import { denied, fail, invalid, isText, noContent, notFound, ok, ruleFail, type Check, type MockHandler, type MockReply, type MockRequest } from './envelope';
 
 interface State {
   seq: number;
@@ -32,6 +33,7 @@ function seed(): State {
     vaccineTypeId: null,
     description: null,
     imageUrl: null,
+    galleryUrls: [],
     isActive: true,
     ...p,
   });
@@ -60,8 +62,8 @@ function seed(): State {
       { vaccineTypeId: 5, name: 'Ho cũi', species: 'DOG', isActive: true },
     ],
     products: [
-      product({ productId: 1, categoryId: 1, sku: 'RC-MINI-2KG', name: 'Hạt Royal Canin Mini Adult 2kg', unit: 'túi', price: 450_000, imageUrl: '/imgs/prod1.jpg' }),
-      product({ productId: 2, categoryId: 1, sku: 'WK-PATE-85', name: 'Pate Whiskas 85g', unit: 'gói', price: 18_000, imageUrl: '/imgs/prod6.jpg' }),
+      product({ productId: 1, categoryId: 1, sku: 'RC-MINI-2KG', name: 'Hạt Royal Canin Mini Adult 2kg', unit: 'túi', price: 450_000, imageUrl: '/imgs/prod1.jpg', galleryUrls: ['/imgs/prod2.jpg', '/imgs/prod3.jpg'] }),
+      product({ productId: 2, categoryId: 1, sku: 'WK-PATE-85', name: 'Pate Whiskas 85g', unit: 'gói', price: 18_000, imageUrl: '/imgs/prod6.jpg', galleryUrls: ['/imgs/prod7.jpg'] }),
       product({ productId: 3, categoryId: 2, sku: 'AMOX-250', name: 'Amoxicillin 250mg', productType: 'DRUG', isPrescription: true, tracksExpiry: true, unit: 'viên', price: 8_000 }),
       product({ productId: 4, categoryId: 2, sku: 'VITA-PET', name: 'Vitamin tổng hợp PetCare', productType: 'DRUG', tracksExpiry: true, unit: 'lọ', price: 120_000 }),
       product({ productId: 5, categoryId: 3, sku: 'VAC-RABISIN', name: 'Vaccine Dại Rabisin', productType: 'VACCINE', tracksExpiry: true, vaccineTypeId: 1, unit: 'liều', price: 150_000 }),
@@ -100,10 +102,17 @@ function withClinicalServices(stored: State): State {
   return missing.length || kept.length !== stored.services.length ? { ...stored, services: [...kept, ...missing] } : stored;
 }
 
+/** State lưu từ trước khi có ảnh phụ: sản phẩm chưa có `galleryUrls` thì coi như `[]` (mọi người đọc chéo qua `catalogProducts()` đều thấy mảng). */
+function withGallery(stored: State): State {
+  return stored.products.every((p) => Array.isArray(p.galleryUrls))
+    ? stored
+    : { ...stored, products: stored.products.map((p) => (Array.isArray(p.galleryUrls) ? p : { ...p, galleryUrls: [] })) };
+}
+
 function load(): State {
   try {
     const raw = localStorage.getItem(STATE_KEY);
-    return raw ? withClinicalServices(JSON.parse(raw) as State) : seed();
+    return raw ? withGallery(withClinicalServices(JSON.parse(raw) as State)) : seed();
   } catch {
     return seed();
   }
@@ -132,7 +141,8 @@ function save(s: State) {
 
 const STAFF_READ: readonly Role[] = ['SUPER_MANAGER', 'BRANCH_MANAGER', 'RECEPTIONIST', 'VET', 'CARETAKER'];
 const read = (h: MockHandler): MockHandler => (req) => (STAFF_READ.includes(req.account!.role) ? h(req) : denied());
-const write = (h: MockHandler): MockHandler => (req) => (req.account!.role === 'SUPER_MANAGER' ? h(req) : denied());
+const isChainManager = (req: MockRequest) => req.account!.role === 'SUPER_MANAGER';
+const write = (h: MockHandler): MockHandler => (req) => (isChainManager(req) ? h(req) : denied());
 
 // ─── Đọc dữ liệu vào ───
 
@@ -148,6 +158,25 @@ const priceChecks = (price: unknown, required: boolean): Check[] => [
   ['price', 'Thiếu giá', required && !isInt(price)],
   ['price', 'Giá không được âm', isInt(price) && price < 0],
 ];
+
+/**
+ * `galleryUrls` như Bean Validation của BE: chạy trên thân thô (TRƯỚC khi cắt khoảng trắng và bỏ trùng, nên 9 phần tử trùng nhau
+ * vẫn bị từ chối), tên trường kèm chỉ số phần tử `galleryUrls[i]`. Không phải mảng, hoặc có phần tử là đối tượng, thì là sai kiểu JSON
+ * (`MALFORMED_REQUEST`, xử lý ở `badGallery`). Thứ tự các vi phạm trong một thông báo trên BE thật là KHÔNG ỔN ĐỊNH; mock giữ một thứ tự cố định.
+ * (Số / boolean trong mảng BE ép thành chuỗi và chấp nhận; mock không bắt chước, FE không gửi kiểu này.)
+ */
+function galleryChecks(v: unknown): Check[] {
+  if (!Array.isArray(v)) return [];
+  return [
+    ['galleryUrls', 'Tối đa 8 ảnh phụ', v.length > 8],
+    ...v.flatMap((url, i): Check[] => [
+      [`galleryUrls[${i}]`, 'Đường dẫn ảnh phụ không được để trống', !isText(url)],
+      [`galleryUrls[${i}]`, 'Đường dẫn ảnh phụ tối đa 500 ký tự', typeof url === 'string' && url.length > 500],
+    ]),
+  ];
+}
+const badGallery = (v: unknown) =>
+  v != null && (!Array.isArray(v) || v.some((u) => typeof u === 'object' && u !== null)) ? fail('MALFORMED_REQUEST', 'Nội dung request không đúng định dạng JSON hoặc sai kiểu dữ liệu', 400) : null;
 
 // ─── Danh mục sản phẩm (#1–3) ───
 
@@ -246,9 +275,11 @@ const getProduct: MockHandler = ({ params }) => {
 
 const PRODUCT_TYPES: readonly ProductType[] = ['GOODS', 'DRUG', 'VACCINE'];
 
-const createProduct: MockHandler = ({ body }) => {
-  const b = bodyOf(body);
-  const bad = invalid([
+// Thứ tự đo trên BE thật (24/11/2026, `@Valid` chạy trước `@PreAuthorize`): 401, 400 (thân sai), 403 (không phải SUPER_MANAGER), 404, rồi 400 BR-SP-….
+const createProduct: MockHandler = (req) => {
+  const b = bodyOf(req.body);
+  // Sai kiểu JSON (Jackson) đến trước Bean Validation.
+  const bad = badGallery(b.galleryUrls) ?? invalid([
     ['categoryId', 'Thiếu danh mục sản phẩm', !isInt(b.categoryId)],
     ['sku', 'SKU không được để trống', !isText(b.sku)],
     ['sku', 'SKU tối đa 50 ký tự', isText(b.sku) && b.sku.length > 50],
@@ -260,8 +291,10 @@ const createProduct: MockHandler = ({ body }) => {
     ['unit', 'Đơn vị tính không được để trống', !isText(b.unit)],
     ['unit', 'Đơn vị tính tối đa 20 ký tự', isText(b.unit) && b.unit.length > 20],
     ...priceChecks(b.price, true),
+    ...galleryChecks(b.galleryUrls),
   ]);
   if (bad) return bad;
+  if (!isChainManager(req)) return denied();
   const s = load();
   const vaccineTypeId = (b.vaccineTypeId as number | null | undefined) ?? null;
   const rule = productRule(s, b.productType as ProductType, b.isPrescription as boolean, b.tracksExpiry as boolean, vaccineTypeId);
@@ -281,6 +314,7 @@ const createProduct: MockHandler = ({ body }) => {
     price: b.price as number,
     description: (b.description as string | undefined) ?? null,
     imageUrl: (b.imageUrl as string | undefined) ?? null,
+    galleryUrls: uniqueUrls((b.galleryUrls as string[] | undefined) ?? []),
     isActive: true,
   };
   s.products.push(product);
@@ -288,17 +322,20 @@ const createProduct: MockHandler = ({ body }) => {
   return ok(product, 201, 'Đã tạo sản phẩm');
 };
 
-const updateProduct: MockHandler = ({ body, params }) => {
-  const b = bodyOf(body);
-  const s = load();
-  const product = s.products.find((p) => p.productId === Number(params.productId));
-  if (!product) return notFound('Sản phẩm', params.productId);
-  const bad = invalid([
+const updateProduct: MockHandler = (req) => {
+  const { params } = req;
+  const b = bodyOf(req.body);
+  const bad = badGallery(b.galleryUrls) ?? invalid([
     ['name', 'Tên sản phẩm không được để trống', b.name !== undefined && !isText(b.name)],
     ['unit', 'Đơn vị tính không được để trống', b.unit !== undefined && !isText(b.unit)],
     ...priceChecks(b.price, false),
+    ...galleryChecks(b.galleryUrls),
   ]);
   if (bad) return bad;
+  if (!isChainManager(req)) return denied();
+  const s = load();
+  const product = s.products.find((p) => p.productId === Number(params.productId));
+  if (!product) return notFound('Sản phẩm', params.productId);
   // PATCH như BE (ProductService.update): trường vắng hoặc null = giữ nguyên; mô tả "" = xóa mô tả.
   const next: Product = {
     ...product,
@@ -311,6 +348,8 @@ const updateProduct: MockHandler = ({ body, params }) => {
     ...(isInt(b.price) && { price: b.price }),
     ...(b.description != null && { description: b.description as string }),
     ...(b.imageUrl != null && { imageUrl: b.imageUrl as string }),
+    // Vắng / null = giữ nguyên; mảng (kể cả []) = THAY cả danh sách.
+    ...(Array.isArray(b.galleryUrls) && { galleryUrls: uniqueUrls(b.galleryUrls as string[]) }),
     ...(isBool(b.isActive) && { isActive: b.isActive }),
   };
   const rule = productRule(s, next.productType, next.isPrescription, next.tracksExpiry, next.vaccineTypeId);
@@ -318,7 +357,7 @@ const updateProduct: MockHandler = ({ body, params }) => {
   if (!s.categories.some((c) => c.categoryId === next.categoryId)) return notFound('Danh mục sản phẩm', next.categoryId);
   Object.assign(product, next);
   save(s);
-  return ok(product);
+  return ok(product, 200, 'Đã cập nhật sản phẩm');
 };
 
 // ─── Dịch vụ, gồm loại chuồng (#8–11) ───
@@ -568,9 +607,9 @@ export const catalogRoutes: Record<string, MockHandler> = {
   'POST /api/product-categories': write(createCategory),
   'PATCH /api/product-categories/:categoryId': write(updateCategory),
   'GET /api/products': read(listProducts),
-  'POST /api/products': write(createProduct),
+  'POST /api/products': createProduct,
   'GET /api/products/:productId': read(getProduct),
-  'PATCH /api/products/:productId': write(updateProduct),
+  'PATCH /api/products/:productId': updateProduct,
   'GET /api/services': read(listServices),
   'POST /api/services': write(createService),
   'GET /api/services/:serviceId': read(getService),

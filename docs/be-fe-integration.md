@@ -25,7 +25,7 @@
 | visit-v1 | 21 / 21 | — (#21 hồ sơ sức khỏe thú có từ 05/11, T28b, ADR-0108 Proposed) | BE-1 · T28b | tiếp nhận, hàng đợi, bệnh án, tiêm, kê đơn, hoàn tất: **L**; #21: tab "Sức khỏe" của khách gọi BE thật 200 (5/11 10:43): **L** |
 | care-v1 | 8 / 10 | #9–10 cài đặt nhận thông báo (D025, chờ PO) | BE-1 | thông báo: **P**; Care Task lễ tân: **L** |
 | branch-v1 | 21 / 21 | — | BE-2 | **P** (xem), ca thu ngân dùng giờ mở cửa: **L** |
-| catalog-v1 | 22 / 22 | — | BE-2 | **P**, seed-dev tạo qua đúng API này |
+| catalog-v1 | 22 / 22 | — (24/11: thêm trường `galleryUrls` ảnh phụ, không thêm endpoint: mục 9) | BE-2 | **P**, seed-dev tạo qua đúng API này |
 | customer-v1 | 21 / 21 | — | BE-2 | dùng trong luồng khám: **L**; trang khách: **P** |
 | inventory-v1 | 17 / 17 | — | BE-2 | FEFO khi thu tiền: **L**; phiếu nhập / điều chỉnh qua UI: **S** |
 | sales-v1 | 21 / 21 | — (#11 có từ 05/11, ADR-0103; #9 hủy phiên trả thú có từ 30/10, T43) | BE-2 | Order, thu tiền, ca, đối soát: **L**; #11: BE có, FE có nút "Mua ngoài" từ 05/11 (mock + vitest; BE thật chỉ thăm dò route, chưa chạy luồng): **S** |
@@ -331,3 +331,38 @@ Sau đó: T72 (BE-1) và T76 (BE-2) kiểm thử FSM + nối thật interface ch
 | `custmerge` | Màn "Gộp hồ sơ khách trùng" (`/admin/customers`, BRANCH_MANAGER) mở được | Xem trước gộp với khách thật #6 → 404 |
 
 **Kết luận.** Hỗn hợp đủ để xem giao diện tầng 3 với dữ liệu mock và để demo từng màn riêng lẻ. Nó **không** làm luồng liên module chạy với dữ liệu thật: mọi luồng bắt đầu từ lượt khám, thú, khách, đơn, sản phẩm hoặc nhân viên thật của GĐ1 đều vỡ hoặc sai người (đã đo: `surgery`, `inpatient`, `materialuse`, `custmerge`, `returns` tạo mới, `ai` gợi ý, `workforce` (trước T66), `shop` với sản phẩm khác id 1–2). Muốn demo GĐ1 trên BE thật mà không lộ các màn này, cần ẩn menu và route tầng 3 (đề xuất cờ `VITE_TIER3`, **chưa làm, chờ Hiến quyết**).
+
+## 9. Ảnh phụ của sản phẩm (`galleryUrls`, catalog-v1, 24/11/2026)
+
+> **Trạng thái ghép:** FE xong trên mock (kiểu, mock, trang chi tiết, hộp sửa sản phẩm, test tự động); **BE thật chờ tích hợp** (migration `V62__product_gallery_urls`, chưa áp lên DB demo 5433; BE 8082 vẫn chạy mã cũ không có trường). **Chưa chạy FE với BE thật**; ca tay `SP-GAL-01` đến `SP-GAL-17` ở `docs/testcases/T57-fe.md`, cột J để trống. Việc làm thay BE-2 (Dũng), hợp đồng ở `D:/Do-an/.c2-tmp/final2/GALLERY-HOP-DONG.md`.
+
+**Trường mới (không đổi đường dẫn, không thêm endpoint, catalog-v1 vẫn 22 / 22):**
+
+| Schema | Trường | Ghi chú |
+|---|---|---|
+| `Product` (admin: danh sách, chi tiết, kết quả POST / PATCH) | `galleryUrls: string[]`, luôn có, `[]` khi chưa có | FE: `Product.galleryUrls` bắt buộc |
+| `CreateProductRequest` | `galleryUrls?: string[]` | bỏ qua = `[]` (FE form tạo luôn gửi mảng) |
+| `UpdateProductRequest` (PATCH) | `galleryUrls?: string[]` | **vắng hoặc `null` = giữ nguyên; `[]` = xóa hết; mảng khác = THAY cả danh sách, giữ thứ tự gửi** |
+| `PublicProduct` (`GET /api/public/products`, `/{id}`) | `galleryUrls`, cùng DTO cho danh sách và chi tiết | FE: `PublicProduct.galleryUrls?` tùy chọn để fixture cũ còn biên dịch; BE mới luôn gửi |
+
+**Quy tắc FE.**
+
+- Ảnh ở trang chi tiết = `[imageUrl, ...galleryUrls]`, bỏ rỗng và trùng (`FE/src/shared/utils/gallery.ts`). `imageUrl` vẫn là ảnh bìa duy nhất ở thẻ `/shop`, giỏ hàng, AI. BE cũ (chưa V62) không gửi `galleryUrls` thì trang chạy như một ảnh.
+- Hộp sửa sản phẩm: **chỉ gửi `galleryUrls` khi danh sách (sau khi bỏ dòng trống, cắt khoảng trắng, bỏ trùng) khác danh sách đang lưu**, và khi gửi thì luôn là mảng đầy đủ (kể cả `[]` để xóa hết, vì vắng là "giữ nguyên"). Hộp tạo mới luôn gửi mảng. Dòng trống bị bỏ im lặng khi lưu (BE từ chối phần tử rỗng).
+- Giới hạn FE theo BE: tối đa 8 ảnh (nút thêm tắt ở 8, hiện `n/8`), mỗi đường dẫn tối đa 500 ký tự (ô nhập `maxLength`). Không tải tệp lên (chỉ nhập URL), không kiểm giao thức URL.
+- Ảnh tải lỗi: ẩn khỏi dải ảnh nhỏ và bị bỏ qua khi chuyển ảnh; hết ảnh tốt thì dùng khung dự phòng cũ.
+- `plainMessage` / `fieldErrorsOf` (`FE/src/shared/api/api-error.ts`) nay đọc được tên trường kèm chỉ số phần tử (`galleryUrls[0]: …`); trước đó dòng lỗi theo phần tử rơi khỏi thông báo. Cùng một câu lặp ở nhiều phần tử chỉ hiện một lần.
+
+**Mock (`catalog.mock.ts`, `public.mock.ts`) làm theo luật hợp đồng:** tối đa 8 phần tử (đếm trên thân thô, trước khi bỏ trùng: 9 phần tử trùng nhau vẫn bị từ chối); phần tử rỗng / chỉ khoảng trắng / `null` bị 400; mỗi phần tử tối đa 500 ký tự (đếm trên chuỗi thô); sau khi qua kiểm tra mới cắt khoảng trắng và bỏ trùng, giữ lần xuất hiện đầu; `galleryUrls` không phải mảng là `MALFORMED_REQUEST`. State lưu từ trước chưa có trường được đọc là `[]`. Dữ liệu mẫu: sản phẩm 1 có 2 ảnh phụ, sản phẩm 2 có 1.
+
+**Số đo trên BE thật (24/11/2026):** BE cổng 8083 chạy mã có V62 trên DB tạm `petcare_gallery` (restore từ dump demo, Flyway 61 lên 62); số đo thô ở `D:/Do-an/.c2-tmp/final2/gallery-do-be.md`. Mock đã khớp:
+
+- Thân lỗi 400 `VALIDATION_FAILED`, nguyên văn, cả POST lẫn PATCH: `galleryUrls: Tối đa 8 ảnh phụ`; `galleryUrls[i]: Đường dẫn ảnh phụ không được để trống` (rỗng, chỉ khoảng trắng hoặc `null`); `galleryUrls[i]: Đường dẫn ảnh phụ tối đa 500 ký tự` (đếm chuỗi gốc, kể cả khoảng trắng đầu). `i` đếm từ 0 trên mảng GỬI LÊN.
+- Kiểm hợp lệ chạy TRƯỚC chuẩn hóa: 9 phần tử vẫn 400 dù trùng nhau còn 1 hoặc còn 8.
+- Nhiều vi phạm trong một lần gửi: nối bằng `; ` thành MỘT `message`, **thứ tự không ổn định ở BE** (4 thứ tự khác nhau trong 5 lần đo; lỗi trường khác như `price`, `name` đi chung). Vì vậy test chỉ so tập hợp các đoạn; mock giữ một thứ tự cố định.
+- Sai kiểu (chuỗi, đối tượng, phần tử là đối tượng): 400 `MALFORMED_REQUEST`. Số hoặc boolean trong mảng bị ép thành chuỗi và được chấp nhận (mock không bắt chước, FE không gửi kiểu này).
+- Thứ tự kiểm cho `POST /api/products` và `PATCH /api/products/{id}`: 401, rồi **400 (thân sai) trước 403 (không phải SUPER_MANAGER) trước 404 (không có sản phẩm)**. Mock sản phẩm đã đổi theo (trước đây 403, 404, rồi 400). **Các endpoint ghi khác của catalog (danh mục, dịch vụ, loại vaccine, phác đồ) vẫn theo thứ tự mock cũ, chưa đo trong đợt này.**
+- Chuẩn hóa: `trim()` từng phần tử rồi bỏ trùng giữ lần đầu (phân biệt hoa thường); POST và PATCH trả sản phẩm đã chuẩn hóa, PATCH kèm `message` "Đã cập nhật sản phẩm" (mock đã đổi theo).
+- `galleryUrls` luôn là mảng, không bao giờ `null`, ở cả admin và công khai; sản phẩm có sẵn sau V62 là `[]`; `imageUrl` không đổi và không tự vào gallery.
+
+**Chưa kiểm:** chạy FE (Vite) và các ca tay `SP-GAL` trên BE thật; BE 8082 (DB 5433, Flyway 61) vẫn là mã cũ không có trường. Khi BE 8082 lên V62: `PublicProduct` / `Product` mới tự có trường, FE không cần đổi; ghi ảnh phụ qua hộp sửa sản phẩm rồi mở `/shop/<id>` là phép thử đầu tiên.

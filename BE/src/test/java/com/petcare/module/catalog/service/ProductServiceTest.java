@@ -9,6 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -56,7 +58,30 @@ class ProductServiceTest {
     private static CreateProductRequest create(ProductType type, boolean prescription, boolean tracksExpiry,
             Long vaccineTypeId) {
         return new CreateProductRequest(1L, " SKU-1 ", "Sản phẩm", type, prescription, tracksExpiry, vaccineTypeId,
-                "hộp", 100_000L, null, null);
+                "hộp", 100_000L, null, null, null);
+    }
+
+    private static CreateProductRequest createWithGallery(List<String> gallery) {
+        return new CreateProductRequest(1L, "SKU-1", "Sản phẩm", ProductType.GOODS, false, false, null, "hộp",
+                100_000L, null, "/imgs/cover.jpg", gallery);
+    }
+
+    private static UpdateProductRequest updateGallery(List<String> gallery) {
+        return new UpdateProductRequest(null, null, null, null, null, null, null, null, null, gallery, null);
+    }
+
+    private ProductResponse created(List<String> gallery) {
+        when(products.existsBySku("SKU-1")).thenReturn(false);
+        when(categories.existsById(1L)).thenReturn(true);
+        when(products.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
+        return service.createProduct(createWithGallery(gallery));
+    }
+
+    private ProductResponse updatedFrom(List<String> current, List<String> requested) {
+        Product product = existing(ProductType.GOODS, false, false, null, 100);
+        product.setGalleryUrls(new ArrayList<>(current));
+        productExists(product);
+        return service.updateProduct(7L, updateGallery(requested));
     }
 
     private static Product existing(ProductType type, boolean prescription, boolean tracksExpiry, Long vaccineTypeId,
@@ -183,7 +208,7 @@ class ProductServiceTest {
         when(stock.hasStockAnywhere(7L)).thenReturn(true);
 
         assertThatThrownBy(() -> service.updateProduct(7L,
-                new UpdateProductRequest(null, null, null, false, null, null, null, null, null, null)))
+                new UpdateProductRequest(null, null, null, false, null, null, null, null, null, null, null)))
                 .isInstanceOfSatisfying(BusinessRuleViolationException.class,
                         e -> assertThat(e.getRuleId()).isEqualTo("BR-SP-05"));
         verify(products, never()).saveAndFlush(any());
@@ -195,7 +220,7 @@ class ProductServiceTest {
         when(stock.hasStockAnywhere(7L)).thenReturn(false);
 
         ProductResponse response = service.updateProduct(7L,
-                new UpdateProductRequest(null, null, null, false, null, null, null, null, null, null));
+                new UpdateProductRequest(null, null, null, false, null, null, null, null, null, null, null));
 
         assertThat(response.tracksExpiry()).isFalse();
     }
@@ -205,7 +230,7 @@ class ProductServiceTest {
         productExists(existing(ProductType.VACCINE, false, true, 3L, 100));
 
         assertThatThrownBy(() -> service.updateProduct(7L,
-                new UpdateProductRequest(null, null, null, false, null, null, null, null, null, null)))
+                new UpdateProductRequest(null, null, null, false, null, null, null, null, null, null, null)))
                 .isInstanceOfSatisfying(BusinessRuleViolationException.class,
                         e -> assertThat(e.getRuleId()).isEqualTo("BR-SP-05"));
         verifyNoInteractions(stock);
@@ -215,7 +240,7 @@ class ProductServiceTest {
     void priceChangeIsAudited() {
         productExists(existing(ProductType.GOODS, false, false, null, 100));
 
-        service.updateProduct(7L, new UpdateProductRequest(null, null, null, null, null, null, 250L, null, null, null));
+        service.updateProduct(7L, new UpdateProductRequest(null, null, null, null, null, null, 250L, null, null, null, null));
 
         ArgumentCaptor<AuditEntry> captor = ArgumentCaptor.forClass(AuditEntry.class);
         verify(auditRecorder).record(captor.capture());
@@ -232,7 +257,7 @@ class ProductServiceTest {
         productExists(existing(ProductType.GOODS, false, false, null, 100));
 
         ProductResponse response = service.updateProduct(7L,
-                new UpdateProductRequest(null, " Tên mới ", null, null, null, null, 100L, null, null, false));
+                new UpdateProductRequest(null, " Tên mới ", null, null, null, null, 100L, null, null, null, false));
 
         assertThat(response.name()).isEqualTo("Tên mới");
         assertThat(response.isActive()).isFalse();
@@ -244,7 +269,60 @@ class ProductServiceTest {
         when(products.findByIdForUpdate(7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updateProduct(7L,
-                new UpdateProductRequest(null, null, null, null, null, null, null, null, null, null)))
+                new UpdateProductRequest(null, null, null, null, null, null, null, null, null, null, null)))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ------------------------------------------------------------------ gallery ảnh phụ (docs/adr/0151)
+
+    @Test
+    void createWithoutGalleryStoresAnEmptyList() {
+        assertThat(created(null).galleryUrls()).isEmpty();
+        assertThat(created(List.of()).galleryUrls()).isEmpty();
+    }
+
+    @Test
+    void createKeepsTheSentOrderTrimsAndDropsLaterDuplicates() {
+        ProductResponse response = created(List.of(" /imgs/b.jpg ", "/imgs/a.jpg", "/imgs/b.jpg", "/imgs/c.jpg  ",
+                "/imgs/a.jpg"));
+
+        assertThat(response.galleryUrls()).containsExactly("/imgs/b.jpg", "/imgs/a.jpg", "/imgs/c.jpg");
+        assertThat(response.imageUrl()).isEqualTo("/imgs/cover.jpg");
+    }
+
+    @Test
+    void updateWithoutGalleryKeepsTheCurrentList() {
+        assertThat(updatedFrom(List.of("/imgs/a.jpg", "/imgs/b.jpg"), null).galleryUrls())
+                .containsExactly("/imgs/a.jpg", "/imgs/b.jpg");
+    }
+
+    @Test
+    void updateWithAnEmptyListClearsAllGalleryImages() {
+        assertThat(updatedFrom(List.of("/imgs/a.jpg", "/imgs/b.jpg"), List.of()).galleryUrls()).isEmpty();
+    }
+
+    @Test
+    void updateWithAListReplacesTheWholeListKeepingTheSentOrder() {
+        assertThat(updatedFrom(List.of("/imgs/a.jpg", "/imgs/b.jpg"), List.of("/imgs/c.jpg", "/imgs/a.jpg"))
+                .galleryUrls()).containsExactly("/imgs/c.jpg", "/imgs/a.jpg");
+    }
+
+    @Test
+    void updateTrimsAndDropsDuplicatesToo() {
+        assertThat(updatedFrom(List.of(), List.of(" /imgs/a.jpg", "/imgs/a.jpg ", "/imgs/b.jpg")).galleryUrls())
+                .containsExactly("/imgs/a.jpg", "/imgs/b.jpg");
+    }
+
+    @Test
+    void updatingOtherFieldsLeavesTheGalleryAlone() {
+        Product product = existing(ProductType.GOODS, false, false, null, 100);
+        product.setGalleryUrls(new ArrayList<>(List.of("/imgs/a.jpg")));
+        productExists(product);
+
+        ProductResponse response = service.updateProduct(7L,
+                new UpdateProductRequest(null, "Tên khác", null, null, null, null, null, null, null, null, null));
+
+        assertThat(response.name()).isEqualTo("Tên khác");
+        assertThat(response.galleryUrls()).containsExactly("/imgs/a.jpg");
     }
 }

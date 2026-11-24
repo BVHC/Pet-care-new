@@ -167,7 +167,7 @@ public class PublicCatalogService {
 
     private static PublicProductResponse toPublic(Product p, String categoryName, List<Long> inStockBranchIds) {
         return new PublicProductResponse(p.getId(), p.getName(), p.getCategoryId(), categoryName, p.getPrice(),
-                p.getUnit(), p.getDescription(), p.getImageUrl(), inStockBranchIds);
+                p.getUnit(), p.getDescription(), p.getImageUrl(), p.getGalleryUrls(), inStockBranchIds);
     }
 
     private static String escapeLike(String text) {
