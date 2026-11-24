@@ -120,7 +120,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`PaymentPreview`** — {`customerId`: int64, `branchId`: int64, `totalAmount`: int64, `shortages`: [ShortageLine]}
 - **`CreatePaymentRequest`** — {`orderIds`: [integer], `method`: CASH|TRANSFER, `amount`: int64}
 - **`Payment`** — {`paymentId`: int64, `code`: string, `branchId`: int64, `customerId`: int64, `cashierShiftId`: int64, `method`: CASH|TRANSFER, `amount`: int64, `receivedBy`: int64, `paidAt`: date-time, `orders`: [OrderSummary]}
-- **`CashierShift`** — {`shiftId`: int64, `branchId`: int64, `cashierId`: int64, `cashierName`: string, `isAfterHours`: boolean, `businessDate`: date, `status`: OPEN|CLOSED|RECONCILED, `openedAt`: date-time, `closedAt?`: date-time, `autoClosed`: boolean, `expectedCash?`: int64, `expectedTransfer?`: int64, `countedCash?`: int64, `difference?`: int64, `reconcileNote?`: string, `reconciledBy?`: int64, `reconciledAt?`: date-time, `paymentCount`: int32}
+- **`CashierShift`** — {`shiftId`: int64, `branchId`: int64, `cashierId`: int64, `cashierName`: string, `isAfterHours`: boolean, `businessDate`: date, `status`: OPEN|CLOSED|RECONCILED, `openedAt`: date-time, `closedAt?`: date-time, `autoClosed`: boolean, `expectedCash?`: int64, `expectedTransfer?`: int64, `countedCash?`: int64, `difference?`: int64, `reconcileNote?`: string, `reconciledBy?`: int64, `reconciledAt?`: date-time, `paymentCount`: int32} — `expectedCash` và `expectedTransfer` là tiền thu trừ tiền hoàn theo từng hình thức (VND), có thể âm. `countedCash` là tiền mặt thực đếm, không âm.
 - **`OpenShiftRequest`** — {`afterHours`: boolean}
 - **`CurrentShift`** — {`open`: boolean, `shift?`: CashierShift}
 - **`CloseShiftRequest`** — {`countedCash`: int64}

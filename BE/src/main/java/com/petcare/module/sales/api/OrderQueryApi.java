@@ -57,6 +57,17 @@ public interface OrderQueryApi {
         throw placeholder("findLinesForReturn", "T73");
     }
 
+    record ReturnOrderLine(Long id, Long productId, String description, int quantity, long unitPrice, boolean goods) {}
+
+    record ReturnOrderSnapshot(Long id, Long branchId, String code, OrderSource source, Instant paidAt,
+                               List<ReturnOrderLine> lines) {}
+
+    /** Chi nhánh bất biến của Order, để kiểm phạm vi trước khi lấy khóa. */
+    Optional<Long> findBranchForReturn(Long orderId);
+
+    /** Khóa Order tới hết transaction của bên gọi, trước khi kiểm số lượng trả. `paidAt` chỉ có khi Order PAID. */
+    Optional<ReturnOrderSnapshot> lockForReturn(Long orderId);
+
     /**
      * I-8 (07 §11, UC92): ngày mua gần nhất (ngày {@code paid_at} theo giờ Việt Nam) của từng sản phẩm trong các Order
      * {@code PAID} của khách; sản phẩm chưa mua thì vắng mặt. Bản thật ở AI-0 (9/11/2026).

@@ -116,6 +116,18 @@ app:
       batch-gap: 800ms
       max-attempts: 3
       retry-backoff: 20s
+  # Cổng thanh toán online (task 127, ADR-0137 D4; docs/payment-gateway-setup.md §3; BR-TG-07, BR-TG-11). Khóa chỉ đến từ
+  # biến môi trường, KHÔNG đặt giá trị thật ở đây hay ở .env.example. gateway: FAKE (mặc định, không gọi mạng, chạy được khi
+  # chưa có tài khoản sandbox) hoặc VNPAY (cần PAYMENT_MERCHANT_CODE, PAYMENT_SECRET, PAYMENT_RETURN_URL). base-url / api-url
+  # trống thì VNPAY dùng sandbox.vnpayment.vn, FAKE dùng trang giả lập của FE.
+  payment:
+    gateway: ${PAYMENT_GATEWAY:FAKE}
+    merchant-code: ${PAYMENT_MERCHANT_CODE:}
+    secret: ${PAYMENT_SECRET:}
+    base-url: ${PAYMENT_BASE_URL:}
+    return-url: ${PAYMENT_RETURN_URL:http://localhost:5173/checkout/result}
+    ipn-url: ${PAYMENT_IPN_URL:}
+    api-url: ${PAYMENT_API_URL:}
   # Job định kỳ (docs/adr/0007): cron 6 trường theo giờ Việt Nam, "-" để tắt.
   jobs:
     # Xóa phiên đăng nhập hết hạn quá retention-days ngày (docs/adr/0008). Docker đổi lịch bằng SESSION_CLEANUP_CRON.

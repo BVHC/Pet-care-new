@@ -102,10 +102,14 @@ m.schema("CashierShift", {
     "shiftId": "int64", "branchId": "int64", "cashierId": "int64", "cashierName": "string",
     "isAfterHours": "bool|Ca ngoài giờ thu tiền cấp cứu (BR-CN-05)", "businessDate": "date",
     "status": "enum:OPEN,CLOSED,RECONCILED", "openedAt": "datetime", "closedAt": "datetime?",
-    "autoClosed": "bool|ST13", "expectedCash": "money?", "expectedTransfer": "money?", "countedCash": "money?",
+    "autoClosed": "bool|ST13",
+    "expectedCash": "int64?|Tiền mặt thu trừ tiền mặt hoàn trong ca (VND), có thể âm.",
+    "expectedTransfer": "int64?|Tiền chuyển khoản thu trừ tiền chuyển khoản hoàn trong ca (VND), có thể âm.",
+    "countedCash": "money?",
     "difference": "int64?|countedCash − expectedCash (VND), có thể âm", "reconcileNote": "string?",
     "reconciledBy": "int64?", "reconciledAt": "datetime?", "paymentCount": "int",
-})
+}, desc="`expectedCash` và `expectedTransfer` là tiền thu trừ tiền hoàn theo từng hình thức (VND), có thể âm. "
+        "`countedCash` là tiền mặt thực đếm, không âm.")
 m.schema("OpenShiftRequest", {"afterHours": "bool|false = ca thường, true = ca ngoài giờ (BR-TG-05)"})
 m.schema("CurrentShift", {"open": "bool", "shift": "ref:CashierShift"}, required=["open"])
 m.schema("CloseShiftRequest", {"countedCash": "money|Tiền mặt thực đếm (A4)"})

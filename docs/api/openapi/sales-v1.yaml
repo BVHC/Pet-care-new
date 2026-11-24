@@ -1396,6 +1396,7 @@ components:
             $ref: "#/components/schemas/OrderSummary"
     CashierShift:
       type: object
+      description: "`expectedCash` và `expectedTransfer` là tiền thu trừ tiền hoàn theo từng hình thức (VND), có thể âm. `countedCash` là tiền mặt thực đếm, không âm."
       required: [shiftId, branchId, cashierId, cashierName, isAfterHours, businessDate, status, openedAt, autoClosed, paymentCount]
       properties:
         shiftId:
@@ -1430,13 +1431,11 @@ components:
         expectedCash:
           type: [integer, "null"]
           format: int64
-          minimum: 0
-          description: VND
+          description: "Tiền mặt thu trừ tiền mặt hoàn trong ca (VND), có thể âm."
         expectedTransfer:
           type: [integer, "null"]
           format: int64
-          minimum: 0
-          description: VND
+          description: "Tiền chuyển khoản thu trừ tiền chuyển khoản hoàn trong ca (VND), có thể âm."
         countedCash:
           type: [integer, "null"]
           format: int64
