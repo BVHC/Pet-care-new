@@ -7,9 +7,9 @@ Use one checkout and a separate `codex/be2-<slice>` branch for each API or job. 
 | L1 | return-create | `returns/{controller,dto,repository,service}`, `sales/api` and its Order lock/read implementation, new `ReturnRequestCreateIT`. Follow shop's place-order transaction and workforce controller validation. | T127 baseline; V46 schema | Verified |
 | L2 | return-approve | Returns decisions/refund persistence, inventory ledger path, new Flyway migration, new `ReturnRequestApproveIT`. | L1 and schema compatibility | Blocked |
 | L3 | return-reject | Returns decision path, no ledger/refund mutation; new `ReturnRequestRejectIT`. | L1 | Verified |
-| L4 | refund-confirm | Returns controller/service/repository, sales shift lock and cashier totals, new `RefundConfirmIT`. Follow cashier shift ownership and transactional collection. | L1 for shared code; fixture refund rows while L2 is blocked | In progress |
+| L4 | refund-confirm | Returns controller/service/repository, sales shift lock and cashier totals, new `RefundConfirmIT`. Follow cashier shift ownership and transactional collection. | L1 for shared code; fixture refund rows while L2 is blocked | Verified with fixtures |
 | L5 | payment-expire | `payment/{service,repository,job}`, new `PaymentExpiryIT`. Follow `OnlineOrderPaymentExpiryService` locking and scheduling. | Common UC63 outcome service | Blocked |
-| L6 | payment-reconcile-job | `payment/{repository,service,job}`, new `PaymentReconciliationJobIT`. Follow existing job scheduling/transaction style. | V45, fake report client; real source for sandbox acceptance | Pending |
+| L6 | payment-reconcile-job | `payment/{repository,service,job}`, new `PaymentReconciliationJobIT`. Follow existing job scheduling/transaction style. | V45, fake report client; real source for sandbox acceptance | In progress locally |
 | L7 | payment-reconcile-list | Payment controller/DTO/read query, new `PaymentReconciliationListIT`. | L6 | Pending |
 | L8 | payment-reconcile-items | Payment controller/DTO/read query, new `PaymentReconciliationItemsIT`. | L6, shared L7 controller | Pending |
 | L9 | payment-reconcile-resolve | Payment controller/DTO/write service, new `PaymentReconciliationResolveIT`. | L6, shared L7 controller | Pending |
