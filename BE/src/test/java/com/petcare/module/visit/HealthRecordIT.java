@@ -132,9 +132,7 @@ class HealthRecordIT {
     void tearDown() {
         vaccines.deleteDoses();
         for (long b : branches) {
-            jdbc.update("""
-                    DELETE FROM medical_record_addenda WHERE medical_record_id IN (
-                        SELECT id FROM visits WHERE branch_id = ?)""", b);
+            AppointmentItSupport.deleteAddenda(jdbc, "medical_record_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
             jdbc.update("DELETE FROM prescription_items WHERE medical_record_id IN (SELECT id FROM visits WHERE branch_id = ?)",
                     b);
             jdbc.update("DELETE FROM medical_records WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);

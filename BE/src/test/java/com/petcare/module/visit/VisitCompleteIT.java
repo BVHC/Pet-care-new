@@ -156,9 +156,7 @@ class VisitCompleteIT {
         for (long b : branches) {
             // mũi tiêm trỏ tới dòng Order, lô và lượt (FK RESTRICT): xóa trước các bảng đó
             jdbc.update("DELETE FROM vaccinations WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
-            jdbc.update("""
-                    DELETE FROM medical_record_addenda WHERE medical_record_id IN (
-                        SELECT id FROM visits WHERE branch_id = ?)""", b);
+            AppointmentItSupport.deleteAddenda(jdbc, "medical_record_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);
             jdbc.update("""
                     DELETE FROM medical_records WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)""", b);
             jdbc.update("DELETE FROM visit_assignments WHERE visit_id IN (SELECT id FROM visits WHERE branch_id = ?)", b);

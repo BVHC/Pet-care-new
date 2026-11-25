@@ -1,6 +1,6 @@
 # ADR-0093: Trả D043 một phần (4 index FK + CHECK lý do mua ngoài), chấp nhận không trigger chặn sửa bệnh án
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted; mục 3 (không làm hai trigger) bị thay bởi ADR-0153 (2026-11-25, hai trigger làm ở V65)
 - **Ngày:** 2026-11-02
 - **Liên quan:** BR-KB-01, BR-KB-03, BR-KB-04, BR-BH-04, BR-SP-07; ADR-0066 §6 (bảng đảm bảo G6, G8, G9; mở D043), 0070, 0072, 0076 (C3, §5), 0077, 0078, 0018 (index FK, không `CONCURRENTLY`), 0081 (khuôn V22). Nợ: D043 (nhóm 1 và 3 trả, nhóm 2 chấp nhận).
 - **Triển khai:** `V28__medical_record_fk_indexes_external_reason_check.sql`; `SchemaMigrationIT` (danh sách phiên bản có `28`, `medicalRecordAndVaccinationForeignKeysHaveSingleColumnIndexes`, `prescriptionItemsTieTheExternalReasonToTheExternalFlag`); `PrescriptionItemConstraintIT.theReasonIsTiedToTheExternalFlag` (thay `knownGapD043…`); `FkIndexScanIT` (EXPLAIN trên 20 000 dòng). Không đổi contract, không [CFG], không đổi lock order.

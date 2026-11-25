@@ -6,9 +6,12 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.Objects;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Dữ liệu cho IT của lịch hẹn, chèn bằng SQL vì customer / catalog / branch chưa có (hoặc không cần) đường ghi chung
@@ -196,6 +199,19 @@ public final class AppointmentItSupport {
     }
 
     /**
+     * Xóa bản bổ sung bệnh án khỏi dữ liệu IT. Từ V65 (docs/adr/0153) trigger chặn DELETE bảng này, nên câu xóa chạy trong
+     * một transaction riêng ở chế độ {@code session_replication_role = replica} (trigger thường không chạy; {@code SET LOCAL}
+     * chỉ có tác dụng trong transaction, ngoài transaction nó bị bỏ qua). {@code where} là phần sau {@code WHERE}.
+     */
+    public static void deleteAddenda(JdbcTemplate jdbc, String where, Object... args) {
+        new TransactionTemplate(new DataSourceTransactionManager(Objects.requireNonNull(jdbc.getDataSource())))
+                .executeWithoutResult(status -> {
+                    jdbc.execute("SET LOCAL session_replication_role = replica");
+                    jdbc.update("DELETE FROM medical_record_addenda WHERE " + where, args);
+                });
+    }
+
+    /**
      * Xóa con trước cha. Trước {@code services}: dữ liệu con của các chi nhánh đã ghi nhận ({@code branch_services},
      * giờ mở cửa, ngày nghỉ, quota) và {@code sessions} / {@code staff_profiles} của các tài khoản đã ghi nhận (hồ sơ trỏ
      * tới chi nhánh) — IT không tạo những dòng này thì các câu đó xóa 0 dòng.
@@ -206,9 +222,7 @@ public final class AppointmentItSupport {
                 // cân nặng ghi khi khám (docs/adr/0068) trỏ tới visits và pets, FK RESTRICT
                 jdbc.update("DELETE FROM weight_records WHERE pet_id = ?", entry[1]);
                 // bệnh án, bản bổ sung và đơn thuốc (docs/adr/0066, 0077) trỏ tới visits, FK RESTRICT
-                jdbc.update("""
-                        DELETE FROM medical_record_addenda WHERE medical_record_id IN (SELECT id FROM visits WHERE pet_id = ?)
-                        """, entry[1]);
+                deleteAddenda(jdbc, "medical_record_id IN (SELECT id FROM visits WHERE pet_id = ?)", entry[1]);
                 jdbc.update("""
                         DELETE FROM prescription_items WHERE medical_record_id IN (SELECT id FROM visits WHERE pet_id = ?)
                         """, entry[1]);
