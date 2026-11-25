@@ -10,7 +10,7 @@
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--paper);color:var(--ink);font:13px/1.45 var(--sans);display:flex;flex-direction:column;overflow:hidden}
-header{display:flex;flex-wrap:wrap;align-items:center;gap:12px 22px;padding:12px 20px;border-bottom:1px solid var(--line);background:#fff}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 18px;border-bottom:1px solid var(--line);background:#fff}
 h1{font:400 1.55rem/1.1 var(--serif);letter-spacing:-.02em;margin:0 6px 0 0}
 h1 em{color:var(--accent);font-style:italic}
 .tabs,.seg{display:flex;gap:2px;padding:3px;background:#f1efeb;border-radius:8px}
@@ -33,7 +33,7 @@ aside h2{font:500 11px var(--mono);letter-spacing:.12em;text-transform:uppercase
 .chips{display:flex;flex-direction:column;gap:5px}
 .chip{--c:#8b8f9c;display:flex;justify-content:space-between;gap:8px;align-items:center;text-align:left;border:1px solid var(--line);background:#fff;border-radius:6px;padding:6px 9px;font:inherit;color:var(--ink);cursor:pointer;transition:background .15s,border-color .15s}
 .chip:hover{border-color:var(--c)}
-.chip span{display:flex;align-items:center}
+.chip span{display:flex;align-items:center;min-width:0}
 .chip .dot{width:8px;height:8px;border-radius:2px;background:var(--c);margin-right:9px;flex:none}
 .chip[aria-pressed=true]{background:color-mix(in srgb,var(--c) 14%,#fff);border-color:var(--c);font-weight:600}
 .chip small{font:11px var(--mono);color:var(--soft)}
@@ -109,9 +109,10 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 <header>
   <h1>Sơ đồ hệ thống <em>Pet Care</em></h1>
   <div class="tabs" role="tablist" aria-label="Loại sơ đồ">
-    <button role="tab" data-tab="uc">Use Case tổng quát</button>
+    <button role="tab" data-tab="uc">UC tổng quát</button>
+    <button role="tab" data-tab="ucd">UC chi tiết</button>
     <button role="tab" data-tab="class">Lớp thực thể</button>
-    <button role="tab" data-tab="db">Database schema</button>
+    <button role="tab" data-tab="db">Database</button>
   </div>
   <div class="tools">
     <span class="lbl">Chế độ</span>
@@ -149,7 +150,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 
 /* ---------- trạng thái ---------- */
-const S={tab:'uc',mode:'view',keysOnly:false,sel:{class:new Set([DATA.groups[0].id]),db:new Set([DATA.groups[0].id])},k:1,tx:0,ty:0,pick:null,hover:null};
+const S={tab:'uc',mode:'view',keysOnly:false,sel:{class:new Set([DATA.groups[0].id]),db:new Set([DATA.groups[0].id]),ucd:'UC01'},k:1,tx:0,ty:0,pick:null,hover:null};
 let nodes=new Map(),edges=[],zones=[],stage=$('#stage'),vp=null,gEdges=null,gNodes=null,gZones=null,info=null;
 const grpTitle=Object.fromEntries(DATA.groups.map(g=>[g.id,g.title]));
 
@@ -503,13 +504,156 @@ function focus(){
 }
 
 /* lưu vị trí kéo */
-const viewKey=()=>S.tab==='uc'?'uc':`${S.tab}:${[...S.sel[S.tab]].sort().join(',')}:${S.keysOnly?'k':'f'}`;
+const viewKey=()=>S.tab==='uc'?'uc':S.tab==='ucd'?'ucd:'+S.sel.ucd:`${S.tab}:${[...S.sel[S.tab]].sort().join(',')}:${S.keysOnly?'k':'f'}`;
 function savePos(){const o={};nodes.forEach(n=>o[n.id]=[Math.round(n.x),Math.round(n.y)]);store.set('pcd:'+viewKey(),o)}
 function loadPos(){const o=store.get('pcd:'+viewKey());if(!o)return;nodes.forEach(n=>{if(o[n.id]){n.x=o[n.id][0];n.y=o[n.id][1]}})}
 
 /* ---------- Use case ---------- */
 function expand(a){const s=new Set();for(const t of a.split(',')){const r=/^A(\d\d)-A(\d\d)$/.exec(t);if(r)for(let i=+r[1];i<=+r[2];i++)s.add('A'+String(i).padStart(2,'0'));else s.add(t)}return s}
 function wrapLines(s,font,max){const w=s.split(' ');const out=[''];for(const x of w){const t=out.at(-1)?out.at(-1)+' '+x:x;if(tw(t,font)<=max||!out.at(-1))out[out.length-1]=t;else out.push(x)}return out}
+/* ---------- tác nhân + đường association: dùng chung cho sơ đồ tổng quát và chi tiết ---------- */
+// rút gọn endpoint nhưng giữ method và đoạn cuối (phần phân biệt các thao tác): POST …/{bookingId}/check-in
+function epLabel(ep,max){
+  if(tw(ep,F.sub)<=max)return ep;
+  const i=ep.indexOf(' '),m=ep.slice(0,i),segs=ep.slice(i+1).split('/').filter(Boolean);
+  for(let k=segs.length-1;k>=1;k--){const t=m+' …/'+segs.slice(-k).join('/');if(tw(t,F.sub)<=max)return t}
+  return cut(ep,F.sub,max);
+}
+// tách dòng tối đa n dòng; dòng cuối thêm … nếu còn chữ và đếm vào window.__trunc để kiểm thử bắt được
+function wrapN(s,font,max,n){
+  const all=wrapLines(s,font,max);if(all.length<=n)return all;
+  window.__trunc=(window.__trunc||0)+1;const out=all.slice(0,n);out[n-1]=cut(all.slice(n-1).join(' '),font,max);return out;
+}
+function actorNode(a,cx,cy){
+  let n;
+  if(a.ext){
+    const w=Math.ceil(Math.max(tw(a.name,F.nm),tw(a.sub,F.sub),tw('«hệ thống ngoài»',F.eye))/4)*4+28,h=56;
+    n=mkNode('A:'+a.id,cx-w/2,cy-h/2,w,h,{act:a,portY:h/2,ext:true});
+    el('rect',{class:'ext',width:w,height:h,rx:6},n.g);
+    txt(n.g,w/2,16,'«hệ thống ngoài»','eye',{'text-anchor':'middle'});txt(n.g,w/2,33,a.name,'nm',{'text-anchor':'middle'});txt(n.g,w/2,46,a.sub,'sub',{'text-anchor':'middle'});
+  }else{
+    const w=Math.ceil(Math.max(tw(a.name,F.nm),tw(a.sub,F.sub),44)/4)*4+16,h=96;
+    n=mkNode('A:'+a.id,cx-w/2,cy-30,w,h,{act:a,portY:30,fig:true});
+    const m=w/2,c='fig'+(a.abstract?' abs':''),ac=ACOL[a.id],fs=`stroke:${ac}`;
+    el('circle',{class:c,cx:m,cy:9,r:8,style:`${fs};fill:${tint(ac,.14)}`},n.g);el('path',{class:c,d:`M${m},17V40M${m-14},26H${m+14}M${m},40L${m-11},56M${m},40L${m+11},56`,fill:'none',style:fs},n.g);
+    txt(n.g,m,72,a.name,a.abstract?'nm-i':'nm',{'text-anchor':'middle'});txt(n.g,m,85,(a.code?a.code+' · ':'')+a.sub,'sub',{'text-anchor':'middle',style:`fill:${dark(ac,.8)}`});
+    el('rect',{x:0,y:0,width:w,height:h,fill:'transparent'},n.g);
+  }
+  place(n);return n;
+}
+// điểm trên elip (tâm c, bán kính rx, ry) theo hướng tới điểm t
+const ellPt=(c,rx,ry,t)=>{const dx=t[0]-c[0],dy=t[1]-c[1],L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L,k=1/Math.sqrt((ux/rx)**2+(uy/ry)**2);return[c[0]+ux*k,c[1]+uy*k]};
+// đường thẳng từ tác nhân (ed.a) tới elip (ed.b)
+function assocStraight(ed){
+  const A=ed.a,M=ed.b,ax=A.x+A.w/2,ay=A.y+(A.portY??A.h/2),mc=[M.x+M.rx,M.y+M.ry];
+  // ed.tip: chạm vào mép elip (mỗi tác nhân một điểm lệch nhẹ) để đường không cắt elip kề bên khi tác nhân ở xa theo chiều dọc
+  let ex,ey;
+  if(ed.tip){const s=ax<mc[0]?-1:1,th=(ed.tip.k-(ed.tip.m-1)/2)*.34;ex=mc[0]+s*M.rx*Math.cos(th);ey=mc[1]+M.ry*Math.sin(th)}
+  const tx=ex??mc[0],ty=ey??mc[1],dx=tx-ax,dy=ty-ay,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
+  let sx,sy;
+  if(A.ext){const t=Math.min((A.w/2)/Math.abs(ux||1e-9),(A.h/2)/Math.abs(uy||1e-9));sx=ax+ux*t;sy=ay+uy*t}
+  else{sx=ax+ux*24;sy=ay+uy*24}
+  if(ex===undefined)[ex,ey]=ellPt(mc,M.rx,M.ry,[sx,sy]);
+  ed.ln.setAttribute('x1',sx);ed.ln.setAttribute('y1',sy);ed.ln.setAttribute('x2',ex);ed.ln.setAttribute('y2',ey);
+}
+
+/* ---------- sơ đồ UC chi tiết: chức năng con = thao tác API thật; nét đứt = include / extend ---------- */
+const curUc=()=>DATA.ucd.find(x=>x.uc===S.sel.ucd)||DATA.ucd[0];
+// đường nối include/extend giữa hai elip (hoặc ranh giới 'main'); nhãn nằm giữa đường
+function relStraight(ed){
+  const A=ed.a,B=ed.b,ctr=N=>[N.x+N.rx,N.y+N.ry];
+  let pa,pb,d,mid;
+  if(A.main){const c=ctr(B),y=clamp(c[1],A.y+30,A.y+A.h-30);pa=[c[0]>A.x+A.w/2?A.x+A.w:A.x,y];pb=ellPt(c,B.rx,B.ry,pa)}
+  else if(B.main){const c=ctr(A),y=clamp(c[1],B.y+30,B.y+B.h-30);pb=[c[0]>B.x+B.w/2?B.x+B.w:B.x,y];pa=ellPt(c,A.rx,A.ry,pb)}
+  else{
+    const ca=ctr(A),cb=ctr(B);
+    if(A.idx!=null&&B.idx!=null&&Math.abs(A.idx-B.idx)>1){ // hai chức năng con không kề nhau: vòng sang phải để khỏi xuyên qua khối ở giữa
+      pa=[A.x+A.w,ca[1]];pb=[B.x+B.w,cb[1]];
+      const bx=Math.max(pa[0],pb[0])+50+16*Math.abs(A.idx-B.idx),cy=(pa[1]+pb[1])/2;
+      d=`M${pa[0]},${pa[1]}Q${bx},${cy} ${pb[0]},${pb[1]}`;mid=[.25*pa[0]+.5*bx+.25*pb[0],cy];
+    }else{pa=ellPt(ca,A.rx,A.ry,cb);pb=ellPt(cb,B.rx,B.ry,ca)}
+  }
+  if(!d){d=`M${pa[0]},${pa[1]}L${pb[0]},${pb[1]}`;mid=[(pa[0]+pb[0])/2,(pa[1]+pb[1])/2]}
+  ed.ln.setAttribute('d',d);
+  const l=ed.lbl;l.t.setAttribute('x',mid[0]);l.t.setAttribute('y',mid[1]+3);l.r.setAttribute('x',mid[0]-l.w/2);l.r.setAttribute('y',mid[1]-8);
+}
+function buildUCD(){
+  const d=curUc(),n=d.subs.length,ac=AREA[MAREA[d.module]][0],U=DATA.uc;
+  const RX=124,RY=36,GAP=96,BX=420,BY=40,BW=2*RX+88,ERX=112,ERY=34;
+  const bz=el('g',null,gZones);
+  const bnd=el('rect',{class:'bound',x:BX,y:BY,width:BW,rx:8,style:`fill:rgba(255,255,255,.62);stroke:${dark(ac,.9)}`},bz);
+  // đầu ranh giới: mã UC, tên, số chức năng, trạng thái
+  const cw=tw(d.uc,F.eye)+16;
+  el('rect',{x:BX+14,y:BY+14,width:cw,height:17,rx:3,fill:tint(ac,.14),stroke:dark(ac,.9),'stroke-width':.8},bz);
+  txt(bz,BX+14+cw/2,BY+26,d.uc,'eye',{'text-anchor':'middle',style:`fill:${dark(ac,.7)};font-weight:600`});
+  let hy=BY+54;
+  const tl=wrapN(d.title,`600 13px ${SANS}`,BW-28,3);
+  tl.forEach((s,i)=>txt(bz,BX+14,hy+i*17,s,'nm',{style:'font-size:13px'}));hy+=tl.length*17;
+  const nOps=d.subs.reduce((s,x)=>s+x.ep.length,0);
+  txt(bz,BX+14,hy,`${n} chức năng · ${nOps} thao tác API`,'sub');hy+=10;
+  if(d.status){const sw=tw(d.status,F.eye)+14;el('rect',{x:BX+14,y:hy,width:sw,height:16,rx:3,fill:'#fbf3db',stroke:'#efe2b0','stroke-width':.8},bz);txt(bz,BX+14+sw/2,hy+11.5,d.status,'eye',{'text-anchor':'middle',style:'fill:#956400;font-weight:600'});hy+=22}
+  const TOP=hy-BY+10,y0=BY+TOP+RY,BH=TOP+(n-1)*GAP+2*RY+22,cxs=BX+BW/2,subY=i=>y0+i*GAP;
+  bnd.setAttribute('height',BH);
+  const bpseudo={id:'B',main:true,x:BX,y:BY,w:BW,h:BH,g:el('g')};
+  // chức năng con
+  d.subs.forEach((s,i)=>{
+    const cy=subY(i),nd=mkNode('S:'+i,cxs-RX,cy-RY,RX*2,RY*2,{sub:s,ell:true,rx:RX,ry:RY,idx:i});
+    el('title',null,nd.g).textContent=`${s.n}\n${s.ep.join('\n')}`;
+    el('ellipse',{class:'ell',cx:RX,cy:RY,rx:RX,ry:RY,style:`fill:${tint(ac,.11)};stroke:${dark(ac,.9)}`},nd.g);
+    const lines=wrapN(s.n,F.nm,RX*2-40,2),total=lines.length*14+13,t0=RY-total/2+11;
+    lines.forEach((l,k)=>txt(nd.g,RX,t0+k*14,l,'nm',{'text-anchor':'middle'}));
+    txt(nd.g,RX,t0+lines.length*14+1,epLabel(s.ep[0],RX*2-56-(s.ep.length>1?26:0))+(s.ep.length>1?`  +${s.ep.length-1}`:''),'sub',{'text-anchor':'middle',style:`fill:${dark(ac,.7)}`});
+    place(nd);
+  });
+  // chỉ số chức năng con liên quan tới mỗi nút ngoài ranh giới (tác nhân, use case liên quan)
+  const idxOf=new Map();
+  const add=(k,i)=>{(idxOf.get(k)??idxOf.set(k,[]).get(k)).push(i)};
+  d.subs.forEach((s,i)=>s.a.forEach(a=>add('A:'+a,i)));
+  for(const [f,t] of d.links)for(const [x,o] of [[f,t],[t,f]])if(typeof x==='string'&&x.startsWith('x:'))add('X:'+x.slice(2),typeof o==='number'?o:'main');
+  const yOf=k=>{const l=idxOf.get(k).map(i=>i==='main'?BY+BH/2:subY(i));return l.reduce((s,v)=>s+v,0)/l.length};
+  const spread=(items,gap)=>{items.sort((p,q)=>p.y-q.y);const ideal=items.map(x=>x.y);for(let i=1;i<items.length;i++)items[i].y=Math.max(items[i].y,items[i-1].y+gap);
+    const sh=items.length?(ideal.reduce((s,v)=>s+v,0)-items.reduce((s,x)=>s+x.y,0))/items.length:0;items.forEach(x=>x.y+=sh)};
+  const actorIds=[...new Set(d.subs.flatMap(s=>s.a))],actorOf=id=>U.actors.find(a=>a.id===id);
+  const hum=actorIds.filter(id=>!actorOf(id).ext).map(id=>({k:'A:'+id,id,y:yOf('A:'+id)}));
+  spread(hum,150);
+  const rightX=BX+BW+300;
+  const right=[...actorIds.filter(id=>actorOf(id).ext).map(id=>({k:'A:'+id,id,y:yOf('A:'+id)})),...d.ext.map(e=>({k:'X:'+e.code,e,y:yOf('X:'+e.code)}))];
+  spread(right,100);
+  for(const h of hum)actorNode(actorOf(h.id),BX-300,h.y);
+  for(const r of right){
+    if(r.id){actorNode(actorOf(r.id),rightX,r.y);continue}
+    const nd=mkNode('X:'+r.e.code,rightX-ERX,r.y-ERY,ERX*2,ERY*2,{ucx:r.e,ell:true,rx:ERX,ry:ERY});
+    el('title',null,nd.g).textContent=`${r.e.code} ${r.e.name} (use case liên quan)`;
+    el('ellipse',{class:'ell',cx:ERX,cy:ERY,rx:ERX,ry:ERY,style:'fill:rgba(45,49,66,.035);stroke:rgba(45,49,66,.5);stroke-dasharray:5 4'},nd.g);
+    const lines=wrapN(r.e.name,F.nm,ERX*2-36,2),t0=ERY-(lines.length*14+11)/2+11;
+    lines.forEach((l,k)=>txt(nd.g,ERX,t0+k*14,l,'nm',{'text-anchor':'middle'}));
+    txt(nd.g,ERX,t0+lines.length*14+1,r.e.code,'sub',{'text-anchor':'middle'});
+    place(nd);
+  }
+  // association: tác nhân — chức năng con
+  d.subs.forEach((s,i)=>{
+    const as=[...s.a].sort((p,q)=>nodes.get('A:'+p).y-nodes.get('A:'+q).y);
+    as.forEach((a,k)=>{
+      const g=el('g',{class:'edge'},gEdges),ln=el('line',{class:'ln',style:`stroke:${ACOL[a]};opacity:.85;stroke-width:1.3`},g);
+      edges.push({a:nodes.get('A:'+a),b:nodes.get('S:'+i),g,ln,e:{},straight:assocStraight,tip:{k,m:as.length}});
+    });
+  });
+  // include / extend (nét đứt, mũi tên: include = gốc → được gồm; extend = mở rộng → gốc)
+  const ref=x=>x==='main'?bpseudo:typeof x==='number'?nodes.get('S:'+x):nodes.get('X:'+x.slice(2));
+  for(const [f,t,rel] of d.links){
+    const g=el('g',{class:'edge rel'},gEdges),ln=el('path',{class:'ln',style:'stroke:#4f5d75;stroke-width:1.2;stroke-dasharray:6 4','marker-end':'url(#m-open)'},g);
+    const gl=el('g',null,g),text=`«${rel}»`,w=tw(text,`8px ${MONO}`)+8,lr=el('rect',{class:'mask',width:w,height:12,rx:2},gl),lt=txt(gl,0,0,text,'mlt',{'text-anchor':'middle'});
+    edges.push({a:ref(f),b:ref(t),g,ln,e:{},straight:relStraight,lbl:{t:lt,r:lr,w}});
+  }
+  // quy tắc áp dụng
+  const ny=BY+BH+26;
+  if(d.rules.length){
+    txt(bz,BX,ny,'Quy tắc áp dụng (nguồn: hợp đồng API)','nm',{style:'font-size:11px'});
+    wrapLines(d.rules.join('  ·  '),`10px ${MONO}`,BW+60).forEach((l,i)=>txt(bz,BX,ny+16+i*14,l,'atr'));
+  }
+  routeAll();
+}
+
 function buildUC(){
   const U=DATA.uc,P=U.pos,GR=P.grid,TR=P.tr;
   const RX=GR.rx,RY=GR.ry,BX=P.bound.x,BY=P.bound.y,BW=P.bound.w,BH=P.bound.h;
@@ -520,46 +664,23 @@ function buildUC(){
   // nút phân hệ
   for(const m of U.modules){
     const [cx,cy]=P.mod[m.id];
-    const n=mkNode('M:'+m.id,cx-RX,cy-RY,RX*2,RY*2,{mod:m,ell:true});
+    const n=mkNode('M:'+m.id,cx-RX,cy-RY,RX*2,RY*2,{mod:m,ell:true,rx:RX,ry:RY});
     el('title',null,n.g).textContent=`${m.title}: ${ucBy[m.id].map(u=>u.c).join(', ')}`;
     const ac=AREA[MAREA[m.id]][0];
     el('ellipse',{class:'ell',cx:RX,cy:RY,rx:RX,ry:RY,style:`fill:${tint(ac,.11)};stroke:${dark(ac,.9)}`},n.g);
-    const lines=wrapLines(m.title,F.nm,RX*2-34).slice(0,2);const y0=RY-(lines.length-1)*7-4;
+    const lines=wrapN(m.title,F.nm,RX*2-34,2);const y0=RY-(lines.length-1)*7-4;
     lines.forEach((s,i)=>txt(n.g,RX,y0+i*15,s,'nm',{'text-anchor':'middle'}));
     txt(n.g,RX,y0+lines.length*15+3,`${m.id} · ${ucBy[m.id].length} UC`,'sub',{'text-anchor':'middle',style:`fill:${dark(ac,.7)}`});
     place(n);
   }
   // tác nhân
-  for(const a of U.actors){
-    const [cx,cy]=P.act[a.id];
-    if(a.ext){
-      const w=Math.ceil(Math.max(tw(a.name,F.nm),tw(a.sub,F.sub),tw('«hệ thống ngoài»',F.eye))/4)*4+28,h=56;
-      const n=mkNode('A:'+a.id,cx-w/2,cy-h/2,w,h,{act:a,portY:h/2,ext:true});
-      el('rect',{class:'ext',width:w,height:h,rx:6},n.g);
-      txt(n.g,w/2,16,'«hệ thống ngoài»','eye',{'text-anchor':'middle'});txt(n.g,w/2,33,a.name,'nm',{'text-anchor':'middle'});txt(n.g,w/2,46,a.sub,'sub',{'text-anchor':'middle'});
-    }else{
-      const w=Math.ceil(Math.max(tw(a.name,F.nm),tw(a.sub,F.sub),44)/4)*4+16,h=96;
-      const n=mkNode('A:'+a.id,cx-w/2,cy-30,w,h,{act:a,portY:30,fig:true});
-      const m=w/2,c='fig'+(a.abstract?' abs':''),ac=ACOL[a.id],fs=`stroke:${ac}`;
-      el('circle',{class:c,cx:m,cy:9,r:8,style:`${fs};fill:${tint(ac,.14)}`},n.g);el('path',{class:c,d:`M${m},17V40M${m-14},26H${m+14}M${m},40L${m-11},56M${m},40L${m+11},56`,fill:'none',style:fs},n.g);
-      txt(n.g,m,72,a.name,a.abstract?'nm-i':'nm',{'text-anchor':'middle'});txt(n.g,m,85,(a.code?a.code+' · ':'')+a.sub,'sub',{'text-anchor':'middle',style:`fill:${dark(ac,.8)}`});
-      el('rect',{x:0,y:0,width:w,height:h,fill:'transparent'},n.g);
-    }
-    place(nodes.get('A:'+a.id));
-  }
+  for(const a of U.actors){const [cx,cy]=P.act[a.id];actorNode(a,cx,cy)}
   // liên kết association (đường thẳng, theo quy ước UML)
   const gen=(from,to,s0,s1,xo)=>{const a=nodes.get('A:'+from),b=nodes.get('A:'+to);const g=el('g',{class:'edge gen'},gEdges);const ln=el('path',{class:'ln','marker-end':'url(#m-tri)'},g);edges.push({a,b,g,ln,s0,s1,sd:[s0,s1],jit:0,xo,e:{}})};
   for(const [m,a] of U.links){
     const an=nodes.get('A:'+a),mn=nodes.get('M:'+m);
     const g=el('g',{class:'edge'},gEdges);const ln=el('line',{class:'ln',style:`stroke:${ACOL[a]};opacity:.8;stroke-width:1.2`},g);
-    const ed={a:an,b:mn,g,ln,e:{},straight(ed){
-      const A=ed.a,M=ed.b;const ax=A.x+A.w/2,ay=A.y+(A.portY??A.h/2),mx=M.x+RX,my=M.y+RY;
-      const dx=mx-ax,dy=my-ay,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
-      let sx,sy;
-      if(A.ext){const hw=A.w/2,hh=A.h/2;const t=Math.min(hw/Math.abs(ux||1e-9),hh/Math.abs(uy||1e-9));sx=ax+ux*t;sy=ay+uy*t}
-      else{sx=ax+ux*24;sy=ay+uy*24}
-      const k=1/Math.sqrt((ux/RX)**2+(uy/RY)**2);const ex=mx-ux*k,ey=my-uy*k;
-      ed.ln.setAttribute('x1',sx);ed.ln.setAttribute('y1',sy);ed.ln.setAttribute('x2',ex);ed.ln.setAttribute('y2',ey)}};
+    const ed={a:an,b:mn,g,ln,e:{},straight:assocStraight};
     edges.push(ed);
   }
   for(const s of['A05','A06','A07','A08'])gen(s,'STAFF','R','L',TR.staff);
@@ -606,6 +727,14 @@ function legend(tab){
     item(40,p=>line(p,'url(#m-tri)'),'Kế thừa (generalization)');
     item(36,p=>el('rect',{class:'ext',x:0,y:Y-9,width:36,height:18,rx:4},p),'Hệ thống ngoài');
     item(36,p=>el('rect',{class:'bound',x:0,y:Y-9,width:36,height:18,rx:4},p),'Ranh giới hệ thống');
+  }else if(tab==='ucd'){
+    item(24,p=>{el('circle',{class:'fig',cx:12,cy:Y-8,r:5,style:'stroke:#2e5aa8;fill:rgba(46,90,168,.14)'},p);el('path',{class:'fig',d:`M12,${Y-3}V${Y+6}M4,${Y}H20M12,${Y+6}L6,${Y+14}M12,${Y+6}L18,${Y+14}`,fill:'none',style:'stroke:#2e5aa8'},p)},'Tác nhân (màu theo vai trò)');
+    item(40,p=>el('ellipse',{cx:20,cy:Y,rx:20,ry:10,fill:'#fff',stroke:'#2d3142'},p),'Chức năng con (thao tác API)');
+    item(40,p=>el('ellipse',{cx:20,cy:Y,rx:20,ry:10,fill:'rgba(45,49,66,.035)',stroke:'rgba(45,49,66,.5)','stroke-dasharray':'5 4'},p),'Use case liên quan');
+    item(40,p=>line(p,null),'Association (màu = tác nhân)');
+    item(40,p=>el('path',{d:`M0,${Y}H40`,fill:'none',stroke:'#4f5d75','stroke-width':1.2,'stroke-dasharray':'6 4','marker-end':'url(#m-open)'},p),'«include» / «extend»');
+    item(36,p=>el('rect',{class:'ext',x:0,y:Y-9,width:36,height:18,rx:4},p),'Hệ thống ngoài');
+    item(36,p=>el('rect',{class:'bound',x:0,y:Y-9,width:36,height:18,rx:4},p),'Ranh giới = use case');
   }else{
     for(const [k,l] of [['ROOT','gốc'],['PART','thuộc ROOT'],['REF','danh mục'],['LOG','chỉ thêm']])item(0,p=>tag(p,k),l);
     item(36,head,'Màu đầu = phân hệ');
@@ -628,11 +757,24 @@ function legend(tab){
 /* ---------- thanh bên + chú thích ---------- */
 const CAP={
   uc:()=>`Tác nhân và phân hệ theo <code>docs/01</code> (85 UC hiệu lực, tác vụ hệ thống S01 không vẽ). Hai tác nhân trừu tượng gom các liên kết chung: Người dùng đăng nhập (A02–A08: đăng nhập, hồ sơ cá nhân, thông báo) và Nhân viên chi nhánh (A05–A08, mỗi người thuộc đúng một chi nhánh). A02 kế thừa A01 nên xem được mọi thông tin công khai. Một đường nối nghĩa là tác nhân tham gia ít nhất một use case của phân hệ. Nhấp một khối để xem danh sách use case.`,
+  ucd:()=>'Mỗi use case phân rã thành các chức năng con = thao tác trong <code>docs/api</code> (bảng thao tác và ma trận tác nhân); một chức năng con có thể gộp các thao tác cùng loại, ví dụ xem danh sách và chi tiết. Tác nhân gộp theo quy ước của sơ đồ tổng quát. Quan hệ include/extend lấy từ <code>docs/01</code> mục C. Quy tắc nghiệp vụ gom từ cột Rule của hợp đồng API.',
   class:()=>`Lớp có entity Java thật: ${DATA.classes.filter(c=>c.java).length}/${DATA.classes.length}, thao tác lấy từ method nghiệp vụ (bỏ get/set); lớp còn lại suy ra từ bảng. Khóa ngoại thể hiện bằng quan hệ, không liệt kê trong thuộc tính. Mọi lớp kế thừa <code>TimestampedEntity</code> (createdAt, updatedAt). Chỉ vẽ quan hệ đi ra khỏi phân hệ đang xem. Bỏ 2 bảng không dùng (surgeries, branch_home_visit_fees).`,
   db:()=>`Schema thật theo ${DATA.meta.migrations} migration (V1–V64): ${DATA.meta.tables} bảng, ${DATA.meta.fks} khóa ngoại, <b>mọi khóa ngoại đều ON DELETE RESTRICT</b> (không CASCADE). Chỉ vẽ khóa ngoại đi ra khỏi phân hệ đang xem. surgeries và branch_home_visit_fees còn trong DB nhưng không dùng (nét đứt). Tạo ngày ${DATA.meta.builtAt}.`,
 };
 function renderSide(){
   const side=$('#side');
+  if(S.tab==='ucd'){
+    const cur=S.sel.ucd,ix=DATA.ucd.findIndex(u=>u.uc===cur);
+    side.innerHTML=`<h2>30 use case chi tiết</h2><div class="row"><button class="btn" id="bPrev">Trước</button><button class="btn" id="bNext">Sau</button></div>
+    <div class="chips">${DATA.ucd.map(u=>`<button class="chip" style="--c:${AREA[MAREA[u.module]][0]}" data-u="${u.uc}" aria-pressed="${u.uc===cur}"><span><i class="dot"></i>${u.uc} · ${u.title}</span><small>${u.subs.length}</small></button>`).join('')}</div>
+    <p class="hint">Mỗi use case phân rã thành các chức năng con, lấy từ thao tác API thật (docs/api). Nét đứt là use case liên quan (include, extend). Số bên phải là số chức năng con.</p>`;
+    const go=u=>{S.sel.ucd=u;rebuild()};
+    $$('.chip',side).forEach(b=>b.onclick=()=>go(b.dataset.u));
+    $('#bPrev',side).onclick=()=>go(DATA.ucd[(ix+DATA.ucd.length-1)%DATA.ucd.length].uc);
+    $('#bNext',side).onclick=()=>go(DATA.ucd[(ix+1)%DATA.ucd.length].uc);
+    const on=$('.chip[aria-pressed=true]',side);if(on)on.scrollIntoView({block:'nearest'});
+    return;
+  }
   if(S.tab==='uc'){side.innerHTML='<h2>Chi tiết</h2><div id="ucinfo"></div>';onPick(null);return}
   const tab=S.tab,src=tab==='db'?DATA.db:DATA.classes;
   const cnt=Object.fromEntries(DATA.groups.map(g=>[g.id,src.filter(t=>t.group===g.id).length]));
@@ -647,8 +789,9 @@ function renderSide(){
 }
 
 /* ---------- vòng đời ---------- */
-const TITLES={uc:'Biểu đồ Use Case tổng quát',class:'Biểu đồ lớp thực thể',db:'Cơ sở dữ liệu (Database schema)'};
+const TITLES={uc:'Biểu đồ Use Case tổng quát',ucd:'Sơ đồ use case chi tiết',class:'Biểu đồ lớp thực thể',db:'Cơ sở dữ liệu (Database schema)'};
 function viewLabel(){
+  if(S.tab==='ucd'){const d=curUc(),ids=[...new Set(d.subs.flatMap(x=>x.a))].map(a=>a==='USER'?'A02–A08':a==='STAFF'?'A05–A08':a);return 'Phân hệ '+DATA.uc.modules.find(m=>m.id===d.module).title+' · '+d.subs.length+' chức năng · tác nhân '+ids.join(', ')}
   if(S.tab==='uc')return 'Toàn hệ thống · 19 phân hệ · 85 use case';
   const s=S.sel[S.tab];if(s.size===DATA.groups.length)return 'Tất cả phân hệ';
   return 'Phân hệ: '+[...s].map(g=>grpTitle[g]).join(', ');
@@ -656,7 +799,7 @@ function viewLabel(){
 function rebuild(keepView){
   S.pick=null;S.hover=null;stage.classList.remove('focus');
   clearScene();
-  if(S.tab==='uc')buildUC();else buildRelational(S.tab);
+  if(S.tab==='uc')buildUC();else if(S.tab==='ucd')buildUCD();else buildRelational(S.tab);
   loadPos();nodes.forEach(place);routeAll();
   renderSide();
   const lg=legend(S.tab);const lb=$('#legendbox');lb.innerHTML='';lb.appendChild(lg.svg);
@@ -682,7 +825,7 @@ function buildExport(){
   const dd=stage.querySelector('defs').cloneNode(true);out.appendChild(dd);
   const pt=el('pattern',{id:'x-dots',width:22,height:22,patternUnits:'userSpaceOnUse'},dd);el('circle',{cx:1,cy:1,r:1,fill:'rgba(45,49,66,.16)'},pt);
   el('rect',{width:W,height:H,fill:'#f5f5f5'},out);el('rect',{width:W,height:H,fill:'url(#x-dots)'},out);
-  txt(out,PAD,34,TITLES[S.tab]+' — Pet Care','ttl');
+  txt(out,PAD,34,S.tab==='ucd'?'Use case '+curUc().uc+': '+curUc().title:TITLES[S.tab]+' — Pet Care','ttl');
   txt(out,PAD,52,viewLabel(),'stt');
   const cp=vp.cloneNode(true);cp.removeAttribute('id');cp.setAttribute('transform',`translate(${PAD-b.x + (W-2*PAD-b.width)/2},${TOP-b.y})`);
   $$('.hl,.pick,.focus',cp).forEach(x=>x.classList.remove('hl','pick','focus'));
@@ -698,7 +841,7 @@ function inlineVars(xml){
   return out;
 }
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
-function fname(ext){const v=S.tab==='uc'?'usecase':S.tab==='class'?'lop-thuc-the':'db-schema';const s=S.tab==='uc'?'':'-'+(S.sel[S.tab].size===DATA.groups.length?'tat-ca':[...S.sel[S.tab]].join('+'));return `petcare-${v}${s}.${ext}`}
+function fname(ext){if(S.tab==='ucd')return 'petcare-uc-chi-tiet-'+S.sel.ucd+'.'+ext;const v=S.tab==='uc'?'usecase':S.tab==='class'?'lop-thuc-the':'db-schema';const s=S.tab==='uc'?'':'-'+(S.sel[S.tab].size===DATA.groups.length?'tat-ca':[...S.sel[S.tab]].join('+'));return `petcare-${v}${s}.${ext}`}
 async function doExport(kind){
   try{
     const{svg,W,H}=buildExport();
@@ -718,7 +861,7 @@ async function doExport(kind){
 $$('[data-exp]').forEach(b=>b.onclick=()=>doExport(b.dataset.exp));
 
 /* khởi động */
-window.__pc={S,get nodes(){return nodes},get edges(){return edges},setTab,rebuild,exportSvg:buildExport};
+window.__pc={S,DATA,get nodes(){return nodes},get edges(){return edges},setTab,rebuild,exportSvg:buildExport};
 setTab(store.get('pcd:tab')||'uc');
 </script>
 </body>

@@ -5,6 +5,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseSchema } from './parse-schema.mjs';
 import { USE_CASES, ACTORS, MODULES_UC, ucLinks, layoutUC } from './usecases.mjs';
+import { DETAIL } from './ucdetail.mjs';
+import { parseApi } from './parse-api.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '../../..');
@@ -155,11 +157,40 @@ for (const t of schema.tables) {
 }
 
 // ---------- ghép vào template ----------
+// ---------- 30 sơ đồ UC chi tiết: chức năng con = thao tác API thật ----------
+const api = parseApi(), allOps = Object.values(api).flat();
+const ucName = Object.fromEntries(USE_CASES.map(u => [u.c, u.n])), ucMod = Object.fromEntries(USE_CASES.map(u => [u.c, u.m]));
+const collapseActors = s => { // A02–A08 → USER, A05–A08 → STAFF (cùng quy ước với sơ đồ tổng quát)
+  const a = new Set(s), has = l => l.every(x => a.has(x));
+  if (has(['A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08'])) { ['A02', 'A03', 'A04', 'A05', 'A06', 'A07', 'A08'].forEach(x => a.delete(x)); a.add('USER'); }
+  else if (has(['A05', 'A06', 'A07', 'A08'])) { ['A05', 'A06', 'A07', 'A08'].forEach(x => a.delete(x)); a.add('STAFF'); }
+  return [...a];
+};
+const expandRules = txt => { const m = new Map();
+  for (const r of txt.matchAll(/BR-([A-Z]{2})-(\d+)((?:\s*,\s*\d+)*)/g)) { const set = m.get(r[1]) ?? m.set(r[1], new Set()).get(r[1]); set.add(r[2]); for (const n of r[3].matchAll(/\d+/g)) set.add(n[0]); }
+  return m; };
+const ucd = DETAIL.map(d => {
+  const rules = new Map();
+  const subs = d.subs.map(s => {
+    const ops = s.ops.map(name => (api[d.uc] || []).find(o => o.op === name) || allOps.find(o => o.op === name));
+    ops.forEach((o, i) => { if (!o) throw new Error(`${d.uc}: không thấy thao tác API "${s.ops[i]}"`); });
+    const actors = collapseActors(s.a || [...new Set(ops.flatMap(o => o.actors))]);
+    for (const o of ops) for (const [k, v] of expandRules(o.rules)) { const set = rules.get(k) ?? rules.set(k, new Set()).get(k); v.forEach(x => set.add(x)); }
+    return { n: s.n, ep: ops.map(o => o.endpoint), a: actors };
+  });
+  const ext = [...new Set(d.links.flatMap(l => l.slice(0, 2)).filter(x => typeof x === 'string' && x.startsWith('x:')))].map(x => ({ id: x, code: x.slice(2), name: ucName[x.slice(2)] }));
+  ext.forEach(e => { if (!e.name) throw new Error(d.uc + ': thiếu use case liên quan ' + e.code); });
+  const ruleTxt = [...rules].sort().map(([k, v]) => `BR-${k}: ${[...v].sort().join(', ')}`);
+  return { uc: d.uc, title: d.title, status: d.status, module: ucMod[d.uc], subs, ext, links: d.links, rules: ruleTxt };
+});
+if (ucd.length !== 30) throw new Error('cần đúng 30 use case chi tiết, đang có ' + ucd.length);
+
 const data = {
   meta: { builtAt: (d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)(new Date()), migrations: schema.migrations, tables: dbTables.length, fks: dbTables.reduce((n, t) => n + t.cols.filter(c => c.fk).length, 0), classes: classes.length, javaEntities: entities.size },
   groups: GROUPS.map(g => ({ id: g.id, title: g.title })),
   db: dbTables, classes, rels,
   uc: { actors: ACTORS, modules: MODULES_UC, cases: USE_CASES, links: ucLinks(), pos: layoutUC(ucLinks()) },
+  ucd,
 };
 const tpl = readFileSync(join(HERE, 'template.html'), 'utf8');
 const out = join(ROOT, 'docs/diagrams/petcare-system-diagrams.html');
