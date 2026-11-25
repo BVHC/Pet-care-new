@@ -8,6 +8,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { InfoRow, StatusBadge } from '@/components/ui/modal-templates';
 import { formatCurrency } from '@/lib/utils';
 import { useAdmission } from '@/shared/hooks/useInpatient';
+import { useVisit } from '@/shared/hooks/useVisits';
+import { useAccount } from '@/shared/stores/session.store';
 import type { Role } from '@/shared/types/auth';
 import { ADMISSION_STATUS_LABELS, DISCHARGE_OUTCOME_LABELS } from '@/shared/types/inpatient';
 import { DischargeDialog } from './AdmissionDialogs';
@@ -17,10 +19,13 @@ import { inpatientPermissions } from './permissions';
 
 export function AdmissionDetail({ admissionId, kennelCode, role, onNotice }: { admissionId: number; kennelCode?: string | null; role: Role | undefined; onNotice: (text: string) => void }) {
   const query = useAdmission(admissionId);
-  const [discharging, setDischarging] = useState(false);
   const a = query.data;
+  // Xuất viện, ra và hủy y lệnh thuộc VET đang được gán Visit của ca: chưa biết người phụ trách thì chưa hiện nút (BE trả 403 cho VET khác).
+  const visit = useVisit(a?.visitId ?? null);
+  const me = useAccount();
+  const [discharging, setDischarging] = useState(false);
   if (!a) return query.isError ? <QueryError error={query.error} onRetry={() => query.refetch()} what="ca nội trú" /> : <RowsSkeleton rows={5} />;
-  const perms = inpatientPermissions(role);
+  const perms = inpatientPermissions(role, visit.data?.assigneeId != null && visit.data.assigneeId === me?.id);
   const active = a.status === 'ADMITTED';
 
   return (
@@ -43,6 +48,7 @@ export function AdmissionDetail({ admissionId, kennelCode, role, onNotice }: { a
             <InfoRow label="Dịch vụ" value={`${a.serviceName} · ${formatCurrency(a.unitPrice)}/ngày`} />
             <InfoRow label="Chuồng" value={kennelCode ?? (a.kennelId ? `#${a.kennelId}` : 'Chưa gán')} />
             <InfoRow label="Nhập viện lúc" value={formatVnDateTime(a.admittedAt)} />
+            <InfoRow label={active ? 'Tạm tính đến hôm nay' : 'Tiền dịch vụ nội trú'} value={`${a.billedDays} ngày × ${formatCurrency(a.unitPrice)} = ${formatCurrency(a.estimatedAmount)}`} />
             {a.dischargedAt && <InfoRow label="Xuất viện lúc" value={formatVnDateTime(a.dischargedAt)} />}
             {a.dischargeOutcome && <InfoRow label="Lý do xuất viện" value={DISCHARGE_OUTCOME_LABELS[a.dischargeOutcome]} />}
           </dl>

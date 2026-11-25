@@ -1,30 +1,26 @@
-// Mock inpatient-v1 (UC55, UC56, BR-LT-13…17; docs/api/inpatient-v1.md #1–10; 09 §C; 03 #24, #25) — T57 bước A. BE tầng 3 CHƯA cài (T54 chỉ duyệt đặc tả), nên không có số đo thật:
-// mọi chỗ dưới đây là chép hợp đồng (openapi/inpatient-v1.yaml: path, body, "Quyền:", mã lỗi) cộng ASSUMPTION khi hợp đồng im lặng.
+// Mock inpatient-v1 (UC55, UC56, BR-LT-13…17; docs/api/inpatient-v1.md #1–10; 09 §C; 03 #24, #25). T79 (25/11/2026): KHỚP BE THẬT. BE nội trú đã cài (T69, PR #34) và đã đo trên BE 8083 (bản sao petcare_t79)
+// bằng `D:/Do-an/.c2-tmp/t79-m1…m5.mjs`; bảng số đo ở docs/testcases/T57-fe.md mục NT. Chỗ mock từng chép hợp đồng cũ mà BE khác thì đã đổi theo BE.
 //
-// Thứ tự kiểm (00-method §3.5; chỗ yaml im lặng giữ thứ tự này cho cả 10 endpoint):
-//   401 (adapter) → 400 path / query / body sai kiểu (MALFORMED_REQUEST) → 403 vai trò (ACCESS_DENIED) → 400 VALIDATION_FAILED → 404 → 403 phạm vi (ACCESS_DENIED_SCOPE_MISMATCH, message chung)
-//   → 400 BR-LT-… → 409 INVALID_STATE_TRANSITION. Quyền theo "Quyền:" của yaml: BRANCH_MANAGER, SUPER_MANAGER, ADMIN không có endpoint nào ở đây.
+// Thứ tự kiểm (đo, mọi endpoint ghi): 401 (adapter) → 400 path / query / body sai kiểu (MALFORMED_REQUEST) → 400 VALIDATION_FAILED (Bean Validation chạy TRƯỚC @PreAuthorize) → 403 vai trò (ACCESS_DENIED)
+//   → 404 → 403 chi nhánh (ACCESS_DENIED_SCOPE_MISMATCH) → 403 người phụ trách Visit (cùng mã; #4, #5, #8) → 409 INVALID_STATE_TRANSITION → 400 BR-LT-… (rỗng sau cắt, điều kiện).
+//   Ngoại lệ: #1 kiểm nguồn / chuồng BR-LT-13 ngay sau vai trò và 409 đứng trước mọi 400 điều kiện; #4 tóm tắt rỗng (400 BR-LT-14) đứng ngay sau vai trò, trước 404.
+//   Quyền: BRANCH_MANAGER, SUPER_MANAGER, ADMIN không có endpoint nào ở đây (ADR-0148).
 //
-// ASSUMPTION (đã cân nhắc, ghi để không bị tính là lệch BE):
-//  A1  Phạm vi chi nhánh kiểm SAU 404 (chi nhánh chỉ biết sau khi nạp ca / lượt / đặt chỗ). "Visit không của mình" ở #1 là 400 BR-LT-13 (đúng chữ yaml), không phải 403.
-//  A2  Mã rule theo mã ĐẦU của dòng lỗi trong yaml: #1 mọi vế là BR-LT-13, #4 là BR-LT-14, #5 / #7 / #8 là BR-LT-15, #9 là BR-LT-16. Thiếu tóm tắt (#4), thiếu ghi chú (#7), thiếu lý do (#8) là 400 BR-LT-*,
-//      KHÔNG phải VALIDATION_FAILED; chỉ `outcome`, `serviceId`, `orderType`, `content`, `scheduledAt`, `abnormal` thiếu hoặc quá độ dài (`content` ≤ 500, `note` ≤ 300, `reason` ≤ 300, ghi chú theo dõi ≤ 500) là VALIDATION_FAILED.
-//  A3  409 khi thú đã có ca ADMITTED: yaml không ghi mã, mock dùng INVALID_STATE_TRANSITION ("Thú cưng đã có ca nội trú đang điều trị"); kiểm SAU mọi 400 rule của #1 và TRƯỚC khi tạo Visit điều trị.
+// ASSUMPTION còn lại (mock vẫn lệch BE, ghi để không bị tính là lỗi):
 //  A4  Dịch vụ INPATIENT: catalog.mock chưa có loại này (09 Q1), dùng bộ mẫu ở clinical-shared.ts (id 7101–7104, giá theo ngày). Giá chốt vào `unitPrice` lúc nhập viện; xuất viện thêm dòng
-//      "số ngày × giá đã chốt" (số ngày = ngày VN từ ngày nhập đến ngày xuất, tối thiểu 1) qua `addServiceLineToVisitOrder` (nguồn đăng ký, mặc định mã dòng giả, KHÔNG sửa Order thật: xem clinical-shared.ts).
+//      "số ngày × giá đã chốt" (số ngày = ngày VN từ ngày nhập đến ngày xuất + 1, gồm hai đầu) qua `addServiceLineToVisitOrder` (nguồn đăng ký, mặc định mã dòng giả, KHÔNG sửa Order thật: xem clinical-shared.ts).
 //  A5  Chuồng/đặt chỗ lưu trú đọc từ boarding.mock qua chính route của nó (với vai trò hệ thống, như `BoardingQueryApi` / `KennelApi` không kiểm vai trò). boarding.mock không cho ghi chuồng từ ngoài, nên "chiếm chuồng"
-//      (`occupyForTreatment`) được theo dõi ở ĐÂY: chuồng AVAILABLE của boarding mà đang giữ cho một ca ADMITTED khác thì coi như không còn trống. Chuồng cấp riêng cho nội trú = `kennelId` truyền vào khác chuồng đang ở;
-//      xuất viện thì ca hết ADMITTED nên chuồng tự trống lại. Đặt chỗ lưu trú giữ nguyên CHECKED_IN (BR-LT-17).
-//  A6  Nhập viện từ đặt chỗ (b) tạo Visit điều trị IN_PROGRESS gán VET gọi qua `startDirectVisit` (visit.mock), Order mở với dịch vụ khám EXAM đầu tiên đang bật ở chi nhánh (hợp đồng im lặng dịch vụ nào);
-//      thú còn lượt mở khác → 400 BR-TN-01. Thú không có trong mock thú (khách lưu trú mẫu 9002, 9003 …) coi là chưa mất, không có lượt mở; cân nặng của theo dõi chỉ ghi vào hồ sơ cân khi thú có trong mock thú.
-//  A7  DECEASED chỉ xuất được khi thú ĐÃ đánh dấu mất (400 BR-LT-14 nếu chưa). Nhưng mark-deceased (customer-v1) từ chối khi thú còn lượt mở (BR-KH-05) mà ca ADMITTED luôn có lượt mở: hợp đồng tự mâu thuẫn,
-//      nên trong luồng thật DECEASED không tới được. Mock giữ đúng chữ hợp đồng (kiểm `deceasedOn` của mock thú), không gỡ mâu thuẫn.
-//  A8  Chỉ số theo dõi: khoảng hợp lệ theo kiểu cột (OBSERVATION_BOUNDS) vì yaml chỉ ghi "ngoài khoảng". "Không có chỉ số hay ghi chú nào" = cả 4 số, tình trạng ăn và ghi chú đều vắng; `abnormal` một mình không đủ.
-//      `abnormal = true` báo VET phụ trách và khách (có tài khoản) bằng tin CARE_LOG_ABNORMAL (mẫu của nhật ký lưu trú, BR-LT-12; chữ do mock đặt); người ghi là chính VET thì không tự báo mình.
-//  A9  Y lệnh MEDICATION: `prescriptionItemId` phải là dòng đơn của đúng Visit của ca (đọc qua `prescriptionItemIdsOfVisit` của visit-clinical.mock); loại khác bỏ qua `prescriptionItemId` (lưu null).
-//      Y lệnh không bị chặn theo `scheduledAt` (quá khứ hay tương lai đều được). CARETAKER thực hiện y lệnh MEDICATION → 403 ACCESS_DENIED (yaml), kiểm sau 404 / phạm vi.
+//      (`occupyForTreatment`) được theo dõi ở ĐÂY: chuồng AVAILABLE của boarding mà đang giữ cho một ca ADMITTED khác thì coi như không còn trống. Chỉ nhập từ lượt khám mới cấp chuồng (kennelId bắt buộc);
+//      nhập từ lưu trú cấm kennelId, thú ở nguyên chuồng (kennelId null, kennelCode của đặt chỗ). Xuất viện thì ca hết ADMITTED nên chuồng tự trống lại. Đặt chỗ lưu trú giữ nguyên trạng thái (BR-LT-17).
+//      Chuồng của chi nhánh khác: BE 400, mock 404 (kennelsOf chỉ liệt kê chuồng của chi nhánh người gọi).
+//  A6  LỆCH BE: nhập viện từ đặt chỗ (b) tạo Visit điều trị IN_PROGRESS gán VET gọi qua `startDirectVisit` (visit.mock), mà mock luôn mở Order với một dịch vụ khám EXAM đầu tiên đang bật ở chi nhánh;
+//      BE (`VisitApi.startTreatmentVisit`) mở Order KHÔNG có dòng tự sinh. Thú còn lượt mở khác → 400 BR-TN-01. Thú không có trong mock thú (khách lưu trú mẫu 9002, 9003 …) coi là chưa mất,
+//      không có lượt mở; cân nặng của theo dõi chỉ ghi vào hồ sơ cân khi thú có trong mock thú.
+//  A9  Y lệnh MEDICATION: `prescriptionItemId` phải là dòng đơn CỦA PHÒNG KHÁM (không mua ngoài) của đúng Visit của ca (đọc qua `prescriptionItemIdsOfVisit` / `externalPrescriptionItemIdsOfVisit` của visit-clinical.mock).
+//      Y lệnh không bị chặn theo `scheduledAt` (quá khứ hay tương lai đều được).
 //  A10 Dữ liệu mẫu KHÔNG có ca ADMITTED nào trên lượt thật (chỉ lịch sử DISCHARGED ở lượt 61 và 1 ca ADMITTED chi nhánh 2 trên lượt giả) để không chặn hoàn tất lượt 2002 của các test GĐ1 (guard BR-LT-14 đã đăng ký vào
-//      visit-clinical.mock). `code` NT-yyMMdd-xxxx: bộ đếm theo ngày VN của lúc nhập viện.
+//      visit-clinical.mock). `code` NT-yyMM-xxxxx: bộ đếm theo tháng VN của lúc nhập viện (BE: `document_counters` theo tháng).
+//  Không mô phỏng: hai lần nhập viện đồng thời (409 CONCURRENCY_CONFLICT), khóa dòng, thông báo EMAIL (mock chỉ có IN_APP).
 import type { Role } from '../../types/auth';
 import type { Booking, Kennel } from '../../types/boarding';
 import type {
@@ -52,7 +48,7 @@ import { MOCK_ACCOUNTS, branchIdOf } from './identity.mock';
 import { staffNameOf } from './identity-admin.mock';
 import { clampPaging, pageOf, typeError } from './public.mock';
 import { asBoolean, asLong, asText, conflict, idParam, isJsonObject, isReply, malformed, startDirectVisit, visitNotFound, visitRowOf } from './visit.mock';
-import { prescriptionItemIdsOfVisit, registerCompletionGuard } from './visit-clinical.mock';
+import { externalPrescriptionItemIdsOfVisit, prescriptionItemIdsOfVisit, registerCompletionGuard } from './visit-clinical.mock';
 
 const MINUTE = 60_000;
 const DAY = 24 * 60 * MINUTE;
@@ -119,7 +115,7 @@ interface ObservationRow {
 interface State {
   /** Mã đã cấp gần nhất của từng bảng. */
   seq: { admission: number; order: number; observation: number };
-  /** Bộ đếm mã `NT-yyMMdd-xxxx` theo ngày VN của lúc nhập viện. */
+  /** Bộ đếm mã `NT-yyMM-xxxxx` theo tháng VN của lúc nhập viện. */
   counters: Record<string, number>;
   admissions: AdmissionRow[];
   orders: OrderRow[];
@@ -129,9 +125,9 @@ interface State {
 const iso = (ms: number) => new Date(ms).toISOString();
 
 function nextCode(counters: Record<string, number>, atMs: number): string {
-  const day = vnDate(atMs).slice(2).replace(/-/g, '');
-  counters[day] = (counters[day] ?? 0) + 1;
-  return `NT-${day}-${String(counters[day]).padStart(4, '0')}`;
+  const month = vnDate(atMs).slice(2, 7).replace('-', '');
+  counters[month] = (counters[month] ?? 0) + 1;
+  return `NT-${month}-${String(counters[month]).padStart(5, '0')}`;
 }
 
 /** Lịch sử 1 ca DISCHARGED về nhà trên lượt 61 (Mochi, kèm y lệnh và theo dõi) và 1 ca ADMITTED ở chi nhánh 2 trên lượt giả (để thử 403 phạm vi). Xem A10. */
@@ -252,7 +248,10 @@ function load(): State {
 
 const petNameOf = (a: AdmissionRow) => petSummary(a.petId)?.name ?? a.petName ?? `Thú cưng #${a.petId}`;
 
-const view = (a: AdmissionRow): Admission => ({
+/** Số ngày tính tiền = ngày xuất (hoặc hôm nay nếu còn ADMITTED) − ngày nhập + 1, theo ngày VN, gồm hai đầu (BR-LT-14, ADR-0124): BE đo 25/11/2026. */
+const billedDays = (a: AdmissionRow, now: number) => daysBetween(Date.parse(a.admittedAt), a.dischargedAt ? Date.parse(a.dischargedAt) : now) + 1;
+
+const view = (a: AdmissionRow, now = Date.now()): Admission => ({
   admissionId: a.admissionId,
   code: a.code,
   visitId: a.visitId,
@@ -266,13 +265,24 @@ const view = (a: AdmissionRow): Admission => ({
   unitPrice: a.unitPrice,
   status: a.status,
   admittedAt: a.admittedAt,
+  billedDays: billedDays(a, now),
+  estimatedAmount: billedDays(a, now) * a.unitPrice,
   dischargeOutcome: a.dischargeOutcome,
   dischargeSummary: a.dischargeSummary,
   dischargedAt: a.dischargedAt,
   orderLineId: a.orderLineId,
 });
 
-const summary = (a: AdmissionRow): AdmissionSummary => ({ admissionId: a.admissionId, code: a.code, petName: petNameOf(a), status: a.status, admittedAt: a.admittedAt, kennelCode: a.kennelCode });
+const summary = (a: AdmissionRow, now = Date.now()): AdmissionSummary => ({
+  admissionId: a.admissionId,
+  code: a.code,
+  petName: petNameOf(a),
+  status: a.status,
+  admittedAt: a.admittedAt,
+  kennelCode: a.kennelCode,
+  billedDays: billedDays(a, now),
+  estimatedAmount: billedDays(a, now) * a.unitPrice,
+});
 
 const orderView = (o: OrderRow): AdmissionOrder => ({
   admissionOrderId: o.admissionOrderId,
@@ -327,8 +337,11 @@ function orderFor(req: MockRequest, s: State, orderId: number): { order: OrderRo
   return admission && admission.branchId === branchOf(req) ? { order, admission } : scopeDenied();
 }
 
+/** `AdmissionAssignees.requireAssignee` của BE: việc của VET trên ca (xuất viện, ra và hủy y lệnh) thuộc VET đang được gán Visit; Visit không có trong mock Visit (dữ liệu mẫu) thì lấy người nhập viện. */
+const isAssignee = (a: AdmissionRow, req: MockRequest) => (visitRowOf(a.visitId)?.assigneeId ?? a.admittedBy) === me(req).id;
+
 /** Đọc boarding.mock qua route của nó, như `BoardingQueryApi` / `KennelApi` (không kiểm vai trò): đóng vai quản lý chi nhánh của người gọi (A5). */
-const asSystem = (req: MockRequest, params: Record<string, string> = {}): MockRequest => ({ body: null, query: {}, params, account: { ...me(req), role: 'BRANCH_MANAGER' } });
+const asSystem = (req: MockRequest, params: Record<string, string> = {}, query: Record<string, string> = {}): MockRequest => ({ body: null, query, params, account: { ...me(req), role: 'BRANCH_MANAGER' } });
 const bookingOf = (req: MockRequest, bookingId: number): Booking | MockReply => {
   const reply = boardingRoutes['GET /api/boarding-bookings/:bookingId'](asSystem(req, { bookingId: String(bookingId) }));
   return reply.status >= 400 ? reply : (reply.body as { data: Booking }).data;
@@ -336,6 +349,11 @@ const bookingOf = (req: MockRequest, bookingId: number): Booking | MockReply => 
 const kennelsOf = (req: MockRequest): Kennel[] => {
   const reply = boardingRoutes['GET /api/kennels'](asSystem(req));
   return reply.status >= 400 ? [] : (reply.body as { data: Kennel[] }).data;
+};
+/** `BoardingQueryApi.findCurrentStay`: thú đang nằm trong chuồng (CHECKED_IN / OVERDUE). */
+const inStay = (req: MockRequest, petId: number): boolean => {
+  const reply = boardingRoutes['GET /api/boarding-bookings'](asSystem(req, {}, { petId: String(petId), inStay: 'true', size: '1' }));
+  return reply.status < 400 && (reply.body as { data: { content: unknown[] } }).data.content.length > 0;
 };
 /** Chuồng đang giữ cho một ca ADMITTED khác (A5). */
 const heldKennels = (s: State) => new Set(s.admissions.filter((a) => a.status === 'ADMITTED' && a.kennelDedicated && a.kennelId !== null).map((a) => a.kennelId));
@@ -348,12 +366,16 @@ const tooLong = (v: string | null, n: number) => v !== null && v.length > n;
 const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
 const enumOf = <T extends string>(v: string | null | undefined, values: readonly T[]): T | null | undefined => (v === null || v === undefined ? null : (values as readonly string[]).includes(v) ? (v as T) : undefined);
 
+/** Lỗi 409 "không còn ADMITTED" của BE: câu nêu việc đang làm, ví dụ "ca nội trú (chỉ ra y lệnh khi đang điều trị) từ DISCHARGED sang ra y lệnh". */
+const notAdmitted = (row: AdmissionRow, what: string, to: string) => conflict(`${NAME} (${what})`, row.status, to);
+
 // ─── #1 Nhập viện ───
 
 /**
- * #1 (BR-LT-13, 17): body → VET → thiếu dịch vụ / mã ≤ 0 400 → không đúng một trong visitId / boardingBookingId 400 → Visit hoặc đặt chỗ 404 / chi nhánh 403 → dịch vụ 404 → chuồng 404
- * → 400 BR-LT-13 (Visit không IN_PROGRESS / không của mình, đặt chỗ không CHECKED_IN, thú đã mất, dịch vụ không INPATIENT / ngừng / chưa bật, chuồng không AVAILABLE) → 409 thú đã ADMITTED
- * → (b) Visit điều trị: 400 BR-TN-01 thú còn lượt mở.
+ * #1 (BR-LT-13, 17), thứ tự đo ở BE: body sai kiểu 400 → thiếu dịch vụ / mã ≤ 0 400 → VET 403 → nguồn (đúng một trong visitId / boardingBookingId; từ khám phải có kennelId, từ lưu trú cấm kennelId) 400 BR-LT-13
+ * → Visit hoặc đặt chỗ 404 → chi nhánh 403 → thú đã ADMITTED 409 → thú đã mất 400 → (từ khám) Visit không IN_PROGRESS / không do mình phụ trách / không nhóm Khám-Tiêm / thú đang lưu trú 400
+ * hoặc (từ lưu trú) đặt chỗ không CHECKED_IN / OVERDUE 400 → dịch vụ 404, không INPATIENT / ngừng / chưa bật tại chi nhánh 400 → (từ khám) chuồng 404, không AVAILABLE 400.
+ * Từ lưu trú: Visit điều trị mới gán VET gọi, thú ở nguyên chuồng (kennelId null; kennelCode của đặt chỗ hiện ở danh sách).
  */
 const admit: MockHandler = (req) => {
   if (!isJsonObject(req.body)) return malformed();
@@ -362,11 +384,19 @@ const admit: MockHandler = (req) => {
   const serviceId = asLong(req.body.serviceId);
   const kennelId = asLong(req.body.kennelId);
   if ([visitId, bookingId, serviceId, kennelId].includes(undefined)) return malformed();
-  if (!allow(VET_ONLY, req)) return denied();
-  const positive = (name: string, v: number | null | undefined): [string, string, boolean] => [name, `Mã không hợp lệ`, v != null && v <= 0];
-  const bad = invalid([['serviceId', 'Thiếu dịch vụ nội trú', serviceId === null], positive('serviceId', serviceId), positive('visitId', visitId), positive('boardingBookingId', bookingId), positive('kennelId', kennelId)]);
+  const positive = (name: string, label: string, v: number | null | undefined): [string, string, boolean] => [name, `${label} không hợp lệ`, v != null && v <= 0];
+  const bad = invalid([
+    ['serviceId', 'Vui lòng chọn dịch vụ nội trú', serviceId === null],
+    positive('serviceId', 'Mã dịch vụ', serviceId),
+    positive('visitId', 'Mã lượt khám', visitId),
+    positive('boardingBookingId', 'Mã đặt chỗ lưu trú', bookingId),
+    positive('kennelId', 'Mã chuồng', kennelId),
+  ]);
   if (bad) return bad;
-  if ((visitId === null) === (bookingId === null)) return ruleFail('BR-LT-13', 'Phải chọn đúng một trong lượt khám đang khám hoặc đặt chỗ lưu trú đang CHECKED_IN');
+  if (!allow(VET_ONLY, req)) return denied();
+  if ((visitId === null) === (bookingId === null)) return ruleFail('BR-LT-13', 'Chọn đúng một nguồn nhập viện: lượt khám hoặc đặt chỗ lưu trú');
+  if (visitId !== null && kennelId === null) return ruleFail('BR-LT-13', 'Nhập viện từ lượt khám phải chọn chuồng điều trị');
+  if (bookingId !== null && kennelId !== null) return ruleFail('BR-LT-13', 'Nhập viện từ lưu trú không chọn chuồng: thú ở nguyên chuồng của đặt chỗ');
 
   const s = load();
   const branchId = branchOf(req)!;
@@ -385,25 +415,28 @@ const admit: MockHandler = (req) => {
     booking = found;
     ({ petId, customerId, petName } = found);
   }
-  const service = findClinicalService(serviceId as number);
-  if (!service) return notFound('dịch vụ', serviceId as number);
-  const kennel = kennelId === null ? undefined : kennelsOf(req).find((k) => k.kennelId === kennelId);
-  if (kennelId !== null && !kennel) return notFound('chuồng', kennelId as number);
-
+  if (s.admissions.some((a) => a.petId === petId && a.status === 'ADMITTED')) return fail('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái ca nội trú (thú đã có ca đang điều trị) từ — sang ADMITTED', 409);
+  if (petSummary(petId)?.deceasedOn) return ruleFail('BR-LT-13', 'Thú cưng đã được đánh dấu đã mất');
   if (visitId !== null) {
     const visit = visitRowOf(visitId as number)!;
-    if (visit.status !== 'IN_PROGRESS') return ruleFail('BR-LT-13', 'Chỉ nhập viện từ lượt đang khám');
-    if (visit.assigneeId !== me(req).id) return ruleFail('BR-LT-13', 'Chỉ nhập viện từ lượt khám do chính bạn phụ trách');
-  } else if (booking!.status !== 'CHECKED_IN') {
-    return ruleFail('BR-LT-13', 'Chỉ chuyển sang điều trị từ đặt chỗ lưu trú đang CHECKED_IN');
+    if (visit.status !== 'IN_PROGRESS') return ruleFail('BR-LT-13', 'Lượt khám phải đang được thực hiện (IN_PROGRESS)');
+    if (visit.assigneeId !== me(req).id) return ruleFail('BR-LT-13', 'Chỉ VET đang phụ trách lượt khám mới nhập viện được');
+    if (visit.serviceGroup !== 'MEDICAL') return ruleFail('BR-LT-13', 'Chỉ nhập viện được từ lượt khám / tiêm');
+    if (inStay(req, petId)) return ruleFail('BR-LT-13', 'Thú đang lưu trú: nhập viện từ đặt chỗ lưu trú, không cấp thêm chuồng');
+  } else if (booking!.status !== 'CHECKED_IN' && booking!.status !== 'OVERDUE') {
+    return ruleFail('BR-LT-13', 'Đặt chỗ phải đang giữ thú trong chuồng (CHECKED_IN hoặc OVERDUE)');
   }
-  if (petSummary(petId)?.deceasedOn) return ruleFail('BR-LT-13', 'Thú cưng đã mất, không nhập viện được');
-  if (service.medicalType !== 'INPATIENT') return ruleFail('BR-LT-13', 'Dịch vụ không phải dịch vụ nội trú');
-  if (!service.isActive || !service.enabledAt(branchId)) return ruleFail('BR-LT-13', 'Dịch vụ nội trú đã ngừng hoặc chưa bật tại chi nhánh');
-  // Chuồng đang ở của chính đặt chỗ (OCCUPIED trong boarding) vẫn dùng được; chuồng khác phải AVAILABLE và chưa giữ cho ca khác (A5).
-  const ownKennel = !!kennel && kennel.kennelId === booking?.kennelId;
-  if (kennel && !ownKennel && (kennel.status !== 'AVAILABLE' || heldKennels(s).has(kennel.kennelId))) return ruleFail('BR-LT-13', `Chuồng ${kennel.code} không còn trống`);
-  if (s.admissions.some((a) => a.petId === petId && a.status === 'ADMITTED')) return fail('INVALID_STATE_TRANSITION', 'Thú cưng đã có ca nội trú đang điều trị', 409);
+  const service = findClinicalService(serviceId as number);
+  if (!service) return notFound('dịch vụ', serviceId as number);
+  if (service.medicalType !== 'INPATIENT') return ruleFail('BR-LT-13', 'Dịch vụ không phải dịch vụ nội trú (INPATIENT)');
+  if (!service.isActive) return ruleFail('BR-LT-13', 'Dịch vụ nội trú đã ngừng kinh doanh');
+  if (!service.enabledAt(branchId)) return ruleFail('BR-LT-13', 'Dịch vụ nội trú chưa được bật tại chi nhánh');
+  let kennel: Kennel | undefined;
+  if (kennelId !== null) {
+    kennel = kennelsOf(req).find((k) => k.kennelId === kennelId);
+    if (!kennel) return notFound('chuồng', kennelId as number);
+    if (kennel.status !== 'AVAILABLE' || heldKennels(s).has(kennel.kennelId)) return ruleFail('BR-LT-13', 'Chuồng không còn trống');
+  }
 
   const now = Date.now();
   let admissionVisitId = visitId as number;
@@ -425,10 +458,9 @@ const admit: MockHandler = (req) => {
     customerId,
     branchId,
     boardingBookingId: booking ? booking.bookingId : null,
-    // Vắng kennelId → dùng chuồng đang ở của đặt chỗ (không cấp riêng); truyền đúng chuồng đang ở cũng không phải cấp riêng.
-    kennelId: kennel ? kennel.kennelId : (booking?.kennelId ?? null),
+    kennelId: kennel ? kennel.kennelId : null,
     kennelCode: kennel ? kennel.code : (booking?.kennelCode ?? null),
-    kennelDedicated: !!kennel && !ownKennel,
+    kennelDedicated: !!kennel,
     serviceId: service.serviceId,
     unitPrice: service.price,
     status: 'ADMITTED',
@@ -443,22 +475,23 @@ const admit: MockHandler = (req) => {
   s.seq.admission = row.admissionId;
   s.admissions.push(row);
   save(s);
-  return ok(view(row), 201, 'Đã nhập viện');
+  return ok(view(row, now), 201, 'Đã nhập viện');
 };
 
 // ─── #2, #3 Xem ca ───
 
-/** #2: lễ tân, VET, CARETAKER; query sai kiểu → vai trò. `status` vắng = ADMITTED; nhập viện sớm nhất trước; phân trang. */
+/** #2: lễ tân, VET, CARETAKER (BRANCH_MANAGER chưa được xem: ADR-0148); query sai kiểu → vai trò. `status` vắng = ADMITTED; nhập viện sớm nhất trước; phân trang. */
 const listAdmissions: MockHandler = (req) => {
   const { status } = req.query;
   if (status !== undefined && !(ADMISSION_STATUSES as readonly string[]).includes(status)) return badParam('status');
   const bad = typeError(req.query, ['page', 'size']);
   if (bad) return bad;
   if (!allow(VIEW_ROLES, req)) return denied();
+  const now = Date.now();
   const found = load()
     .admissions.filter((a) => a.branchId === branchOf(req) && a.status === (status ?? 'ADMITTED'))
     .sort((a, b) => Date.parse(a.admittedAt) - Date.parse(b.admittedAt) || a.admissionId - b.admissionId);
-  return ok(pageOf(found.map(summary), clampPaging(req.query)));
+  return ok(pageOf(found.map((a) => summary(a, now)), clampPaging(req.query)));
 };
 
 /** #3: path → vai trò → 404 → chi nhánh 403. */
@@ -475,8 +508,9 @@ const getAdmission: MockHandler = (req) => {
 const daysBetween = (fromMs: number, toMs: number) => Math.round((Date.parse(vnDate(toMs)) - Date.parse(vnDate(fromMs))) / DAY);
 
 /**
- * #4 (BR-LT-14): path / body sai kiểu → VET → thiếu `outcome` 400 → 404 → chi nhánh 403 → 400 BR-LT-14 (thiếu tóm tắt, còn y lệnh ORDERED, DECEASED mà thú chưa đánh dấu mất) → 409 không ADMITTED.
- * Thêm dòng dịch vụ nội trú (số ngày × giá đã chốt) vào Order của Visit (A4).
+ * #4 (BR-LT-14), thứ tự đo ở BE: path / body sai kiểu 400 → thiếu kết cục / tóm tắt, tóm tắt > 2000 400 VALIDATION_FAILED → VET 403 → tóm tắt rỗng sau cắt 400 BR-LT-14 (TRƯỚC 404)
+ * → 404 → chi nhánh 403 → không phải VET đang được gán Visit 403 → 409 không ADMITTED → còn y lệnh ORDERED 400 BR-LT-14.
+ * Kết cục DECEASED xuất viện được ngay: không đòi, cũng không tự đánh dấu thú mất (lễ tân làm sau, BR-LT-14). Thêm dòng dịch vụ nội trú (số ngày × giá đã chốt) vào Order của Visit (A4).
  */
 const discharge: MockHandler = (req) => {
   const admissionId = idParam(req, 'admissionId');
@@ -485,32 +519,38 @@ const discharge: MockHandler = (req) => {
   const outcome = enumOf(asText(req.body.outcome), DISCHARGE_OUTCOMES);
   const summaryText = asText(req.body.summary);
   if (outcome === undefined || summaryText === undefined) return malformed();
-  if (!allow(VET_ONLY, req)) return denied();
-  const bad = invalid([['outcome', 'Thiếu kết cục xuất viện', outcome === null]]);
+  const bad = invalid([
+    ['outcome', 'Vui lòng chọn kết cục xuất viện', outcome === null],
+    ['summary', 'Vui lòng nhập tóm tắt điều trị', summaryText === null],
+    ['summary', `Tóm tắt điều trị tối đa ${INPATIENT_LIMITS.summary} ký tự`, tooLong(summaryText, INPATIENT_LIMITS.summary)],
+  ]);
   if (bad) return bad;
+  if (!allow(VET_ONLY, req)) return denied();
+  if (blank(summaryText)) return ruleFail('BR-LT-14', 'Vui lòng nhập tóm tắt điều trị');
 
   const s = load();
   const row = admissionFor(req, s, admissionId);
   if (!isAdmission(row)) return row;
-  if (blank(summaryText)) return ruleFail('BR-LT-14', 'Phải nhập tóm tắt điều trị trước khi xuất viện');
-  const pending = s.orders.filter((o) => o.admissionId === row.admissionId && o.status === 'ORDERED').length;
-  if (pending > 0) return ruleFail('BR-LT-14', `Còn ${pending} y lệnh chưa thực hiện hoặc chưa hủy`);
-  if (outcome === 'DECEASED' && !petSummary(row.petId)?.deceasedOn) return ruleFail('BR-LT-14', 'Kết cục thú đã mất yêu cầu đánh dấu thú đã mất trước (BR-KH-05)');
+  if (!isAssignee(row, req)) return scopeDenied();
   if (row.status !== 'ADMITTED') return conflict(NAME, row.status, 'DISCHARGED');
+  const pending = s.orders.filter((o) => o.admissionId === row.admissionId && o.status === 'ORDERED').length;
+  if (pending > 0) return ruleFail('BR-LT-14', `Còn ${pending} y lệnh chưa thực hiện hoặc hủy`);
 
   const now = Date.now();
-  const days = Math.max(1, daysBetween(Date.parse(row.admittedAt), now));
+  const days = billedDays({ ...row, dischargedAt: iso(now) }, now);
   const lineId = addServiceLineToVisitOrder(row.visitId, row.serviceId, days, me(req).id, row.unitPrice);
   if (lineId === null) return fail('INTERNAL_ERROR', `Lượt #${row.visitId} không có Order đang mở`, 500);
   Object.assign(row, { status: 'DISCHARGED', dischargeOutcome: outcome, dischargeSummary: summaryText!.trim(), dischargedBy: me(req).id, dischargedAt: iso(now), orderLineId: lineId });
   save(s);
-  return ok(view(row), 200, 'Đã xuất viện');
+  return ok(view(row, now), 200, 'Đã xuất viện');
 };
 
 // ─── #5, #6 Y lệnh ───
 
 /**
- * #5 (BR-LT-15): path / body sai kiểu → VET → thiếu loại / nội dung / giờ, nội dung > 500 400 → 404 → chi nhánh 403 → 400 BR-LT-15 (MEDICATION thiếu dòng đơn, dòng đơn không thuộc Visit) → 409 ca không ADMITTED.
+ * #5 (BR-LT-15), thứ tự đo ở BE: path / body sai kiểu 400 → thiếu loại / nội dung / giờ, nội dung > 500, mã dòng đơn ≤ 0 400 VALIDATION_FAILED → VET 403 → 404 → chi nhánh 403
+ * → không phải VET đang được gán Visit 403 → 409 ca không ADMITTED → 400 BR-LT-15 (nội dung rỗng sau cắt KHÔNG phải VALIDATION_FAILED; loại khác thuốc mà có dòng đơn; thuốc thiếu dòng đơn,
+ * dòng đơn không thuộc Visit, dòng đơn mua ngoài).
  */
 const createOrder: MockHandler = (req) => {
   const admissionId = idParam(req, 'admissionId');
@@ -522,24 +562,29 @@ const createOrder: MockHandler = (req) => {
   const itemId = asLong(req.body.prescriptionItemId);
   if (orderType === undefined || content === undefined || scheduledAt === undefined || itemId === undefined) return malformed();
   if (scheduledAt !== null && (!DATE_TIME.test(scheduledAt) || Number.isNaN(Date.parse(scheduledAt)))) return malformed();
-  if (!allow(VET_ONLY, req)) return denied();
   const bad = invalid([
-    ['orderType', 'Thiếu loại y lệnh', orderType === null],
-    ['content', 'Nội dung y lệnh không được để trống', blank(content)],
+    ['orderType', 'Vui lòng chọn loại y lệnh', orderType === null],
+    ['content', 'Vui lòng nhập nội dung y lệnh', content === null],
     ['content', `Nội dung y lệnh tối đa ${INPATIENT_LIMITS.content} ký tự`, tooLong(content, INPATIENT_LIMITS.content)],
-    ['scheduledAt', 'Thiếu giờ thực hiện dự kiến', scheduledAt === null],
-    ['prescriptionItemId', 'Mã dòng đơn không hợp lệ', itemId !== null && itemId <= 0],
+    ['scheduledAt', 'Vui lòng nhập giờ thực hiện dự kiến', scheduledAt === null],
+    ['prescriptionItemId', 'Mã dòng đơn thuốc phải lớn hơn 0', itemId !== null && itemId <= 0],
   ]);
   if (bad) return bad;
+  if (!allow(VET_ONLY, req)) return denied();
 
   const s = load();
   const row = admissionFor(req, s, admissionId);
   if (!isAdmission(row)) return row;
-  if (orderType === 'MEDICATION') {
-    if (itemId === null) return ruleFail('BR-LT-15', 'Y lệnh thuốc phải liên kết một dòng đơn thuốc của lượt khám');
+  if (!isAssignee(row, req)) return scopeDenied();
+  if (row.status !== 'ADMITTED') return notAdmitted(row, 'chỉ ra y lệnh khi đang điều trị', 'ra y lệnh');
+  if (blank(content)) return ruleFail('BR-LT-15', 'Vui lòng nhập nội dung y lệnh');
+  if (orderType !== 'MEDICATION') {
+    if (itemId !== null) return ruleFail('BR-LT-15', 'Chỉ y lệnh thuốc mới liên kết dòng đơn thuốc');
+  } else {
+    if (itemId === null) return ruleFail('BR-LT-15', 'Y lệnh thuốc phải liên kết một dòng đơn thuốc');
     if (!prescriptionItemIdsOfVisit(row.visitId).includes(itemId)) return ruleFail('BR-LT-15', 'Dòng đơn thuốc không thuộc lượt khám của ca nội trú');
+    if (externalPrescriptionItemIdsOfVisit(row.visitId).includes(itemId)) return ruleFail('BR-LT-15', 'Dòng đơn thuốc mua ngoài không ra y lệnh được; chỉ thuốc của phòng khám');
   }
-  if (row.status !== 'ADMITTED') return fail('INVALID_STATE_TRANSITION', `Không thể ra y lệnh cho ca nội trú ở trạng thái ${row.status}`, 409);
   const created: OrderRow = {
     admissionOrderId: s.seq.order + 1,
     admissionId: row.admissionId,
@@ -578,44 +623,58 @@ const listOrders: MockHandler = (req) => {
   );
 };
 
-/** #7 (BR-LT-15): path / body sai kiểu → VET, CARETAKER → ghi chú > 300 400 → y lệnh 404 → chi nhánh 403 → CARETAKER với y lệnh thuốc 403 ACCESS_DENIED → thiếu ghi chú 400 → không ORDERED 409. */
+/**
+ * #7 (BR-LT-15), thứ tự đo ở BE: path / body sai kiểu 400 → thiếu ghi chú, ghi chú > 300 400 VALIDATION_FAILED → VET, CARETAKER 403 → y lệnh 404 → chi nhánh 403
+ * → CARETAKER với y lệnh thuốc 403 ACCESS_DENIED_SCOPE_MISMATCH (không phải ACCESS_DENIED) → 409 không ORDERED → ghi chú rỗng sau cắt 400 BR-LT-15.
+ * VET nào của chi nhánh cũng thực hiện được, không cần là người được gán Visit.
+ */
 const completeOrder: MockHandler = (req) => {
   const orderId = idParam(req, 'admissionOrderId');
   if (isReply(orderId)) return orderId;
   if (!isJsonObject(req.body)) return malformed();
   const note = asText(req.body.note);
   if (note === undefined) return malformed();
-  if (!allow(COMPLETE_ROLES, req)) return denied();
-  const bad = invalid([['note', `Ghi chú tối đa ${INPATIENT_LIMITS.doneNote} ký tự`, tooLong(note, INPATIENT_LIMITS.doneNote)]]);
+  const bad = invalid([
+    ['note', 'Vui lòng nhập ghi chú thực hiện', note === null],
+    ['note', `Ghi chú thực hiện tối đa ${INPATIENT_LIMITS.doneNote} ký tự`, tooLong(note, INPATIENT_LIMITS.doneNote)],
+  ]);
   if (bad) return bad;
+  if (!allow(COMPLETE_ROLES, req)) return denied();
   const s = load();
   const found = orderFor(req, s, orderId);
   if (!('order' in found)) return found;
   const { order } = found;
-  if (me(req).role === 'CARETAKER' && order.orderType === 'MEDICATION') return denied();
-  if (blank(note)) return ruleFail('BR-LT-15', 'Phải ghi chú khi đánh dấu đã thực hiện y lệnh');
+  if (me(req).role === 'CARETAKER' && order.orderType === 'MEDICATION') return scopeDenied();
   if (order.status !== 'ORDERED') return conflict('y lệnh nội trú', order.status, 'DONE');
+  if (blank(note)) return ruleFail('BR-LT-15', 'Vui lòng nhập ghi chú thực hiện');
   Object.assign(order, { status: 'DONE', doneBy: me(req).id, doneAt: iso(Date.now()), doneNote: note!.trim() });
   save(s);
-  return ok(orderView(order), 200, 'Đã thực hiện y lệnh');
+  return ok(orderView(order), 200, 'Đã ghi nhận thực hiện y lệnh');
 };
 
-/** #8 (BR-LT-15): path / body sai kiểu → VET → lý do > 300 400 → 404 → chi nhánh 403 → thiếu lý do 400 → không ORDERED 409. */
+/**
+ * #8 (BR-LT-15), thứ tự đo ở BE: path / body sai kiểu 400 → thiếu lý do, lý do > 300 400 VALIDATION_FAILED → VET 403 → y lệnh 404 → chi nhánh 403 → không phải VET đang được gán Visit 403
+ * → 409 không ORDERED → lý do rỗng sau cắt 400 BR-LT-15.
+ */
 const cancelOrder: MockHandler = (req) => {
   const orderId = idParam(req, 'admissionOrderId');
   if (isReply(orderId)) return orderId;
   if (!isJsonObject(req.body)) return malformed();
   const reason = asText(req.body.reason);
   if (reason === undefined) return malformed();
-  if (!allow(VET_ONLY, req)) return denied();
-  const bad = invalid([['reason', `Lý do tối đa ${INPATIENT_LIMITS.reason} ký tự`, tooLong(reason, INPATIENT_LIMITS.reason)]]);
+  const bad = invalid([
+    ['reason', 'Vui lòng nhập lý do hủy', reason === null],
+    ['reason', `Lý do hủy tối đa ${INPATIENT_LIMITS.reason} ký tự`, tooLong(reason, INPATIENT_LIMITS.reason)],
+  ]);
   if (bad) return bad;
+  if (!allow(VET_ONLY, req)) return denied();
   const s = load();
   const found = orderFor(req, s, orderId);
   if (!('order' in found)) return found;
-  const { order } = found;
-  if (blank(reason)) return ruleFail('BR-LT-15', 'Phải nhập lý do hủy y lệnh');
+  const { order, admission } = found;
+  if (!isAssignee(admission, req)) return scopeDenied();
   if (order.status !== 'ORDERED') return conflict('y lệnh nội trú', order.status, 'CANCELLED');
+  if (blank(reason)) return ruleFail('BR-LT-15', 'Vui lòng nhập lý do hủy');
   Object.assign(order, { status: 'CANCELLED', cancelReason: reason!.trim() });
   save(s);
   return ok(orderView(order), 200, 'Đã hủy y lệnh');
@@ -623,27 +682,48 @@ const cancelOrder: MockHandler = (req) => {
 
 // ─── #9, #10 Theo dõi ───
 
-const asNumber = (v: unknown): number | null | undefined => (v === undefined || v === null ? null : typeof v === 'number' && Number.isFinite(v) ? v : undefined);
-const outOfRange = (v: number | null, bounds: { min: number; max: number }) => v !== null && (v < bounds.min || v > bounds.max);
+/** Số JSON như Jackson: số, hoặc chuỗi số; `integer` thì số lẻ → sai kiểu. */
+function asNumber(v: unknown, integer = false): number | null | undefined {
+  if (v === undefined || v === null) return null;
+  const n = typeof v === 'number' ? v : typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v.trim()) ? Number(v) : NaN;
+  if (!Number.isFinite(n)) return undefined;
+  return integer && !Number.isInteger(n) ? undefined : n;
+}
+/** Làm tròn HALF_UP (xa số 0) như BigDecimal của BE; `e` nối vào chuỗi để 38.55 → 38.6, không vướng sai số nhị phân. */
+const roundHalfUp = (v: number, digits: number) => Math.sign(v) * Number(`${Math.round(Number(`${Math.abs(v)}e${digits}`))}e-${digits}`);
 
-/** CARE_LOG_ABNORMAL (A8): báo VET phụ trách (trừ chính người ghi) và khách có tài khoản. */
-function notifyAbnormal(row: AdmissionRow, recordedBy: number) {
+/** `AdmissionObservation.invalidReason` của BE: giới hạn lưu trữ của cột V38 và BR-KH-04 (cân > 0); khoảng lâm sàng chưa chốt (A4), nhiệt độ 0 và âm không bị chặn. */
+function observationProblem(v: { temperatureC: number | null; heartRate: number | null; respiratoryRate: number | null; weightKg: number | null; appetite: Appetite | null; note: string | null }): string | null {
+  if (v.temperatureC === null && v.heartRate === null && v.respiratoryRate === null && v.weightKg === null && v.appetite === null && blank(v.note)) return 'Vui lòng nhập ít nhất một chỉ số hoặc ghi chú theo dõi';
+  if (v.temperatureC !== null && Math.abs(v.temperatureC) >= OBSERVATION_BOUNDS.temperatureC.maxAbsExclusive) return 'Nhiệt độ vượt giới hạn lưu trữ';
+  const smallint = (n: number | null) => n !== null && (n < OBSERVATION_BOUNDS.heartRate.min || n > OBSERVATION_BOUNDS.heartRate.max);
+  if (smallint(v.heartRate)) return `Nhịp tim phải từ 1 đến ${OBSERVATION_BOUNDS.heartRate.max}`;
+  if (smallint(v.respiratoryRate)) return `Nhịp thở phải từ 1 đến ${OBSERVATION_BOUNDS.respiratoryRate.max}`;
+  if (v.weightKg !== null && v.weightKg < OBSERVATION_BOUNDS.weightKg.min) return 'Cân nặng phải lớn hơn 0';
+  if (v.weightKg !== null && v.weightKg >= OBSERVATION_BOUNDS.weightKg.maxExclusive) return 'Cân nặng vượt giới hạn lưu trữ';
+  return null;
+}
+
+/** INPATIENT_OBSERVATION_ABNORMAL_APP (V63): báo VET đang được gán Visit (trừ chính người ghi, link màn nội trú) và khách có tài khoản (link /pets). Chữ lấy từ mẫu của BE. */
+function notifyAbnormal(row: AdmissionRow, recordedBy: number, at: number) {
   const pet = petNameOf(row);
-  const notice = {
-    type: 'CARE_LOG_ABNORMAL',
-    title: `Theo dõi nội trú bất thường: ${pet}`,
-    body: `${staffName(recordedBy)} vừa ghi một chỉ số theo dõi bất thường của ${pet} (ca ${row.code}). Vui lòng liên hệ chủ thú và báo bác sĩ phụ trách nếu cần.`,
-    linkUrl: null,
-  };
+  const day = vnDate(at);
+  const notice = (linkUrl: string) => ({
+    type: 'INPATIENT_OBSERVATION_ABNORMAL_APP',
+    title: `${pet} có dấu hiệu bất thường khi nội trú`,
+    body: `Theo dõi ngày ${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)} của ${pet} (ca nội trú ${row.code} tại ${branchBooking(row.branchId)?.branch.name ?? `Chi nhánh #${row.branchId}`}) được đánh dấu bất thường. Vui lòng xem chỉ số theo dõi và liên hệ chi nhánh.`,
+    linkUrl,
+  });
   const vet = visitRowOf(row.visitId)?.assigneeId ?? row.admittedBy;
-  if (vet !== recordedBy) pushNotification(vet, notice);
+  if (vet !== recordedBy) pushNotification(vet, notice('/admin/inpatient'));
   const account = findCustomer(row.customerId)?.accountId;
-  if (account != null) pushNotification(account, notice);
+  if (account != null) pushNotification(account, notice('/pets'));
 }
 
 /**
- * #9 (BR-LT-16): path / body sai kiểu → VET, CARETAKER → thiếu `abnormal`, ghi chú > 500 400 → 404 → chi nhánh 403 → 400 BR-LT-16 (không có chỉ số hay ghi chú nào, giá trị ngoài khoảng) → 409 ca không ADMITTED.
- * Cân nặng ghi vào hồ sơ cân của thú (BR-KH-04); `abnormal` báo VET và khách (A8).
+ * #9 (BR-LT-16), thứ tự đo ở BE: path / body sai kiểu 400 → thiếu `abnormal`, ghi chú > 500 400 VALIDATION_FAILED → VET, CARETAKER 403 → 404 → chi nhánh 403 → 409 ca không ADMITTED
+ * → 400 BR-LT-16 (không có chỉ số hay ghi chú nào, giá trị ngoài giới hạn lưu trữ). Mọi VET / CARETAKER của chi nhánh ghi được, không cần là người được gán Visit.
+ * Nhiệt độ làm tròn 1 chữ số lẻ, cân nặng 2; cân nặng ghi vào hồ sơ cân của thú (BR-KH-04); `abnormal` báo VET và khách (A8).
  */
 const createObservation: MockHandler = (req) => {
   const admissionId = idParam(req, 'admissionId');
@@ -651,58 +731,51 @@ const createObservation: MockHandler = (req) => {
   if (!isJsonObject(req.body)) return malformed();
   const b = req.body;
   const temperatureC = asNumber(b.temperatureC);
-  const heartRate = asNumber(b.heartRate);
-  const respiratoryRate = asNumber(b.respiratoryRate);
+  const heartRate = asNumber(b.heartRate, true);
+  const respiratoryRate = asNumber(b.respiratoryRate, true);
   const weightKg = asNumber(b.weightKg);
   const appetite = enumOf(asText(b.appetite), APPETITES);
   const note = asText(b.note);
   const abnormal = asBoolean(b.abnormal);
   if ([temperatureC, heartRate, respiratoryRate, weightKg, appetite, note, abnormal].includes(undefined)) return malformed();
-  if ((heartRate != null && !Number.isInteger(heartRate)) || (respiratoryRate != null && !Number.isInteger(respiratoryRate))) return malformed();
-  if (!allow(OBSERVE_ROLES, req)) return denied();
   const bad = invalid([
-    ['abnormal', 'Thiếu cờ bất thường', abnormal === null],
+    ['abnormal', 'Vui lòng cho biết mục theo dõi có bất thường không', abnormal === null],
     ['note', `Ghi chú tối đa ${INPATIENT_LIMITS.observationNote} ký tự`, tooLong(note as string | null, INPATIENT_LIMITS.observationNote)],
   ]);
   if (bad) return bad;
+  if (!allow(OBSERVE_ROLES, req)) return denied();
 
   const s = load();
   const row = admissionFor(req, s, admissionId);
   if (!isAdmission(row)) return row;
-  const values = [temperatureC, heartRate, respiratoryRate, weightKg, appetite];
-  if (values.every((v) => v === null) && blank(note as string | null)) return ruleFail('BR-LT-16', 'Phải ghi ít nhất một chỉ số theo dõi hoặc ghi chú');
-  if (
-    outOfRange(temperatureC as number | null, OBSERVATION_BOUNDS.temperatureC) ||
-    outOfRange(heartRate as number | null, OBSERVATION_BOUNDS.heartRate) ||
-    outOfRange(respiratoryRate as number | null, OBSERVATION_BOUNDS.respiratoryRate) ||
-    outOfRange(weightKg as number | null, OBSERVATION_BOUNDS.weightKg)
-  ) {
-    return ruleFail('BR-LT-16', 'Chỉ số theo dõi nằm ngoài khoảng cho phép');
-  }
-  if (row.status !== 'ADMITTED') return fail('INVALID_STATE_TRANSITION', `Không thể ghi theo dõi cho ca nội trú ở trạng thái ${row.status}`, 409);
+  if (row.status !== 'ADMITTED') return notAdmitted(row, 'chỉ ghi theo dõi khi đang điều trị', 'ghi theo dõi');
+  const values = { temperatureC: temperatureC as number | null, heartRate: heartRate as number | null, respiratoryRate: respiratoryRate as number | null, weightKg: weightKg as number | null, appetite: appetite as Appetite | null, note: note as string | null };
+  const problem = observationProblem(values);
+  if (problem) return ruleFail('BR-LT-16', problem);
 
   const now = Date.now();
-  if (weightKg !== null && petSummary(row.petId)) {
-    const recorded = recordVisitWeight(row.petId, weightKg as number, row.visitId, iso(now));
+  const weight = values.weightKg === null ? null : roundHalfUp(values.weightKg, 2);
+  if (weight !== null && petSummary(row.petId)) {
+    const recorded = recordVisitWeight(row.petId, weight, row.visitId, iso(now));
     if (isReply(recorded)) return recorded;
   }
   const created: ObservationRow = {
     observationId: s.seq.observation + 1,
     admissionId: row.admissionId,
     recordedBy: me(req).id,
-    temperatureC: temperatureC as number | null,
-    heartRate: heartRate as number | null,
-    respiratoryRate: respiratoryRate as number | null,
-    weightKg: weightKg as number | null,
-    appetite: appetite as Appetite | null,
-    note: (note as string | null)?.trim() || null,
+    temperatureC: values.temperatureC === null ? null : Math.abs(values.temperatureC) < 0.05 ? 0 : roundHalfUp(values.temperatureC, 1),
+    heartRate: values.heartRate,
+    respiratoryRate: values.respiratoryRate,
+    weightKg: weight,
+    appetite: values.appetite,
+    note: values.note?.trim() || null,
     abnormal: abnormal === true,
     createdAt: iso(now),
   };
   s.seq.observation = created.observationId;
   s.observations.push(created);
   save(s);
-  if (created.abnormal) notifyAbnormal(row, created.recordedBy);
+  if (created.abnormal) notifyAbnormal(row, created.recordedBy, now);
   return ok(observationView(created), 201, 'Đã ghi chỉ số theo dõi');
 };
 
@@ -727,9 +800,10 @@ const listObservations: MockHandler = (req) => {
 /** `AdmissionQueryApi.hasActiveAdmission(petId)` (BR-LT-17): guard "không trả thú lưu trú khi còn ca ADMITTED" của boarding (luồng chính nối vào hand-over, 409 BR-LT-17). */
 export const hasActiveAdmission = (petId: number): boolean => load().admissions.some((a) => a.petId === petId && a.status === 'ADMITTED');
 
+/** BE đo: hoàn tất lượt khi còn ca ADMITTED → 409 INVALID_STATE_TRANSITION (guard Visit#5), không phải 400. */
 registerCompletionGuard('inpatient', (visitId) =>
   load().admissions.some((a) => a.visitId === visitId && a.status === 'ADMITTED')
-    ? ruleFail('BR-LT-14', 'Lượt còn ca nội trú chưa xuất viện, chưa hoàn tất được')
+    ? fail('INVALID_STATE_TRANSITION', 'Không thể chuyển trạng thái lượt tiếp nhận (còn ca nội trú đang điều trị) từ IN_PROGRESS sang COMPLETED', 409)
     : null,
 );
 

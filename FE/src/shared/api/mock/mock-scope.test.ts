@@ -173,6 +173,20 @@ describe('FE/.env.example: giá trị VITE_API_MOCK_ONLY đã commit (T67)', () 
     expect(real('POST', '/api/online-orders/5/redeliver')).toBe(true);
   });
 
+  it('nội trú (T79, inpatient-v1 #1 đến #10) đi tới BE thật: không còn luật admissions / admission-orders nào', () => {
+    expect(real('POST', '/api/admissions')).toBe(true);
+    expect(real('GET', '/api/admissions')).toBe(true);
+    expect(real('GET', '/api/admissions/5')).toBe(true);
+    expect(real('POST', '/api/admissions/5/discharge')).toBe(true);
+    expect(real('POST', '/api/admissions/5/orders')).toBe(true);
+    expect(real('GET', '/api/admissions/5/orders')).toBe(true);
+    expect(real('POST', '/api/admission-orders/7/complete')).toBe(true);
+    expect(real('POST', '/api/admission-orders/7/cancel')).toBe(true);
+    expect(real('POST', '/api/admissions/5/observations')).toBe(true);
+    expect(real('GET', '/api/admissions/5/observations')).toBe(true);
+    expect(line).not.toMatch(/admission/);
+  });
+
   it('hủy sau giao thất bại (#19) còn mock tới task 138 (BE chưa có controller)', () => {
     expect(real('POST', '/api/online-orders/5/cancel-failed')).toBe(false);
   });

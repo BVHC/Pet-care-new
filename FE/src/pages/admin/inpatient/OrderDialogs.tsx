@@ -30,7 +30,8 @@ export function CreateOrderDialog({ admission, onClose, onDone }: DoneProps & { 
   const medication = orderType === 'MEDICATION';
   // Y lệnh thuốc phải gắn dòng đơn của lượt (BR-LT-15); lượt điều trị lập từ lưu trú chưa có đơn nên danh sách này có thể rỗng.
   const record = useMedicalRecord(admission.visitId, medication);
-  const items = record.data?.prescriptions ?? [];
+  // BE đo: dòng đơn mua ngoài không ra y lệnh được (400 BR-LT-15), nên chỉ liệt kê thuốc của phòng khám.
+  const items = (record.data?.prescriptions ?? []).filter((i) => !i.isExternalPurchase);
 
   const submit = async () => {
     if (!content.trim()) return setError('Nhập nội dung y lệnh.');

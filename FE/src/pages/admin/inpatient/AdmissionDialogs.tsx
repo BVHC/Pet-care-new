@@ -8,7 +8,7 @@ import { plainMessage, toApiError } from '@/shared/api/api-error';
 import { useBookingList } from '@/shared/hooks/useBoarding';
 import { useAdmit, useDischarge } from '@/shared/hooks/useInpatient';
 import { useMyQueue } from '@/shared/hooks/useVisits';
-import { DISCHARGE_OUTCOME_LABELS, DISCHARGE_OUTCOMES, type Admission, type DischargeOutcome } from '@/shared/types/inpatient';
+import { DISCHARGE_OUTCOME_LABELS, DISCHARGE_OUTCOMES, INPATIENT_LIMITS, type Admission, type DischargeOutcome } from '@/shared/types/inpatient';
 
 type Source = 'visit' | 'booking';
 const SOURCES: { id: Source; label: string }[] = [
@@ -19,14 +19,18 @@ const SOURCES: { id: Source; label: string }[] = [
 const choice = (active: boolean) =>
   cn('flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2.5 text-sm', active ? 'border-(--ws-accent) bg-(--ws-accent-soft)' : 'border-(--color-border-default) hover:bg-(--bg-secondary)');
 
-/** Chuồng: BE cho vắng `kennelId` (dùng chuồng đang ở của đặt chỗ); VET không có endpoint đọc chuồng trống (GET /kennels 403) nên không chọn chuồng ở đây. */
+/**
+ * Chuồng (BE đo 25/11/2026): nhập từ đặt chỗ lưu trú thì CẤM `kennelId` (thú ở nguyên chuồng); nhập từ lượt khám thì BẮT BUỘC `kennelId` (400 BR-LT-13). VET không đọc được danh sách chuồng
+ * (GET /kennels chỉ cho quản lý chi nhánh, lễ tân, CARETAKER: 403) nên không chọn được chuồng điều trị: đường "từ lượt khám" vẫn gửi (không kèm chuồng) để hiện nguyên lỗi BE, kèm ghi chú.
+ * Chờ BE mở GET /kennels cho VET (msg-manh-t79.md). Đặt chỗ lưu trú lấy theo `inStay` (CHECKED_IN và OVERDUE).
+ */
 export function AdmitDialog({ onClose, onDone }: { onClose: () => void; onDone: (admission: Admission) => void }) {
   const [source, setSource] = useState<Source>('visit');
   const [pickedId, setPickedId] = useState<number | null>(null);
   const [serviceId, setServiceId] = useState('');
   const [error, setError] = useState('');
   const queue = useMyQueue();
-  const bookings = useBookingList({ status: 'CHECKED_IN', size: 50 });
+  const bookings = useBookingList({ inStay: true, size: 50 });
   const { services, isPending: loadingServices } = useClinicalServices('INPATIENT');
   const admit = useAdmit();
   const visits = (queue.data ?? []).filter((v) => v.status === 'IN_PROGRESS' && v.serviceGroup === 'MEDICAL');
@@ -75,6 +79,11 @@ export function AdmitDialog({ onClose, onDone }: { onClose: () => void; onDone: 
           </button>
         ))}
       </div>
+      {source === 'visit' && (
+        <p className="rounded-lg bg-(--bg-tertiary) px-3 py-2 text-sm text-(--text-secondary)">
+          Nhập viện từ lượt khám cần chọn chuồng điều trị, nhưng bác sĩ chưa xem được danh sách chuồng nên chưa chọn được chuồng điều trị. Hiện nhập viện bằng cách chuyển thú từ đặt chỗ lưu trú.
+        </p>
+      )}
       <fieldset className="space-y-2">
         <legend className="mb-1.5 text-sm font-medium">{source === 'visit' ? 'Lượt khám đang mở' : 'Đặt chỗ đang lưu trú'}</legend>
         {!loading && options.length === 0 && (
@@ -132,7 +141,9 @@ export function DischargeDialog({ admission, onClose, onDone }: { admission: Adm
           ))}
         </div>
       </fieldset>
-      <Field label="Tóm tắt điều trị">{(id) => <textarea id={id} rows={4} className={textareaClass} value={summary} onChange={(e) => setSummary(e.target.value)} />}</Field>
+      <Field label="Tóm tắt điều trị" hint={`${summary.length}/${INPATIENT_LIMITS.summary}`}>
+        {(id) => <textarea id={id} rows={4} maxLength={INPATIENT_LIMITS.summary} className={textareaClass} value={summary} onChange={(e) => setSummary(e.target.value)} />}
+      </Field>
     </ClinicalDialog>
   );
 }

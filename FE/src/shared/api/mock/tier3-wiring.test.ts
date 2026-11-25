@@ -57,12 +57,12 @@ describe('nội trú: dịch vụ lấy từ danh mục, không thêm tay vào O
     const chain = await as(ACCOUNTS.chain);
     const doctor = await as(ACCOUNTS.vet);
     await client.patch('/api/services/7101', { price: 400_000 }, chain);
-    const admission = (await client.post('/api/admissions', { visitId: 2002, serviceId: 7101 }, doctor)).data.data as { admissionId: number };
+    const admission = (await client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 3 }, doctor)).data.data as { admissionId: number };
     const discharged = (await client.post(`/api/admissions/${admission.admissionId}/discharge`, { outcome: 'HOME', summary: 'Ổn định, về nhà' }, doctor)).data.data as { orderLineId: number };
     expect((await orderOf(2002)).lines.find((l) => l.lineId === discharged.orderLineId)?.unitPrice).toBe(400_000);
 
     await client.patch('/api/services/7102', { isActive: false }, chain);
-    const refused = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7102 }, doctor));
+    const refused = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7102, kennelId: 3 }, doctor));
     expect(ruleOf(refused)).toEqual([400, 'BUSINESS_RULE_VIOLATION', 'BR-LT-13']);
     expect(refused.data.message).toContain('ngừng');
   });

@@ -56,7 +56,7 @@ describe('lệnh ghi làm mới ["inpatient"]', () => {
     const { result } = setup();
     await waitFor(() => expect(result.current.active.data?.totalElements).toBe(0));
 
-    const admitted = await act(() => result.current.admit.mutateAsync({ visitId: 2002, serviceId: 7101 }));
+    const admitted = await act(() => result.current.admit.mutateAsync({ visitId: 2002, serviceId: 7101, kennelId: 3 }));
     await waitFor(() => expect(result.current.active.data?.content.map((a) => a.admissionId)).toEqual([admitted.admissionId]));
 
     const sub = setup(admitted.admissionId);
@@ -68,7 +68,7 @@ describe('lệnh ghi làm mới ["inpatient"]', () => {
   });
 
   it('BE từ chối (400 BR-LT-14 còn y lệnh ORDERED) vì y lệnh đã thêm ở nơi khác: cache không giữ số cũ', async () => {
-    const admitted = await inpatientApi.admit({ visitId: 2002, serviceId: 7101 });
+    const admitted = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
     const { result } = setup(admitted.admissionId);
     await waitFor(() => expect(result.current.orders.data).toEqual([]));
     await inpatientApi.createOrder(admitted.admissionId, { orderType: 'FEEDING', content: 'Cho ăn', scheduledAt: new Date(Date.now() + 3_600_000).toISOString() }); // ngoài hook nên cache vẫn rỗng
@@ -81,7 +81,7 @@ describe('lệnh ghi làm mới ["inpatient"]', () => {
   });
 
   it('409 (ca đã xuất viện ở nơi khác): chi tiết nạp lại thành DISCHARGED', async () => {
-    const admitted = await inpatientApi.admit({ visitId: 2002, serviceId: 7101 });
+    const admitted = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
     const { result } = setup(admitted.admissionId);
     await waitFor(() => expect(result.current.detail.data?.status).toBe('ADMITTED'));
     await inpatientApi.discharge(admitted.admissionId, { outcome: 'HOME', summary: 'Ổn' }); // ngoài hook

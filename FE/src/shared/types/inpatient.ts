@@ -24,18 +24,18 @@ export const ADMISSION_ORDER_TYPE_LABELS: Record<AdmissionOrderType, string> = {
 export const ADMISSION_ORDER_STATUS_LABELS: Record<AdmissionOrderStatus, string> = { ORDERED: 'Chờ thực hiện', DONE: 'Đã thực hiện', CANCELLED: 'Đã hủy' };
 export const APPETITE_LABELS: Record<Appetite, string> = { NORMAL: 'Bình thường', REDUCED: 'Giảm', NONE: 'Bỏ ăn' };
 
-/** Độ dài tối đa của yaml (`maxLength`). `summary` (tóm tắt điều trị) không giới hạn (TEXT). */
-export const INPATIENT_LIMITS = { content: 500, doneNote: 300, reason: 300, observationNote: 500 } as const;
+/** Độ dài tối đa của yaml (`maxLength`); tóm tắt điều trị tối đa 2000 ký tự (BE `@Size`, đo 25/11/2026). */
+export const INPATIENT_LIMITS = { content: 500, doneNote: 300, reason: 300, observationNote: 500, summary: 2000 } as const;
 
 /**
- * Khoảng giá trị chỉ số theo dõi. Hợp đồng chỉ ghi "giá trị ngoài khoảng → 400 BR-LT-16" mà không nêu khoảng: lấy theo kiểu cột của 09 §C
- * (`temperature_c` NUMERIC(4,1), `heart_rate` / `respiratory_rate` SMALLINT, `weight_kg` NUMERIC(6,2)) và phải dương (cân nặng theo BR-KH-04).
+ * Giới hạn lưu trữ của chỉ số theo dõi, đúng BE (`AdmissionObservation.invalidReason`, đo 25/11/2026): khoảng lâm sàng chưa chốt (inpatient-v1 A4) nên nhiệt độ 0 và âm không bị chặn;
+ * chỉ chặn theo kiểu cột (`temperature_c` NUMERIC(4,1): |t| < 999.95; nhịp SMALLINT 1…32767; `weight_kg` NUMERIC(6,2): 0.005 ≤ w < 9999.995, cân phải dương theo BR-KH-04).
  */
 export const OBSERVATION_BOUNDS = {
-  temperatureC: { min: 0.1, max: 999.9, decimals: 1 },
+  temperatureC: { maxAbsExclusive: 999.95, decimals: 1 },
   heartRate: { min: 1, max: 32767 },
   respiratoryRate: { min: 1, max: 32767 },
-  weightKg: { min: 0.01, max: 9999.99, decimals: 2 },
+  weightKg: { min: 0.005, maxExclusive: 9999.995, decimals: 2 },
 } as const;
 
 export interface AdmitRequest {
@@ -65,6 +65,10 @@ export interface Admission {
   unitPrice: number;
   status: AdmissionStatus;
   admittedAt: string;
+  /** Số ngày tính tiền = ngày xuất (hoặc hôm nay nếu còn ADMITTED) − ngày nhập + 1, giờ Việt Nam, tính khi đọc (BR-LT-14, ADR-0124). */
+  billedDays: number;
+  /** `billedDays` × `unitPrice`: tiền tạm tính; dòng Order chỉ có sau xuất viện. */
+  estimatedAmount: number;
   dischargeOutcome?: DischargeOutcome | null;
   dischargeSummary?: string | null;
   dischargedAt?: string | null;
@@ -79,6 +83,8 @@ export interface AdmissionSummary {
   status: AdmissionStatus;
   admittedAt: string;
   kennelCode?: string | null;
+  billedDays: number;
+  estimatedAmount: number;
 }
 
 export interface DischargeRequest {

@@ -12,7 +12,7 @@ export type ServiceGroup = 'MEDICAL' | 'GROOMING';
 export const SPECIES_LABEL: Record<Species, string> = { DOG: 'Chó', CAT: 'Mèo', OTHER: 'Khác' };
 export const SEX_LABEL: Record<Sex, string> = { MALE: 'Đực', FEMALE: 'Cái', UNKNOWN: 'Chưa rõ' };
 export const WEIGHT_SOURCE_LABEL: Record<WeightSource, string> = {
-  VET: 'Bác sĩ đo khi khám',
+  VET: 'Đo tại phòng khám',
   INTAKE: 'Đo khi nhận lưu trú',
   OWNER: 'Chủ tự khai',
 };

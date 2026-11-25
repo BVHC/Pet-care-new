@@ -9,6 +9,8 @@ import { MOCK_PASSWORD } from './identity.mock';
 import { hasActiveAdmission } from './inpatient.mock';
 import { installMockApi } from './mock-api';
 
+// T79: mock khớp BE thật (đo 25/11/2026 trên BE 8083, bản sao petcare_t79; số đo ở docs/testcases/T57-fe.md mục NT và final2/ket-qua-t79-noi-tru-24-11.md). Thứ tự lỗi của BE: 400 hình thức (sai kiểu, VALIDATION_FAILED)
+// → 403 vai trò → … → 404 → 403 chi nhánh → 403 người phụ trách → 409 → 400 BR-LT-*; riêng #4 tóm tắt rỗng đứng ngay sau vai trò.
 // Dữ liệu mẫu (inpatient.mock.ts): chi nhánh 1 có lịch sử #1 DISCHARGED (lượt 61, chuồng C-03, 3-4 y lệnh, 3 theo dõi) và KHÔNG có ca ADMITTED; #2 ADMITTED ở chi nhánh 2 (lượt giả 9103,
 // 1 y lệnh, 1 theo dõi) để thử 403 phạm vi. Lượt 2002 (Lu, IN_PROGRESS) do BS. Minh Anh (doctor@store1.vn, #5) phụ trách. Đặt chỗ lưu trú mẫu CHECKED_IN: #2 Cốm (chuồng C-01), #3 Mực (C-02).
 
@@ -54,7 +56,7 @@ const nurse = () => as(ROLES.CARETAKER);
 const desk = () => as(ROLES.RECEPTIONIST);
 const SOON = () => new Date(Date.now() + 3_600_000).toISOString();
 
-const admit = async (auth: Auth, body: object = { visitId: 2002, serviceId: 7101 }) => data<Admission>(await client.post('/api/admissions', body, auth));
+const admit = async (auth: Auth, body: object = { visitId: 2002, serviceId: 7101, kennelId: 3 }) => data<Admission>(await client.post('/api/admissions', body, auth));
 const order = async (auth: Auth, admissionId: number, body: object = { orderType: 'FEEDING', content: 'Cho ăn pate mềm', scheduledAt: SOON() }) =>
   data<AdmissionOrder>(await client.post(`/api/admissions/${admissionId}/orders`, body, auth));
 const complete = async (auth: Auth, orderId: number, note = 'Đã làm') => data<AdmissionOrder>(await client.post(`/api/admission-orders/${orderId}/complete`, { note }, auth));
@@ -86,7 +88,7 @@ interface Endpoint {
 }
 const VIEWERS: RoleName[] = ['RECEPTIONIST', 'VET', 'CARETAKER'];
 const ENDPOINTS: Endpoint[] = [
-  { name: '#1 nhập viện', call: (a) => client.post('/api/admissions', { visitId: 2002, serviceId: 7101 }, a), allowed: ['VET'] },
+  { name: '#1 nhập viện', call: (a) => client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 3 }, a), allowed: ['VET'] },
   { name: '#2 ca của chi nhánh', call: (a) => client.get('/api/admissions', a), allowed: VIEWERS },
   { name: '#3 chi tiết ca', call: (a) => client.get('/api/admissions/1', a), allowed: VIEWERS },
   { name: '#4 xuất viện', call: (a) => client.post('/api/admissions/1/discharge', { outcome: 'HOME', summary: 'Ổn' }, a), allowed: ['VET'] },
@@ -125,9 +127,25 @@ describe('quyền theo 7 vai trò và 401 (mọi endpoint)', () => {
 
 // ─── #1 Nhập viện ───
 
+/** Đọc / sửa state thô của mock lưu trú (đặt chỗ): đổi trạng thái hoặc thú của một đặt chỗ mẫu. */
+const patchBoarding = (fn: (s: { bookings: Record<string, unknown>[] }) => void) => {
+  const s = JSON.parse(localStorage.getItem('petcare-mock-boarding')!) as { bookings: Record<string, unknown>[] };
+  fn(s);
+  localStorage.setItem('petcare-mock-boarding', JSON.stringify(s));
+};
+/** Lượt IN_PROGRESS thứ hai của BS. Minh Anh (#5): lễ tân tiếp nhận cấp cứu, gán, VET gọi. Mochi (thú 1) không còn lượt mở. */
+async function secondVisit(): Promise<number> {
+  const reception = await desk();
+  const doctor = await vet();
+  const created = data<Visit>(await client.post('/api/visits', { petId: 1, serviceId: 1, isEmergency: true }, reception));
+  await client.post(`/api/visits/${created.visitId}/assign`, { assigneeId: 5 }, reception);
+  await client.post(`/api/visits/${created.visitId}/call`, undefined, doctor);
+  return created.visitId;
+}
+
 describe('nhập viện (#1, BR-LT-13, 17)', () => {
-  it('từ lượt đang khám của mình: 201, ADMITTED, giá chốt theo ngày, mã NT-yyMMdd-xxxx; chuồng vắng thì không có', async () => {
-    const res = await client.post('/api/admissions', { visitId: 2002, serviceId: 7101 }, await vet());
+  it('từ lượt đang khám của mình kèm chuồng điều trị: 201, ADMITTED, giá chốt theo ngày, mã NT-yyMM-xxxxx, tạm tính 1 ngày', async () => {
+    const res = await client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 3 }, await vet());
     expect(res.status).toBe(201);
     expect(res.data).toMatchObject({ message: 'Đã nhập viện', code: 201 });
     expect(res.data.data).toMatchObject({
@@ -136,38 +154,41 @@ describe('nhập viện (#1, BR-LT-13, 17)', () => {
       petName: 'Lu',
       branchId: 1,
       boardingBookingId: null,
-      kennelId: null,
+      kennelId: 3,
       serviceId: 7101,
       serviceName: 'Nội trú điều trị (theo ngày)',
       unitPrice: 350_000,
       status: 'ADMITTED',
+      billedDays: 1,
+      estimatedAmount: 350_000,
       dischargeOutcome: null,
       dischargeSummary: null,
       dischargedAt: null,
       orderLineId: null,
     });
-    expect(res.data.data.code).toMatch(/^NT-\d{6}-\d{4}$/);
+    expect(res.data.data.code).toMatch(/^NT-\d{4}-\d{5}$/);
     expect(Date.parse(res.data.data.admittedAt)).not.toBeNaN();
     expect(hasActiveAdmission(4)).toBe(true);
     expect(hasActiveAdmission(1)).toBe(false);
   });
 
-  it('mã tăng dần trong ngày; ca mới hiện ở danh sách ADMITTED của lễ tân kèm mã chuồng', async () => {
+  it('mã tăng dần trong tháng; ca mới hiện ở danh sách ADMITTED của lễ tân kèm mã chuồng và tạm tính', async () => {
     const a = await admit(await vet(), { visitId: 2002, serviceId: 7101, kennelId: 3 });
     expect(a.kennelId).toBe(3);
     const b = await admit(await vet(), { boardingBookingId: 2, serviceId: 7102 });
-    expect(Number(b.code.slice(-4))).toBe(Number(a.code.slice(-4)) + 1);
+    expect(Number(b.code.slice(-5))).toBe(Number(a.code.slice(-5)) + 1);
+    expect(b.code.slice(0, 7)).toBe(a.code.slice(0, 7));
     const page = await list(await desk());
-    expect(page.content.map((s) => [s.admissionId, s.petName, s.kennelCode])).toEqual([
-      [a.admissionId, 'Lu', 'C-03'],
-      [b.admissionId, 'Cốm', 'C-01'],
+    expect(page.content.map((s) => [s.admissionId, s.petName, s.kennelCode, s.billedDays, s.estimatedAmount])).toEqual([
+      [a.admissionId, 'Lu', 'C-03', 1, 350_000],
+      [b.admissionId, 'Cốm', 'C-01', 1, 600_000],
     ]);
   });
 
-  it('từ đặt chỗ lưu trú CHECKED_IN: tạo Visit điều trị IN_PROGRESS gán VET gọi, giữ chuồng đang ở, đặt chỗ vẫn CHECKED_IN (BR-LT-17)', async () => {
+  it('từ đặt chỗ lưu trú CHECKED_IN: tạo Visit điều trị IN_PROGRESS gán VET gọi, giữ chuồng đang ở (không có kennelId), đặt chỗ vẫn CHECKED_IN (BR-LT-17)', async () => {
     const doctor = await vet();
     const a = await admit(doctor, { boardingBookingId: 2, serviceId: 7101 });
-    expect(a).toMatchObject({ boardingBookingId: 2, petId: 9002, petName: 'Cốm', kennelId: 1, status: 'ADMITTED' });
+    expect(a).toMatchObject({ boardingBookingId: 2, petId: 9002, petName: 'Cốm', kennelId: null, status: 'ADMITTED' });
     const visit = data<Visit>(await client.get(`/api/visits/${a.visitId}`, doctor));
     expect(visit).toMatchObject({ status: 'IN_PROGRESS', assigneeId: 5, petId: 9002, appointmentId: null, serviceGroup: 'MEDICAL' });
     expect(visit.orderId).toBeGreaterThan(0);
@@ -176,50 +197,80 @@ describe('nhập viện (#1, BR-LT-13, 17)', () => {
     expect(hasActiveAdmission(9002)).toBe(true);
   });
 
-  it('thứ tự: body sai kiểu 400 (trước vai trò) → vai trò 403 → thiếu dịch vụ 400 → không đúng một nguồn 400 BR-LT-13 → 404 → 400 BR-LT-13 → 409', async () => {
+  it('đặt chỗ OVERDUE (quá hạn trả, thú vẫn trong chuồng) cũng nhập viện được như CHECKED_IN', async () => {
+    await vet(); // nạp state lưu trú
+    await client.get('/api/boarding-bookings/2', await desk());
+    patchBoarding((s) => {
+      s.bookings.find((b) => b.bookingId === 2)!.status = 'OVERDUE';
+    });
+    const a = await admit(await vet(), { boardingBookingId: 2, serviceId: 7101 });
+    expect(a).toMatchObject({ boardingBookingId: 2, petName: 'Cốm', status: 'ADMITTED' });
+  });
+
+  it('thứ tự: sai kiểu 400 → VALIDATION_FAILED 400 (cả hai trước vai trò) → vai trò 403 → nguồn / chuồng BR-LT-13 → 404 → 409 → điều kiện BR-LT-13 → dịch vụ → chuồng', async () => {
     const customer = await as(ROLES.CUSTOMER);
     expect((await failure(client.post('/api/admissions', { visitId: 'abc', serviceId: 7101 }, customer))).data.errorCode).toBe('MALFORMED_REQUEST');
     expect((await failure(client.post('/api/admissions', undefined, customer))).data.errorCode).toBe('MALFORMED_REQUEST');
-    expect((await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101 }, customer))).data.errorCode).toBe('ACCESS_DENIED');
+    // BE đo: thiếu serviceId + lễ tân → VALIDATION_FAILED, không phải 403 (Bean Validation chạy trước @PreAuthorize).
+    expect(await failure(client.post('/api/admissions', { visitId: 2002, kennelId: 3 }, await desk()))).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED' } });
+    expect((await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 3 }, customer))).data.errorCode).toBe('ACCESS_DENIED');
 
     const doctor = await vet();
-    const missing = await failure(client.post('/api/admissions', { visitId: 2002 }, doctor));
+    const missing = await failure(client.post('/api/admissions', { visitId: 2002, kennelId: 3 }, doctor));
     expect(missing).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED', message: expect.stringContaining('serviceId') } });
-    expect((await failure(client.post('/api/admissions', { visitId: 0, serviceId: 7101 }, doctor))).data.errorCode).toBe('VALIDATION_FAILED');
-    // Cả hai hoặc không cái nào: BR-LT-13, đứng trước 404.
-    for (const body of [{ serviceId: 7101 }, { visitId: 9999, boardingBookingId: 2, serviceId: 7101 }]) {
+    for (const body of [{ visitId: 0, serviceId: 7101, kennelId: 3 }, { visitId: 2002, serviceId: 0, kennelId: 3 }, { visitId: 2002, serviceId: 7101, kennelId: -1 }]) {
+      expect((await failure(client.post('/api/admissions', body, doctor))).data.errorCode).toBe('VALIDATION_FAILED');
+    }
+    // Không đúng một nguồn, nhập từ khám thiếu chuồng, nhập từ lưu trú có chuồng: BR-LT-13, đứng trước 404.
+    for (const body of [{ serviceId: 7101, kennelId: 3 }, { visitId: 9999, boardingBookingId: 2, serviceId: 7101 }, { visitId: 9999, serviceId: 7101 }, { boardingBookingId: 9999, serviceId: 7101, kennelId: 3 }]) {
       expect(asRule(await failure(client.post('/api/admissions', body, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
     }
-    expect((await failure(client.post('/api/admissions', { visitId: 9999, serviceId: 7101 }, doctor))).status).toBe(404);
+    expect((await failure(client.post('/api/admissions', { visitId: 9999, serviceId: 7101, kennelId: 3 }, doctor))).status).toBe(404);
     expect((await failure(client.post('/api/admissions', { boardingBookingId: 9999, serviceId: 7101 }, doctor))).status).toBe(404);
-    // Dịch vụ 404 đứng trước "lượt không IN_PROGRESS" (2102 đang chờ).
-    expect((await failure(client.post('/api/admissions', { visitId: 2102, serviceId: 99999 }, doctor))).status).toBe(404);
-    expect((await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 999 }, doctor))).status).toBe(404);
+    // Điều kiện của lượt (2102 đang chờ, 2101 …) đứng TRƯỚC dịch vụ 404; dịch vụ 404 đứng trước chuồng 404.
     for (const visitId of [2102, 2101]) {
-      expect(asRule(await failure(client.post('/api/admissions', { visitId, serviceId: 7101 }, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
+      expect(asRule(await failure(client.post('/api/admissions', { visitId, serviceId: 99999, kennelId: 3 }, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
     }
+    expect((await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 99999, kennelId: 999 }, doctor))).data.message).toContain('dịch vụ');
+    expect((await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 999 }, doctor))).data.message).toContain('chuồng');
     // Lượt IN_PROGRESS của VET khác (doctor2 không phụ trách 2002) → "không của mình" 400, không phải 403.
-    const other = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101 }, await as('doctor2@store1.vn')));
+    const other = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 3 }, await as('doctor2@store1.vn')));
     expect(asRule(other, 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
-    // 409 đứng sau mọi 400.
+    // 409 đứng TRƯỚC mọi 400 điều kiện (kể cả dịch vụ sai): BE đo ca trùng thú trả 409 dù serviceId không phải nội trú.
     await admit(doctor);
-    const again = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101 }, doctor));
+    const again = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 4 }, doctor));
     expect(again).toMatchObject({ status: 409, data: { errorCode: 'INVALID_STATE_TRANSITION' } });
-    expect(asRule(await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 1 }, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
+    expect((await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 1, kennelId: 4 }, doctor))).status).toBe(409);
   });
 
-  it('dịch vụ không phải INPATIENT (khám), ngừng, chỉ bật ở chi nhánh khác; thú đã mất: 400 BR-LT-13 và không ghi gì', async () => {
+  it('dịch vụ không phải INPATIENT (khám), ngừng, chỉ bật ở chi nhánh khác; thú đã mất: 400 BR-LT-13 đúng câu của BE và không ghi gì', async () => {
     const doctor = await vet();
+    const messages: Record<number, string> = { 1: 'không phải dịch vụ nội trú', 7104: 'ngừng kinh doanh', 7103: 'chưa được bật tại chi nhánh' };
     for (const serviceId of [1, 7104, 7103]) {
-      const res = await failure(client.post('/api/admissions', { visitId: 2002, serviceId }, doctor));
+      const res = await failure(client.post('/api/admissions', { visitId: 2002, serviceId, kennelId: 3 }, doctor));
       expect([serviceId, ...asRule(res, 'BR-LT-13')]).toEqual([serviceId, ...BAD_RULE('BR-LT-13')]);
+      expect(res.data.message).toContain(messages[serviceId]);
     }
     markPetDeceased(4);
-    expect(asRule(await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101 }, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
+    const dead = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 3 }, doctor));
+    expect(asRule(dead, 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
+    expect(dead.data.message).toContain('đã mất');
     expect((await list(doctor)).totalElements).toBe(0);
   });
 
-  it('đặt chỗ không CHECKED_IN (BOOKED #1, CHECKED_OUT #5): 400 BR-LT-13; thú đã nội trú: 409 trước khi tạo Visit điều trị', async () => {
+  it('thú đang lưu trú mà nhập từ lượt khám: 400 BR-LT-13 (phải đi đường đặt chỗ, không cấp thêm chuồng)', async () => {
+    const doctor = await vet();
+    await client.get('/api/boarding-bookings/3', await desk()); // nạp state lưu trú
+    patchBoarding((s) => {
+      s.bookings.find((b) => b.bookingId === 3)!.petId = 4; // đặt chỗ #3 (Mực) đổi sang Lu: Lu đang nằm trong chuồng
+    });
+    const res = await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId: 3 }, doctor));
+    expect(asRule(res, 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
+    expect(res.data.message).toContain('đang lưu trú');
+    expect((await list(doctor)).totalElements).toBe(0);
+  });
+
+  it('đặt chỗ không CHECKED_IN / OVERDUE (BOOKED #1, CHECKED_OUT #5): 400 BR-LT-13; thú đã nội trú: 409 trước khi tạo Visit điều trị', async () => {
     const doctor = await vet();
     for (const bookingId of [1, 5]) {
       expect(asRule(await failure(client.post('/api/admissions', { boardingBookingId: bookingId, serviceId: 7101 }, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
@@ -230,18 +281,21 @@ describe('nhập viện (#1, BR-LT-13, 17)', () => {
     expect(data<Visit[]>(await client.get('/api/visits', doctor))).toHaveLength(visitsBefore);
   });
 
-  it('chuồng: không AVAILABLE (C-01 đang ở, C-04 bảo trì) 400; chuồng đã giữ cho ca khác 400 cho đến khi xuất viện; truyền đúng chuồng đang ở của đặt chỗ thì được', async () => {
+  it('chuồng điều trị: không AVAILABLE (C-01 đang ở, C-04 bảo trì) 400; đã giữ cho ca khác 400 cho tới khi xuất viện; nhập từ lưu trú mà gửi kennelId 400', async () => {
     const doctor = await vet();
     for (const kennelId of [1, 4]) {
       expect(asRule(await failure(client.post('/api/admissions', { visitId: 2002, serviceId: 7101, kennelId }, doctor)), 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
     }
     const first = await admit(doctor, { visitId: 2002, serviceId: 7101, kennelId: 3 });
-    const held = await failure(client.post('/api/admissions', { boardingBookingId: 3, serviceId: 7101, kennelId: 3 }, doctor));
-    expect(held.data.message).toMatch(/\(BR-LT-13\)$/);
+    const visitId = await secondVisit();
+    const held = await failure(client.post('/api/admissions', { visitId, serviceId: 7101, kennelId: 3 }, doctor));
+    expect(asRule(held, 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
+    expect(held.data.message).toContain('không còn trống');
     expect((await discharge(doctor, first.admissionId)).status).toBe(200);
-    expect((await admit(doctor, { boardingBookingId: 3, serviceId: 7101, kennelId: 2 })).kennelId).toBe(2);
-    // Chuồng 3 trống lại sau khi ca đầu xuất viện.
+    expect((await admit(doctor, { visitId, serviceId: 7101, kennelId: 3 })).kennelId).toBe(3);
     expect(data<Admission>(await client.get(`/api/admissions/${first.admissionId}`, doctor)).status).toBe('DISCHARGED');
+    const noKennel = await failure(client.post('/api/admissions', { boardingBookingId: 3, serviceId: 7101, kennelId: 2 }, doctor));
+    expect(asRule(noKennel, 'BR-LT-13')).toEqual(BAD_RULE('BR-LT-13'));
   });
 });
 
@@ -253,8 +307,8 @@ describe('xem ca nội trú (#2, #3)', () => {
     expect(await list(reception)).toMatchObject({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 });
     const history = await list(reception, { status: 'DISCHARGED' });
     expect(history.content).toHaveLength(1);
-    expect(history.content[0]).toMatchObject({ admissionId: 1, petName: 'Mochi', status: 'DISCHARGED', kennelCode: 'C-03' });
-    expect(history.content[0].code).toMatch(/^NT-\d{6}-\d{4}$/);
+    expect(history.content[0]).toMatchObject({ admissionId: 1, petName: 'Mochi', status: 'DISCHARGED', kennelCode: 'C-03', billedDays: 1, estimatedAmount: 350_000 });
+    expect(history.content[0].code).toMatch(/^NT-\d{4}-\d{5}$/);
     const a = await admit(await vet());
     const b = await admit(await vet(), { boardingBookingId: 3, serviceId: 7102 });
     expect((await list(reception)).content.map((s) => s.admissionId)).toEqual([a.admissionId, b.admissionId]);
@@ -281,6 +335,8 @@ describe('xem ca nội trú (#2, #3)', () => {
       kennelId: 3,
       serviceName: 'Nội trú điều trị (theo ngày)',
       unitPrice: 350_000,
+      billedDays: 1,
+      estimatedAmount: 350_000,
       orderLineId: 5002,
       visitId: 61,
       petName: 'Mochi',
@@ -301,18 +357,20 @@ describe('xuất viện (#4, BR-LT-14)', () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const o = await order(doctor, a.admissionId);
-    expect(asRule(await failure(discharge(doctor, a.admissionId)), 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
+    const blocked = await failure(discharge(doctor, a.admissionId));
+    expect(asRule(blocked, 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
+    expect(blocked.data.message).toBe('Còn 1 y lệnh chưa thực hiện hoặc hủy (BR-LT-14)');
     await complete(doctor, o.admissionOrderId);
     const res = await discharge(doctor, a.admissionId, { outcome: 'HOME', summary: '  Ổn định, về nhà  ' });
     expect(res.status).toBe(200);
-    expect(res.data.data).toMatchObject({ status: 'DISCHARGED', dischargeOutcome: 'HOME', dischargeSummary: 'Ổn định, về nhà', unitPrice: 350_000 });
+    expect(res.data.data).toMatchObject({ status: 'DISCHARGED', dischargeOutcome: 'HOME', dischargeSummary: 'Ổn định, về nhà', unitPrice: 350_000, billedDays: 1, estimatedAmount: 350_000 });
     expect(Number.isInteger(res.data.data.orderLineId)).toBe(true);
     expect(Date.parse(res.data.data.dischargedAt)).not.toBeNaN();
     expect(hasActiveAdmission(4)).toBe(false);
     expect((await list(doctor)).totalElements).toBe(0);
   });
 
-  it('số ngày tính theo ngày VN từ ngày nhập tới ngày xuất, tối thiểu 1; giá là giá đã chốt lúc nhập viện', async () => {
+  it('số ngày = ngày xuất − ngày nhập + 1 (ngày VN, gồm hai đầu); giá là giá đã chốt lúc nhập viện', async () => {
     const calls: unknown[][] = [];
     registerVisitOrderSource({
       addServiceLine: (...args) => (calls.push(args), 7000 + calls.length),
@@ -321,58 +379,66 @@ describe('xuất viện (#4, BR-LT-14)', () => {
     const a = await admit(doctor);
     expect((await discharge(doctor, a.admissionId)).status).toBe(200);
     expect(calls[0]).toEqual([2002, 7101, 1, 5, 350_000]);
-    // Nhập 3 ngày trước, rồi giá dịch vụ đổi: vẫn 350.000 × 3.
+    // Nhập 3 ngày trước, rồi giá dịch vụ đổi: vẫn 350.000 × 4 (BE: ngày xuất − ngày nhập + 1, không phải tối thiểu 1).
     const b = await admit(doctor);
     patchState((s) => {
       const row = s.admissions.find((x) => x.admissionId === b.admissionId)!;
       row.admittedAt = new Date(Date.now() - 3 * 86_400_000).toISOString();
       row.unitPrice = 400_000;
     });
+    expect(data<Admission>(await client.get(`/api/admissions/${b.admissionId}`, doctor))).toMatchObject({ billedDays: 4, estimatedAmount: 1_600_000 });
     const res = await discharge(doctor, b.admissionId);
-    expect(res.data.data.orderLineId).toBe(7002);
-    expect(calls[1]).toEqual([2002, 7101, 3, 5, 400_000]);
+    expect(res.data.data).toMatchObject({ orderLineId: 7002, billedDays: 4, estimatedAmount: 1_600_000 });
+    expect(calls[1]).toEqual([2002, 7101, 4, 5, 400_000]);
   });
 
-  it('thứ tự: path / body sai kiểu 400 → vai trò 403 → thiếu kết cục 400 → 404 → chi nhánh 403 → BR-LT-14 → 409', async () => {
+  it('thứ tự: sai kiểu 400 → thiếu / dài 400 VALIDATION_FAILED → vai trò 403 → tóm tắt rỗng 400 BR-LT-14 → 404 → chi nhánh 403 → người phụ trách 403 → 409 → còn y lệnh 400 BR-LT-14', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const url = `/api/admissions/${a.admissionId}/discharge`;
     expect((await failure(client.post('/api/admissions/abc/discharge', {}, doctor))).data.errorCode).toBe('MALFORMED_REQUEST');
     expect((await failure(client.post(url, { outcome: 'DEAD', summary: 'x' }, await nurse()))).data.errorCode).toBe('MALFORMED_REQUEST');
     expect((await failure(client.post(url, { outcome: 'HOME', summary: [] }, await nurse()))).data.errorCode).toBe('MALFORMED_REQUEST');
+    // BE đo: VALIDATION_FAILED (thiếu kết cục, thiếu tóm tắt, tóm tắt > 2000) đứng TRƯỚC vai trò.
+    expect(await failure(client.post(url, { summary: 'x' }, await nurse()))).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED', message: expect.stringContaining('outcome') } });
+    expect(await failure(client.post(url, { outcome: 'HOME' }, doctor))).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED', message: expect.stringContaining('summary') } });
+    expect(await failure(client.post(url, { outcome: 'HOME', summary: 'x'.repeat(2001) }, doctor))).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED' } });
     expect((await failure(client.post(url, { outcome: 'HOME', summary: 'x' }, await nurse()))).data.errorCode).toBe('ACCESS_DENIED');
-    expect(await failure(client.post(url, { summary: 'x' }, doctor))).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED', message: expect.stringContaining('outcome') } });
-    expect((await failure(client.post('/api/admissions/999/discharge', { summary: 'x' }, doctor))).data.errorCode).toBe('VALIDATION_FAILED');
+    // Tóm tắt rỗng: BR-LT-14 đứng ngay sau vai trò, TRƯỚC 404 / chi nhánh / người phụ trách / 409.
+    expect(asRule(await failure(client.post('/api/admissions/999/discharge', { outcome: 'HOME', summary: ' ' }, doctor)), 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
+    expect(asRule(await failure(client.post(url, { outcome: 'HOME', summary: '' }, await as('doctor2@store1.vn'))), 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
     expect((await failure(client.post('/api/admissions/999/discharge', { outcome: 'HOME', summary: 'x' }, doctor))).status).toBe(404);
     expect((await failure(client.post('/api/admissions/2/discharge', { outcome: 'HOME', summary: 'x' }, doctor))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
-    // Thiếu tóm tắt: BR-LT-14 (không phải VALIDATION_FAILED), đứng trước kiểm y lệnh ORDERED và trước 409 (ca #1 đã DISCHARGED).
+    // VET khác (doctor2 không được gán lượt 2002) → 403 phạm vi, đứng trước 409 và trước "còn y lệnh".
     await order(doctor, a.admissionId);
-    for (const summary of [undefined, '', '   ']) {
-      expect(asRule(await failure(client.post(url, { outcome: 'HOME', summary }, doctor)), 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
-    }
+    expect((await failure(client.post(url, { outcome: 'HOME', summary: 'x' }, await as('doctor2@store1.vn')))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    expect((await failure(client.post('/api/admissions/1/discharge', { outcome: 'HOME', summary: 'x' }, await as('doctor2@store1.vn')))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    // Ca #1 đã DISCHARGED: tóm tắt rỗng vẫn 400 (đứng trước 409); đủ tóm tắt thì 409.
     expect((await failure(client.post('/api/admissions/1/discharge', { outcome: 'HOME', summary: '' }, doctor))).status).toBe(400);
     expect((await failure(client.post('/api/admissions/1/discharge', { outcome: 'HOME', summary: 'Xong' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
+    // 409 đứng trước "còn y lệnh"; y lệnh chờ chặn xuất viện khi ca còn ADMITTED.
+    expect(asRule(await failure(client.post(url, { outcome: 'HOME', summary: 'x' }, doctor)), 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
   });
 
-  it('kết cục DECEASED: thú chưa đánh dấu đã mất → 400 BR-LT-14 (hợp đồng tự mâu thuẫn, xem A7); đã đánh dấu thì xuất viện được', async () => {
+  it('kết cục DECEASED xuất viện được ngay, không cần đánh dấu thú mất và không tự đánh dấu (BE đo: BR-LT-14, lễ tân làm sau)', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
-    expect(asRule(await failure(discharge(doctor, a.admissionId, { outcome: 'DECEASED', summary: 'Thú mất lúc 10 giờ' })), 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
-    expect(data<Admission>(await client.get(`/api/admissions/${a.admissionId}`, doctor)).status).toBe('ADMITTED');
-    markPetDeceased(4);
     const done = await discharge(doctor, a.admissionId, { outcome: 'DECEASED', summary: 'Thú mất lúc 10 giờ' });
+    expect(done.status).toBe(200);
     expect(done.data.data).toMatchObject({ status: 'DISCHARGED', dischargeOutcome: 'DECEASED' });
+    expect(petSummary(4)?.deceasedOn ?? null).toBeNull();
+    expect(hasActiveAdmission(4)).toBe(false);
   });
 });
 
 // ─── #5, #6 Y lệnh ───
 
 describe('y lệnh nội trú (#5, #6, BR-LT-15)', () => {
-  it('ra y lệnh mọi loại: 201, ORDERED, nội dung cắt khoảng trắng, giờ chuẩn hóa ISO; prescriptionItemId của loại khác bị bỏ', async () => {
+  it('ra y lệnh mọi loại: 201, ORDERED, nội dung cắt khoảng trắng, giờ chuẩn hóa ISO; loại không phải thuốc mà gửi dòng đơn thì 400', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const at = '2026-11-07T09:30:00+07:00';
-    const res = await client.post(`/api/admissions/${a.admissionId}/orders`, { orderType: 'PROCEDURE', content: '  Truyền dịch  ', scheduledAt: at, prescriptionItemId: 99 }, doctor);
+    const res = await client.post(`/api/admissions/${a.admissionId}/orders`, { orderType: 'PROCEDURE', content: '  Truyền dịch  ', scheduledAt: at }, doctor);
     expect(res.status).toBe(201);
     expect(res.data.data).toEqual({
       admissionOrderId: expect.any(Number),
@@ -387,9 +453,13 @@ describe('y lệnh nội trú (#5, #6, BR-LT-15)', () => {
       cancelReason: null,
     });
     for (const orderType of ['FEEDING', 'MONITORING', 'OTHER']) expect((await order(doctor, a.admissionId, { orderType, content: 'x', scheduledAt: at })).orderType).toBe(orderType);
+    // BE đo: loại khác MEDICATION mà có prescriptionItemId → 400 BR-LT-15 (không lặng lẽ bỏ qua).
+    const withItem = await failure(client.post(`/api/admissions/${a.admissionId}/orders`, { orderType: 'PROCEDURE', content: 'x', scheduledAt: at, prescriptionItemId: 99 }, doctor));
+    expect(asRule(withItem, 'BR-LT-15')).toEqual(BAD_RULE('BR-LT-15'));
+    expect(withItem.data.message).toContain('Chỉ y lệnh thuốc');
   });
 
-  it('y lệnh MEDICATION: phải liên kết dòng đơn thuốc đúng Visit của ca (400 BR-LT-15 nếu thiếu hoặc của lượt khác)', async () => {
+  it('y lệnh MEDICATION: phải liên kết dòng đơn thuốc của phòng khám đúng Visit của ca (400 BR-LT-15 nếu thiếu, của lượt khác, hoặc mua ngoài)', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const at = SOON();
@@ -398,31 +468,49 @@ describe('y lệnh nội trú (#5, #6, BR-LT-15)', () => {
     const seeded = rawState().orders; // dòng đơn thuốc của lượt 61 không thuộc lượt 2002
     expect(seeded.length).toBeGreaterThan(0);
     expect(asRule(await failure(client.post(url, { orderType: 'MEDICATION', content: 'Amoxicillin', scheduledAt: at, prescriptionItemId: 2 }, doctor)), 'BR-LT-15')).toEqual(BAD_RULE('BR-LT-15'));
+    // Dòng mua ngoài (hết tồn, bác sĩ chọn mua ngoài): BE đo "Dòng đơn thuốc mua ngoài không ra y lệnh được".
+    const external = data<{ itemId: number; isExternalPurchase: boolean }>(
+      await client.post('/api/visits/2002/prescriptions', { productId: 3, quantity: 999_999, dosageInstructions: 'x', shortageResolution: 'EXTERNAL_PURCHASE' }, doctor),
+    );
+    expect(external.isExternalPurchase).toBe(true);
+    const buyOut = await failure(client.post(url, { orderType: 'MEDICATION', content: 'Amoxicillin', scheduledAt: at, prescriptionItemId: external.itemId }, doctor));
+    expect(asRule(buyOut, 'BR-LT-15')).toEqual(BAD_RULE('BR-LT-15'));
+    expect(buyOut.data.message).toContain('mua ngoài');
     const item = data<{ itemId: number }>(await client.post('/api/visits/2002/prescriptions', { productId: 3, quantity: 2, dosageInstructions: 'Ngày 2 lần' }, doctor));
     const med = await order(doctor, a.admissionId, { orderType: 'MEDICATION', content: 'Amoxicillin 250mg', scheduledAt: at, prescriptionItemId: item.itemId });
     expect(med).toMatchObject({ orderType: 'MEDICATION', prescriptionItemId: item.itemId });
   });
 
-  it('thứ tự: body sai kiểu 400 → VET → thiếu / dài 400 VALIDATION_FAILED → 404 → chi nhánh 403 → BR-LT-15 → 409', async () => {
+  it('thứ tự: sai kiểu 400 → thiếu / dài 400 VALIDATION_FAILED (trước vai trò) → VET 403 → 404 → chi nhánh 403 → người phụ trách 403 → 409 → BR-LT-15', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const url = `/api/admissions/${a.admissionId}/orders`;
     const body = { orderType: 'FEEDING', content: 'Cho ăn', scheduledAt: SOON() };
     const customer = await as(ROLES.CUSTOMER);
-    for (const bad of [{ ...body, orderType: 'BATH' }, { ...body, scheduledAt: 'mai' }, { ...body, scheduledAt: '2026-11-07' }, { ...body, prescriptionItemId: 'x' }, { ...body, content: [] }]) {
+    for (const bad of [{ ...body, orderType: 'BATH' }, { ...body, scheduledAt: 'mai' }, { ...body, scheduledAt: '2026-11-07' }, { ...body, scheduledAt: '2026-11-07T08:00:00' }, { ...body, prescriptionItemId: 'x' }, { ...body, content: [] }]) {
       expect((await failure(client.post(url, bad, customer))).data.errorCode).toBe('MALFORMED_REQUEST');
     }
-    expect((await failure(client.post(url, body, await nurse()))).data.errorCode).toBe('ACCESS_DENIED');
-    for (const [patch, field] of [[{ orderType: undefined }, 'orderType'], [{ content: ' ' }, 'content'], [{ content: 'x'.repeat(501) }, 'content'], [{ scheduledAt: undefined }, 'scheduledAt'], [{ prescriptionItemId: 0 }, 'prescriptionItemId']] as const) {
-      const res = await failure(client.post(url, { ...body, ...patch }, doctor));
-      expect([res.status, res.data.errorCode, res.data.message.includes(field)]).toEqual([400, 'VALIDATION_FAILED', true]);
+    for (const [patch, field] of [[{ orderType: undefined }, 'orderType'], [{ content: undefined }, 'content'], [{ content: 'x'.repeat(501) }, 'content'], [{ scheduledAt: undefined }, 'scheduledAt'], [{ prescriptionItemId: 0 }, 'prescriptionItemId']] as const) {
+      for (const who of [doctor, await desk()]) {
+        const res = await failure(client.post(url, { ...body, ...patch }, who));
+        expect([res.status, res.data.errorCode, res.data.message.includes(field)]).toEqual([400, 'VALIDATION_FAILED', true]);
+      }
     }
-    expect((await failure(client.post('/api/admissions/999/orders', { ...body, content: '' }, doctor))).data.errorCode).toBe('VALIDATION_FAILED');
+    expect((await failure(client.post(url, body, await nurse()))).data.errorCode).toBe('ACCESS_DENIED');
+    expect((await failure(client.post('/api/admissions/999/orders', body, await desk()))).data.errorCode).toBe('ACCESS_DENIED');
     expect((await failure(client.post('/api/admissions/999/orders', body, doctor))).status).toBe(404);
     expect((await failure(client.post('/api/admissions/2/orders', body, doctor))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
-    // BR-LT-15 (MEDICATION thiếu dòng đơn) đứng trước 409 (ca #1 đã DISCHARGED); 409 khi hợp lệ.
-    expect((await failure(client.post('/api/admissions/1/orders', { ...body, orderType: 'MEDICATION' }, doctor))).status).toBe(400);
+    // VET không phụ trách lượt (doctor2): 403 phạm vi, đứng trước cả 400 BR-LT-15 (nội dung rỗng) lẫn 409.
+    const doctor2 = await as('doctor2@store1.vn');
+    expect((await failure(client.post(url, body, doctor2))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    expect((await failure(client.post(url, { ...body, content: '   ' }, doctor2))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    // Nội dung toàn khoảng trắng KHÔNG phải VALIDATION_FAILED: BE đo là 400 BR-LT-15, đứng sau 409.
+    expect(asRule(await failure(client.post(url, { ...body, content: '   ' }, doctor)), 'BR-LT-15')).toEqual(BAD_RULE('BR-LT-15'));
+    expect(asRule(await failure(client.post(url, { ...body, content: '' }, doctor)), 'BR-LT-15')).toEqual(BAD_RULE('BR-LT-15'));
+    // Ca #1 đã DISCHARGED: 409 đứng trước mọi 400 BR-LT-15 (nội dung rỗng, MEDICATION thiếu dòng đơn).
     expect(await failure(client.post('/api/admissions/1/orders', body, doctor))).toMatchObject({ status: 409, data: { errorCode: 'INVALID_STATE_TRANSITION' } });
+    expect((await failure(client.post('/api/admissions/1/orders', { ...body, content: ' ' }, doctor))).status).toBe(409);
+    expect((await failure(client.post('/api/admissions/1/orders', { ...body, orderType: 'MEDICATION' }, doctor))).status).toBe(409);
   });
 
   it('#6: mảng không phân trang, scheduledAt tăng dần (trùng thì mã tăng dần), lọc status; CARETAKER và lễ tân xem được', async () => {
@@ -461,54 +549,75 @@ describe('thực hiện và hủy y lệnh (#7, #8, BR-LT-15)', () => {
     expect(cancelled).toMatchObject({ status: 'CANCELLED', cancelReason: 'Thú đã no', doneAt: null });
   });
 
-  it('CARETAKER không thực hiện được y lệnh thuốc: 403 ACCESS_DENIED, y lệnh vẫn ORDERED; VET thực hiện được', async () => {
+  it('CARETAKER không thực hiện được y lệnh thuốc: 403 ACCESS_DENIED_SCOPE_MISMATCH (BE đo, không phải ACCESS_DENIED), y lệnh vẫn ORDERED; mọi VET thực hiện được, kể cả không phụ trách lượt', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const item = data<{ itemId: number }>(await client.post('/api/visits/2002/prescriptions', { productId: 3, quantity: 2, dosageInstructions: 'Ngày 2 lần' }, doctor));
     const med = await order(doctor, a.admissionId, { orderType: 'MEDICATION', content: 'Amoxicillin', scheduledAt: SOON(), prescriptionItemId: item.itemId });
     const denied = await failure(client.post(`/api/admission-orders/${med.admissionOrderId}/complete`, { note: 'Đã cho uống' }, await nurse()));
-    expect(denied).toMatchObject({ status: 403, data: { errorCode: 'ACCESS_DENIED' } });
+    expect(denied).toMatchObject({ status: 403, data: { errorCode: 'ACCESS_DENIED_SCOPE_MISMATCH' } });
+    // Ghi chú rỗng + y lệnh thuốc: vẫn 403 (đứng trước 409 và 400).
+    expect((await failure(client.post(`/api/admission-orders/${med.admissionOrderId}/complete`, { note: ' ' }, await nurse()))).status).toBe(403);
     expect(data<AdmissionOrder[]>(await client.get(`/api/admissions/${a.admissionId}/orders`, doctor))[0].status).toBe('ORDERED');
-    expect((await complete(doctor, med.admissionOrderId, 'Đã cho uống')).status).toBe('DONE');
+    expect((await complete(await as('doctor2@store1.vn'), med.admissionOrderId, 'VET khác ghi')).status).toBe('DONE');
   });
 
-  it('thứ tự #7: path / body sai kiểu 400 → vai trò → ghi chú > 300 400 → 404 → chi nhánh 403 → thiếu ghi chú 400 BR-LT-15 → 409', async () => {
+  it('thứ tự #7: sai kiểu 400 → thiếu / dài 400 VALIDATION_FAILED (trước vai trò) → vai trò → 404 → chi nhánh 403 → CARETAKER với thuốc 403 → 409 → ghi chú rỗng 400 BR-LT-15', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const o = await order(doctor, a.admissionId);
     const url = `/api/admission-orders/${o.admissionOrderId}/complete`;
     expect((await failure(client.post('/api/admission-orders/abc/complete', { note: 'x' }, doctor))).data.errorCode).toBe('MALFORMED_REQUEST');
     expect((await failure(client.post(url, { note: [] }, await desk()))).data.errorCode).toBe('MALFORMED_REQUEST');
+    for (const body of [{}, { note: null }, { note: 'x'.repeat(301) }]) {
+      for (const who of [doctor, await desk()]) {
+        const res = await failure(client.post(url, body, who));
+        expect([res.status, res.data.errorCode, res.data.message.includes('note')]).toEqual([400, 'VALIDATION_FAILED', true]);
+      }
+    }
     expect((await failure(client.post(url, { note: 'x' }, await desk()))).data.errorCode).toBe('ACCESS_DENIED');
-    expect((await failure(client.post(url, { note: 'x'.repeat(301) }, doctor))).data.errorCode).toBe('VALIDATION_FAILED');
     expect((await failure(client.post('/api/admission-orders/999/complete', { note: 'x' }, doctor))).status).toBe(404);
+    expect((await failure(client.post('/api/admission-orders/999/complete', { note: 'x' }, await desk()))).data.errorCode).toBe('ACCESS_DENIED');
     const branch2 = rawState().orders.find((x) => x.admissionId === 2)!.admissionOrderId;
     expect((await failure(client.post(`/api/admission-orders/${branch2}/complete`, { note: 'x' }, doctor))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
-    for (const body of [{}, { note: '' }, { note: '   ' }, { note: null }]) {
+    // Ghi chú rỗng KHÔNG phải VALIDATION_FAILED: BE đo là 400 BR-LT-15, đứng sau 409.
+    for (const body of [{ note: '' }, { note: '   ' }]) {
       expect(asRule(await failure(client.post(url, body, doctor)), 'BR-LT-15')).toEqual(BAD_RULE('BR-LT-15'));
     }
-    // Y lệnh đã DONE (mẫu #1) hoặc đã CANCELLED: 409.
+    // Y lệnh đã DONE (mẫu #1) hoặc đã CANCELLED: 409, kể cả khi ghi chú rỗng.
     expect((await failure(client.post('/api/admission-orders/1/complete', { note: 'x' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
+    expect((await failure(client.post('/api/admission-orders/1/complete', { note: ' ' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
     expect((await failure(client.post('/api/admission-orders/3/complete', { note: 'x' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
     await complete(doctor, o.admissionOrderId);
     expect((await failure(client.post(url, { note: 'x' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
   });
 
-  it('thứ tự #8: body sai kiểu 400 → VET → lý do > 300 400 → 404 → chi nhánh 403 → thiếu lý do 400 BR-LT-15 → 409', async () => {
+  it('thứ tự #8: sai kiểu 400 → thiếu / dài 400 VALIDATION_FAILED (trước vai trò) → VET → 404 → chi nhánh 403 → người phụ trách 403 → 409 → lý do rỗng 400 BR-LT-15', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const o = await order(doctor, a.admissionId);
     const url = `/api/admission-orders/${o.admissionOrderId}/cancel`;
     expect((await failure(client.post(url, { reason: {} }, await nurse()))).data.errorCode).toBe('MALFORMED_REQUEST');
+    for (const body of [{}, { reason: null }, { reason: 'x'.repeat(301) }]) {
+      for (const who of [doctor, await nurse()]) {
+        const res = await failure(client.post(url, body, who));
+        expect([res.status, res.data.errorCode, res.data.message.includes('reason')]).toEqual([400, 'VALIDATION_FAILED', true]);
+      }
+    }
     expect((await failure(client.post(url, { reason: 'x' }, await nurse()))).data.errorCode).toBe('ACCESS_DENIED');
-    expect((await failure(client.post(url, { reason: 'x'.repeat(301) }, doctor))).data.errorCode).toBe('VALIDATION_FAILED');
     expect((await failure(client.post('/api/admission-orders/999/cancel', { reason: 'x' }, doctor))).status).toBe(404);
+    expect((await failure(client.post('/api/admission-orders/999/cancel', { reason: 'x' }, await nurse()))).data.errorCode).toBe('ACCESS_DENIED');
     const branch2 = rawState().orders.find((x) => x.admissionId === 2)!.admissionOrderId;
     expect((await failure(client.post(`/api/admission-orders/${branch2}/cancel`, { reason: 'x' }, doctor))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
-    for (const body of [{}, { reason: '' }, { reason: ' ' }, { reason: null }]) {
+    // VET không phụ trách lượt: 403 phạm vi, đứng trước 409 (y lệnh #1 đã DONE) và trước lý do rỗng.
+    const doctor2 = await as('doctor2@store1.vn');
+    expect((await failure(client.post(url, { reason: 'x' }, doctor2))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    expect((await failure(client.post('/api/admission-orders/1/cancel', { reason: ' ' }, doctor2))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
+    for (const body of [{ reason: '' }, { reason: ' ' }]) {
       expect(asRule(await failure(client.post(url, body, doctor)), 'BR-LT-15')).toEqual(BAD_RULE('BR-LT-15'));
     }
     expect((await failure(client.post('/api/admission-orders/1/cancel', { reason: 'x' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
+    expect((await failure(client.post('/api/admission-orders/1/cancel', { reason: ' ' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
     await client.post(url, { reason: 'x' }, doctor);
     expect((await failure(client.post(url, { reason: 'x' }, doctor))).data.errorCode).toBe('INVALID_STATE_TRANSITION');
   });
@@ -519,7 +628,7 @@ describe('thực hiện và hủy y lệnh (#7, #8, BR-LT-15)', () => {
 const vitals = { temperatureC: 38.6, heartRate: 140, respiratoryRate: 30, weightKg: 18.4, appetite: 'REDUCED', note: ' Thú lờ đờ ', abnormal: false };
 
 describe('chỉ số theo dõi (#9, #10, BR-LT-16)', () => {
-  it('VET và CARETAKER ghi: 201, đủ trường, tên người ghi; cân nặng vào hồ sơ cân của thú (BR-KH-04)', async () => {
+  it('VET và CARETAKER ghi: 201, đủ trường, tên người ghi; cân nặng vào hồ sơ cân của thú (BR-KH-04), làm tròn 1 chữ số lẻ (nhiệt độ) và 2 (cân nặng)', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const res = await client.post(`/api/admissions/${a.admissionId}/observations`, vitals, await nurse());
@@ -541,55 +650,80 @@ describe('chỉ số theo dõi (#9, #10, BR-LT-16)', () => {
     const note = await client.post(`/api/admissions/${a.admissionId}/observations`, { abnormal: false, note: 'Thú ngủ yên' }, doctor);
     expect(note.data.data).toMatchObject({ recordedByName: 'BS. Minh Anh', temperatureC: null, weightKg: null, appetite: null, note: 'Thú ngủ yên' });
     expect(petCurrentWeight(4)).toBe(18.4);
+    const rounded = await client.post(`/api/admissions/${a.admissionId}/observations`, { abnormal: false, temperatureC: 38.55, weightKg: 5.555 }, doctor);
+    expect(rounded.data.data).toMatchObject({ temperatureC: 38.6, weightKg: 5.56 });
   });
 
-  it('abnormal = true: báo VET phụ trách bằng thông báo CARE_LOG_ABNORMAL khi người ghi là CARETAKER; VET tự ghi thì không tự báo mình', async () => {
+  it('abnormal = true: báo VET phụ trách bằng mẫu INPATIENT_OBSERVATION_ABNORMAL_APP (link /admin/inpatient) khi người ghi là CARETAKER; VET tự ghi thì không tự báo mình', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const unread = async () =>
-      data<PageResponse<{ type: string; title: string }>>(await client.get('/api/me/notifications', { params: { unreadOnly: true }, ...doctor })).content.filter((n) => n.type === 'CARE_LOG_ABNORMAL');
+      data<PageResponse<{ type: string; title: string; body: string; linkUrl: string | null }>>(await client.get('/api/me/notifications', { params: { unreadOnly: true }, ...doctor })).content.filter(
+        (n) => n.type === 'INPATIENT_OBSERVATION_ABNORMAL_APP',
+      );
     await client.post(`/api/admissions/${a.admissionId}/observations`, { abnormal: true, note: 'Tự ghi' }, doctor);
     expect(await unread()).toHaveLength(0);
     await client.post(`/api/admissions/${a.admissionId}/observations`, { abnormal: true, temperatureC: 40.1 }, await nurse());
-    expect(await unread()).toMatchObject([{ title: 'Theo dõi nội trú bất thường: Lu' }]);
+    const [notice] = await unread();
+    expect(notice).toMatchObject({ title: 'Lu có dấu hiệu bất thường khi nội trú', linkUrl: '/admin/inpatient' });
+    expect(notice.body).toContain(`ca nội trú ${a.code}`);
+    expect(notice.body).toMatch(/^Theo dõi ngày \d{2}\/\d{2}\/\d{4} của Lu /);
     await client.post(`/api/admissions/${a.admissionId}/observations`, { abnormal: false, temperatureC: 38.5 }, await nurse());
     expect(await unread()).toHaveLength(1);
   });
 
-  it('thứ tự: body sai kiểu 400 → vai trò → thiếu abnormal / ghi chú > 500 400 → 404 → chi nhánh 403 → BR-LT-16 → 409', async () => {
+  it('thứ tự: sai kiểu 400 → thiếu abnormal / ghi chú > 500 400 (trước vai trò) → vai trò → 404 → chi nhánh 403 → 409 → BR-LT-16', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const url = `/api/admissions/${a.admissionId}/observations`;
     const customer = await as(ROLES.CUSTOMER);
-    for (const bad of [{ ...vitals, temperatureC: 'nóng' }, { ...vitals, heartRate: 80.5 }, { ...vitals, respiratoryRate: '30' }, { ...vitals, appetite: 'MAYBE' }, { ...vitals, note: [] }, { ...vitals, abnormal: 'có' }]) {
+    for (const bad of [{ ...vitals, temperatureC: 'nóng' }, { ...vitals, heartRate: 80.5 }, { ...vitals, appetite: 'MAYBE' }, { ...vitals, note: [] }, { ...vitals, abnormal: 'có' }]) {
       expect((await failure(client.post(url, bad, customer))).data.errorCode).toBe('MALFORMED_REQUEST');
     }
-    expect((await failure(client.post(url, vitals, await desk()))).data.errorCode).toBe('ACCESS_DENIED');
+    // BE (Jackson) nhận số dạng chuỗi cho trường số: heartRate '30' vẫn 201.
+    expect((await client.post(url, { ...vitals, respiratoryRate: '30' }, doctor)).status).toBe(201);
     const noFlag = { ...vitals, abnormal: undefined };
+    expect(await failure(client.post(url, noFlag, await desk()))).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED', message: expect.stringContaining('abnormal') } });
+    expect((await failure(client.post(url, vitals, await desk()))).data.errorCode).toBe('ACCESS_DENIED');
     expect(await failure(client.post(url, noFlag, doctor))).toMatchObject({ status: 400, data: { errorCode: 'VALIDATION_FAILED', message: expect.stringContaining('abnormal') } });
     expect((await failure(client.post(url, { ...vitals, note: 'x'.repeat(501) }, doctor))).data.message).toContain('note');
     expect((await failure(client.post('/api/admissions/999/observations', noFlag, doctor))).data.errorCode).toBe('VALIDATION_FAILED');
     expect((await failure(client.post('/api/admissions/999/observations', vitals, doctor))).status).toBe(404);
     expect((await failure(client.post('/api/admissions/2/observations', vitals, doctor))).data.errorCode).toBe('ACCESS_DENIED_SCOPE_MISMATCH');
-    // BR-LT-16 đứng trước 409 (ca #1 đã DISCHARGED); hợp lệ thì 409.
-    expect((await failure(client.post('/api/admissions/1/observations', { abnormal: true }, doctor))).status).toBe(400);
+    // Ca #1 đã DISCHARGED: 409 đứng TRƯỚC BR-LT-16 (BE đo: ghi rỗng trên ca đã xuất viện vẫn 409).
     expect(await failure(client.post('/api/admissions/1/observations', vitals, doctor))).toMatchObject({ status: 409, data: { errorCode: 'INVALID_STATE_TRANSITION' } });
+    expect((await failure(client.post('/api/admissions/1/observations', { abnormal: true }, doctor))).status).toBe(409);
   });
 
-  it('BR-LT-16: không có chỉ số hay ghi chú nào (abnormal một mình không đủ), giá trị ngoài khoảng: 400 và không ghi gì', async () => {
+  it('BR-LT-16: không có chỉ số hay ghi chú nào (abnormal một mình không đủ), giá trị ngoài giới hạn lưu trữ: 400 đúng câu của BE và không ghi gì; biên hợp lệ ghi được', async () => {
     const doctor = await vet();
     const a = await admit(doctor);
     const url = `/api/admissions/${a.admissionId}/observations`;
     for (const body of [{ abnormal: false }, { abnormal: true }, { abnormal: false, note: '   ' }, { abnormal: false, temperatureC: null, note: null }]) {
-      expect(asRule(await failure(client.post(url, body, doctor)), 'BR-LT-16')).toEqual(BAD_RULE('BR-LT-16'));
+      const res = await failure(client.post(url, body, doctor));
+      expect(asRule(res, 'BR-LT-16')).toEqual(BAD_RULE('BR-LT-16'));
+      expect(res.data.message).toBe('Vui lòng nhập ít nhất một chỉ số hoặc ghi chú theo dõi (BR-LT-16)');
     }
-    for (const patch of [{ temperatureC: 0 }, { temperatureC: 1000 }, { heartRate: 0 }, { heartRate: 40000 }, { respiratoryRate: -3 }, { weightKg: 0 }, { weightKg: 10000 }]) {
+    const cases: [object, string][] = [
+      [{ temperatureC: 1000 }, 'Nhiệt độ vượt giới hạn lưu trữ'],
+      [{ temperatureC: 999.96 }, 'Nhiệt độ vượt giới hạn lưu trữ'],
+      [{ heartRate: 0 }, 'Nhịp tim phải từ 1 đến 32767'],
+      [{ heartRate: 40000 }, 'Nhịp tim phải từ 1 đến 32767'],
+      [{ respiratoryRate: -3 }, 'Nhịp thở phải từ 1 đến 32767'],
+      [{ weightKg: 0 }, 'Cân nặng phải lớn hơn 0'],
+      [{ weightKg: -1 }, 'Cân nặng phải lớn hơn 0'],
+      [{ weightKg: 0.004 }, 'Cân nặng phải lớn hơn 0'],
+      [{ weightKg: 10000 }, 'Cân nặng vượt giới hạn lưu trữ'],
+    ];
+    for (const [patch, text] of cases) {
       const res = await failure(client.post(url, { abnormal: false, ...patch }, doctor));
-      expect([JSON.stringify(patch), ...asRule(res, 'BR-LT-16')]).toEqual([JSON.stringify(patch), ...BAD_RULE('BR-LT-16')]);
+      expect([JSON.stringify(patch), ...asRule(res, 'BR-LT-16'), res.data.message]).toEqual([JSON.stringify(patch), ...BAD_RULE('BR-LT-16'), `${text} (BR-LT-16)`]);
     }
     expect(data<PageResponse<Observation>>(await client.get(url, doctor)).totalElements).toBe(0);
-    // Biên hợp lệ.
-    expect((await client.post(url, { abnormal: false, temperatureC: 999.9, heartRate: 32767, respiratoryRate: 1, weightKg: 0.01 }, doctor)).status).toBe(201);
+    // Biên hợp lệ theo BE: nhiệt độ 0 và âm không bị chặn (khoảng lâm sàng chưa chốt, A4), cân từ 0.005.
+    expect((await client.post(url, { abnormal: false, temperatureC: 999.9, heartRate: 32767, respiratoryRate: 1, weightKg: 0.005 }, doctor)).data.data).toMatchObject({ weightKg: 0.01 });
+    expect((await client.post(url, { abnormal: false, temperatureC: 0 }, doctor)).data.data.temperatureC).toBe(0);
+    expect((await client.post(url, { abnormal: false, temperatureC: -5.55 }, doctor)).data.data.temperatureC).toBe(-5.6);
   });
 
   it('#10: mới nhất trước (trùng giờ thì mã lớn trước), phân trang; lịch sử mẫu có 3 dòng; lễ tân xem được; chi nhánh khác 403, không có 404', async () => {
@@ -618,14 +752,22 @@ describe('chỉ số theo dõi (#9, #10, BR-LT-16)', () => {
 // ─── Hoàn tất lượt (visit-v1 #10) bị chặn bởi ca ADMITTED (BR-LT-14) ───
 
 describe('guard hoàn tất lượt khi còn ca nội trú ADMITTED (BR-LT-14)', () => {
-  it('còn ADMITTED: 400 BR-LT-14; xuất viện xong thì hoàn tất được', async () => {
+  it('còn ADMITTED: 409 INVALID_STATE_TRANSITION (BE đo, không phải 400); xuất viện xong thì hoàn tất được', async () => {
     const doctor = await vet();
     await client.put('/api/visits/2002/medical-record', { diagnosis: 'Khỏe' }, doctor);
     const a = await admit(doctor);
     const blocked = await failure(client.post('/api/visits/2002/complete', undefined, doctor));
-    expect(asRule(blocked, 'BR-LT-14')).toEqual(BAD_RULE('BR-LT-14'));
+    expect(blocked).toMatchObject({ status: 409, data: { errorCode: 'INVALID_STATE_TRANSITION' } });
+    expect(blocked.data.message).toContain('còn ca nội trú đang điều trị');
     await discharge(doctor, a.admissionId);
     expect(data<Visit>(await client.post('/api/visits/2002/complete', undefined, doctor))).toMatchObject({ visitId: 2002, status: 'COMPLETED' });
+  });
+
+  it('guard đứng TRƯỚC kiểm chẩn đoán (BR-KB-02): lượt chưa có chẩn đoán mà còn ca ADMITTED vẫn 409 (BE đo: visit 10 chưa chẩn đoán → 409)', async () => {
+    const doctor = await vet();
+    await admit(doctor);
+    const blocked = await failure(client.post('/api/visits/2002/complete', undefined, doctor));
+    expect(blocked).toMatchObject({ status: 409, data: { errorCode: 'INVALID_STATE_TRANSITION' } });
   });
 });
 
@@ -643,7 +785,7 @@ describe('state localStorage', () => {
   it('state chỉ có admissions (hàng thiếu trường): trường tùy chọn là null, các bảng khác lấy mặc định, mã mới tiếp theo mã lớn nhất', async () => {
     localStorage.setItem(
       'petcare-mock-inpatient',
-      JSON.stringify({ admissions: [{ admissionId: 10, code: 'NT-261001-0001', visitId: 61, petId: 1, customerId: 1, branchId: 1, serviceId: 7101, unitPrice: 350000, status: 'ADMITTED', admittedBy: 5, admittedAt: '2026-10-01T03:00:00.000Z' }] }),
+      JSON.stringify({ admissions: [{ admissionId: 10, code: 'NT-2610-00001', visitId: 61, petId: 1, customerId: 1, branchId: 1, serviceId: 7101, unitPrice: 350000, status: 'ADMITTED', admittedBy: 5, admittedAt: '2026-10-01T03:00:00.000Z' }] }),
     );
     const doctor = await vet();
     expect(data<Admission>(await client.get('/api/admissions/10', doctor))).toMatchObject({ boardingBookingId: null, kennelId: null, dischargeOutcome: null, orderLineId: null, petName: 'Mochi' });

@@ -8,7 +8,7 @@
 // T92: 85 → 86 khóa (thêm `ai.chat.general_knowledge_enabled` của V52, khóa BOOL đầu tiên).
 // T57-A: 52 → 85 khóa (thêm 18 `ai.*` của V35 gồm 4 DECIMAL, 8 `complaint.*` / `workforce.*` của V40, 7 `shop.*` / `payment.*` / `returns.*` / `content.*` của V44, V45, V46, V48; V43 và V47 không seed khóa).
 // T57-A: mẫu thông báo 30 → 70 mã (thêm 40 mẫu tầng 3; migration V41…V48 không INSERT / UPDATE bảng mẫu, cả 40 mẫu nằm ở V40).
-// Không có `complaint.*` và `COMPLAINT_*` (V51 đã xóa chúng khỏi BE): 86 khóa (sau V61), 63 mẫu; identity-admin.mock.test.ts áp các lệnh DELETE của V51 khi đọc SQL để đối chiếu.
+// Không có `complaint.*` và `COMPLAINT_*` (V51 đã xóa chúng khỏi BE): 86 khóa (sau V61), 65 mẫu (sau V63: thêm INPATIENT_OBSERVATION_ABNORMAL và _APP); identity-admin.mock.test.ts áp các lệnh DELETE của V51 khi đọc SQL để đối chiếu.
 // Không viết tay: identity-admin.mock.test.ts đọc lại SQL và so từng trường nên lệch BE là test đỏ. BE thêm khóa / mã mới thì thêm vào đây theo cùng migration.
 import type { NotificationTemplate, SystemConfig } from '../../types/identity';
 
@@ -291,6 +291,24 @@ export const SEED_TEMPLATES: NotificationTemplate[] = [
     body: '{ten_thu_cung} có hẹn tái khám ngày {ngay_tai_kham} tại {chi_nhanh}. Bấm để đặt lịch, hoặc gọi chi nhánh theo số {so_dien_thoai_chi_nhanh}.',
     allowedVars: ['ten_khach', 'ten_thu_cung', 'ngay_tai_kham', 'chi_nhanh', 'so_dien_thoai_chi_nhanh'],
     requiredVars: ['ten_thu_cung', 'ngay_tai_kham', 'chi_nhanh', 'so_dien_thoai_chi_nhanh'],
+    isDefault: true,
+  },
+  {
+    code: 'INPATIENT_OBSERVATION_ABNORMAL',
+    channel: 'EMAIL',
+    subject: 'Theo dõi nội trú của {ten_thu_cung} có dấu hiệu bất thường',
+    body: 'Xin chào {ten_khach},\n\nBác sĩ vừa ghi nhận dấu hiệu bất thường của {ten_thu_cung} trong thời gian điều trị nội trú {ma_noi_tru} tại {chi_nhanh} (theo dõi ngày {ngay_ghi}).\nChi nhánh sẽ liên hệ với Quý khách. Quý khách cũng có thể gọi trực tiếp cho chi nhánh để biết thêm tình hình.\n\nTrân trọng,\nPet Care',
+    allowedVars: ['ten_khach', 'ten_thu_cung', 'chi_nhanh', 'ma_noi_tru', 'ngay_ghi'],
+    requiredVars: ['ten_thu_cung', 'chi_nhanh', 'ma_noi_tru', 'ngay_ghi'],
+    isDefault: true,
+  },
+  {
+    code: 'INPATIENT_OBSERVATION_ABNORMAL_APP',
+    channel: 'IN_APP',
+    subject: '{ten_thu_cung} có dấu hiệu bất thường khi nội trú',
+    body: 'Theo dõi ngày {ngay_ghi} của {ten_thu_cung} (ca nội trú {ma_noi_tru} tại {chi_nhanh}) được đánh dấu bất thường. Vui lòng xem chỉ số theo dõi và liên hệ chi nhánh.',
+    allowedVars: ['ten_khach', 'ten_thu_cung', 'chi_nhanh', 'ma_noi_tru', 'ngay_ghi'],
+    requiredVars: ['ten_thu_cung', 'chi_nhanh', 'ma_noi_tru', 'ngay_ghi'],
     isDefault: true,
   },
   {

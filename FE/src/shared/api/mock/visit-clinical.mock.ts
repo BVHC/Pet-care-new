@@ -761,6 +761,12 @@ export const prescriptionItemIdsOfVisit = (visitId: number): number[] =>
     .prescriptions.filter((p) => p.visitId === visitId)
     .map((p) => p.itemId);
 
+/** Các dòng đơn mua ngoài của lượt (không có dòng Order): y lệnh `MEDICATION` không liên kết được (BR-LT-15, đo 25/11/2026). */
+export const externalPrescriptionItemIdsOfVisit = (visitId: number): number[] =>
+  load()
+    .prescriptions.filter((p) => p.visitId === visitId && p.orderLineId === null)
+    .map((p) => p.itemId);
+
 // ─── Cho mock lưu trú (T48, boarding.mock.ts): như VaccinationQueryApi.findBoardingVaccineGaps của BE, chỉ thêm export ───
 
 export interface DoseSummary {

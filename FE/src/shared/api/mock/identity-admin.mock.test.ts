@@ -1363,8 +1363,8 @@ describe('PUT /api/system-configs/{key} — validate như BE SystemConfigEditSer
   });
 });
 
-describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40)', () => {
-  it.skipIf(!hasMigrations)('đúng 63 mã, từng mẫu giống hệt SQL (kênh, tiêu đề, nội dung, allowedVars, requiredVars, isDefault), sắp theo code', async () => {
+describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40, V63)', () => {
+  it.skipIf(!hasMigrations)('đúng 65 mã, từng mẫu giống hệt SQL (kênh, tiêu đề, nội dung, allowedVars, requiredVars, isDefault), sắp theo code', async () => {
     const expected = sqlTemplates().map((r) => ({
       code: r.code,
       channel: r.channel,
@@ -1374,7 +1374,7 @@ describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40)', () => {
       requiredVars: r.required_vars,
       isDefault: r.subject === r.default_subject && r.body === r.default_body,
     }));
-    expect(expected).toHaveLength(63);
+    expect(expected).toHaveLength(65);
     const rows = await getTemplates();
     expect(rows.map((r) => r.code)).toEqual(expected.map((r) => r.code));
     for (const [i, row] of rows.entries()) {
@@ -1397,7 +1397,7 @@ describe('UC10 — mẫu thông báo seed khớp BE (V3…V26, V40)', () => {
   it('dòng gõ tay theo SQL: mã thật của BE có mặt, mã bịa của bản mock cũ không còn, OTP_REGISTER là bản V4', async () => {
     const rows = await getTemplates();
     const by = Object.fromEntries(rows.map((r) => [r.code as string, r]));
-    expect(rows).toHaveLength(63);
+    expect(rows).toHaveLength(65);
     expect(by['LAST_BRANCH_MANAGER_LOCKED_APP']).toMatchObject({
       channel: 'IN_APP',
       subject: 'Chi nhánh không còn quản lý đang hoạt động',

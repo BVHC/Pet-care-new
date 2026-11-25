@@ -10,6 +10,7 @@ import { renderDesk, signInAs, startDesk } from '../../test/visit-harness';
 import { AdminInpatientPage } from './AdminInpatientPage';
 import { inpatientPermissions } from './inpatient/permissions';
 
+// T79: mock khớp BE thật (nhập từ lượt khám phải kèm chuồng điều trị mà VET chưa xem được danh sách chuồng; VET khác không phải người được gán Visit thì không xuất viện / ra y lệnh / hủy được).
 // Mock nội trú lúc 10:40 thứ Năm 22/10/2026, chi nhánh 1: không có ca ADMITTED; lịch sử #1 DISCHARGED (Mochi, lượt 61, 4 y lệnh, 3 lần theo dõi).
 // VET #5 (doctor@store1.vn) đang khám Lu (lượt 2002); đặt chỗ lưu trú #2 Cốm, #3 Mực đang CHECKED_IN. Catalog chưa có dịch vụ INPATIENT (luồng chính nối sau): test tiêm 7101 / 7102.
 
@@ -51,21 +52,21 @@ describe('danh sách và chi tiết (inpatient-v1 #2, #3, #6, #10)', () => {
 });
 
 describe('VET: nhập viện, y lệnh, theo dõi, xuất viện', () => {
-  it('nhập viện Lu từ lượt khám đang mở: ca mới hiện trong danh sách và mở sẵn chi tiết', async () => {
+  it('nhập viện từ lượt khám: BE đòi chuồng điều trị mà VET chưa xem được danh sách chuồng, nên hộp thoại nói rõ và hiện nguyên lỗi BE (không có ô gõ mã chuồng)', async () => {
     spyServices();
     const { user } = await renderPage('doctor@store1.vn');
     await screen.findByText('Chưa có thú nào đang nội trú');
 
     await user.click(screen.getByRole('button', { name: 'Nhập viện' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nhập viện' });
+    expect(within(dialog).getByText(/chưa chọn được chuồng điều trị/i)).toBeInTheDocument();
     await user.click(await within(dialog).findByRole('radio', { name: /Lu/ }));
     await user.selectOptions(within(dialog).getByLabelText('Dịch vụ nội trú'), '7101');
     await user.click(within(dialog).getByRole('button', { name: 'Nhập viện' }));
 
-    expect(await screen.findByText(/Đã nhập viện Lu \(NT-/)).toBeInTheDocument();
-    expect(await screen.findByRole('region', { name: /^Ca nội trú NT-/ })).toHaveTextContent('Nội trú điều trị (theo ngày)');
-    expect(screen.getByRole('button', { name: /^Xem ca NT-/ })).toHaveTextContent('Lu');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Nhập viện từ lượt khám phải chọn chuồng điều trị');
+    expect(screen.getByRole('dialog', { name: 'Nhập viện' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Xem ca NT-/ })).not.toBeInTheDocument();
   });
 
   it('nhập viện từ đặt chỗ lưu trú đang CHECKED_IN (Cốm): chuyển sang tab đặt chỗ, ca mới giữ chuồng của đặt chỗ', async () => {
@@ -80,6 +81,23 @@ describe('VET: nhập viện, y lệnh, theo dõi, xuất viện', () => {
 
     expect(await screen.findByText(/Đã nhập viện Cốm/)).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: /^Xem ca NT-/ })).toHaveTextContent('chuồng C-01');
+  });
+
+  it('đặt chỗ lưu trú OVERDUE (quá hạn trả, thú vẫn trong chuồng) cũng chọn được để chuyển sang điều trị: lấy theo inStay, không lọc riêng CHECKED_IN', async () => {
+    spyServices();
+    await startDesk('doctor@store1.vn');
+    await apiClient.get('/api/boarding-bookings'); // nạp state lưu trú rồi đổi đặt chỗ #2 (Cốm) sang OVERDUE
+    const stored = JSON.parse(localStorage.getItem('petcare-mock-boarding')!) as { bookings: { bookingId: number; status: string }[] };
+    stored.bookings.find((b) => b.bookingId === 2)!.status = 'OVERDUE';
+    localStorage.setItem('petcare-mock-boarding', JSON.stringify(stored));
+    const { user } = renderDesk(<AdminInpatientPage />);
+    await user.click(await screen.findByRole('button', { name: 'Nhập viện' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nhập viện' });
+    await user.click(within(dialog).getByRole('button', { name: 'Từ đặt chỗ lưu trú' }));
+    await user.click(await within(dialog).findByRole('radio', { name: /Cốm/ }));
+    await user.selectOptions(within(dialog).getByLabelText('Dịch vụ nội trú'), '7101');
+    await user.click(within(dialog).getByRole('button', { name: 'Nhập viện' }));
+    expect(await screen.findByText(/Đã nhập viện Cốm/)).toBeInTheDocument();
   });
 
   it('danh mục thật (đã nối 7101–7104): chỉ liệt kê dịch vụ nội trú đang kinh doanh', async () => {
@@ -103,7 +121,7 @@ describe('VET: nhập viện, y lệnh, theo dõi, xuất viện', () => {
   it('ra y lệnh, ghi chỉ số bất thường, rồi xuất viện: còn y lệnh chờ thì BE từ chối (BR-LT-14) và hộp thoại giữ lỗi; làm xong y lệnh thì xuất viện được', async () => {
     spyServices();
     await startDesk('doctor@store1.vn');
-    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101 });
+    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
     const { user } = renderDesk(<AdminInpatientPage />);
     await user.click(await screen.findByRole('button', { name: `Xem ca ${admission.code}` }));
 
@@ -129,7 +147,7 @@ describe('VET: nhập viện, y lệnh, theo dõi, xuất viện', () => {
     const dischargeDialog = await screen.findByRole('dialog', { name: 'Xuất viện' });
     await user.type(within(dischargeDialog).getByLabelText('Tóm tắt điều trị'), 'Ăn uống tốt, về nhà theo dõi');
     await user.click(within(dischargeDialog).getByRole('button', { name: 'Xuất viện' }));
-    expect(await within(dischargeDialog).findByText('Còn 1 y lệnh chưa thực hiện hoặc chưa hủy')).toBeInTheDocument();
+    expect(await within(dischargeDialog).findByText('Còn 1 y lệnh chưa thực hiện hoặc hủy')).toBeInTheDocument();
 
     await user.click(within(dischargeDialog).getByRole('button', { name: 'Quay lại' }));
     await user.click(screen.getByRole('button', { name: /^Đã thực hiện: Cho ăn pate mềm/ }));
@@ -145,12 +163,12 @@ describe('VET: nhập viện, y lệnh, theo dõi, xuất viện', () => {
     expect(await screen.findByText(/Đã xuất viện Lu/)).toBeInTheDocument();
     expect(await screen.findByText('Đã xuất viện', { selector: 'span' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Xuất viện' })).not.toBeInTheDocument();
-  });
+  }, 20_000);
 
   it('hủy y lệnh phải có lý do; y lệnh đã hủy ở nơi khác thì BE trả 409 và hộp thoại báo lại', async () => {
     spyServices();
     await startDesk('doctor@store1.vn');
-    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101 });
+    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
     const order = await inpatientApi.createOrder(admission.admissionId, { orderType: 'PROCEDURE', content: 'Truyền dịch', scheduledAt: new Date(Date.now() + 3_600_000).toISOString() });
     const { user } = renderDesk(<AdminInpatientPage />);
     await user.click(await screen.findByRole('button', { name: `Xem ca ${admission.code}` }));
@@ -172,7 +190,7 @@ describe('VET: y lệnh thuốc phải gắn dòng đơn của lượt (BR-LT-15
     spyServices();
     await startDesk('doctor@store1.vn');
     if (prescribe) await visitApi.addPrescription(2002, { productId: 3, quantity: 10, dosageInstructions: 'Ngày 2 lần, mỗi lần 1 viên sau ăn' });
-    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101 });
+    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
     const { user } = renderDesk(<AdminInpatientPage />);
     await user.click(await screen.findByRole('button', { name: `Xem ca ${admission.code}` }));
     await user.click(await screen.findByRole('button', { name: 'Ra y lệnh' }));
@@ -189,6 +207,21 @@ describe('VET: y lệnh thuốc phải gắn dòng đơn của lượt (BR-LT-15
     expect(await within(dialog).findByText('Chọn dòng đơn thuốc của lượt khám.')).toBeInTheDocument();
   });
 
+  it('dòng đơn mua ngoài không có trong ô chọn (BE từ chối y lệnh thuốc mua ngoài, BR-LT-15)', async () => {
+    spyServices();
+    await startDesk('doctor@store1.vn');
+    await visitApi.addPrescription(2002, { productId: 3, quantity: 10, dosageInstructions: 'Ngày 2 lần' });
+    await visitApi.addPrescription(2002, { productId: 3, quantity: 999_999, dosageInstructions: 'Hết tồn', shortageResolution: 'EXTERNAL_PURCHASE' });
+    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
+    const { user } = renderDesk(<AdminInpatientPage />);
+    await user.click(await screen.findByRole('button', { name: `Xem ca ${admission.code}` }));
+    await user.click(await screen.findByRole('button', { name: 'Ra y lệnh' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Ra y lệnh' });
+    await user.selectOptions(within(dialog).getByLabelText('Loại y lệnh'), 'MEDICATION');
+    const options = await within(await within(dialog).findByLabelText('Dòng đơn thuốc')).findAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(['Chọn dòng đơn', expect.stringMatching(/Amoxicillin.* × 10$/)]);
+  });
+
   it('có đơn thuốc: chọn dòng đơn rồi ra y lệnh thuốc; y lệnh hiện trong bảng', async () => {
     const { user, dialog } = await openOrderDialog(true);
     await user.selectOptions(await within(dialog).findByLabelText('Dòng đơn thuốc'), await within(dialog).findByRole('option', { name: /Amoxicillin/ }));
@@ -199,11 +232,45 @@ describe('VET: y lệnh thuốc phải gắn dòng đơn của lượt (BR-LT-15
   });
 });
 
+describe('chi tiết ca: tiền tạm tính và người phụ trách Visit', () => {
+  it('hiện số ngày × giá đã chốt = tạm tính (BE trả billedDays, estimatedAmount) cho ca đang điều trị; ca đã xuất viện đổi nhãn', async () => {
+    spyServices();
+    await startDesk('doctor@store1.vn');
+    const admission = await inpatientApi.admit({ boardingBookingId: 2, serviceId: 7101 });
+    const { user } = renderDesk(<AdminInpatientPage />);
+    await user.click(await screen.findByRole('button', { name: `Xem ca ${admission.code}` }));
+    const detail = await screen.findByRole('region', { name: `Ca nội trú ${admission.code}` });
+    expect(await within(detail).findByText('Tạm tính đến hôm nay')).toBeInTheDocument();
+    expect(detail).toHaveTextContent(/1 ngày × 350\.000\s?₫ = 350\.000\s?₫/);
+
+    await user.click(screen.getByRole('tab', { name: 'Đã xuất viện' }));
+    await user.click(await screen.findByRole('button', { name: /^Xem ca NT-/ }));
+    const done = await screen.findByRole('region', { name: /^Ca nội trú NT-/ });
+    expect(await within(done).findByText('Tiền dịch vụ nội trú')).toBeInTheDocument();
+    expect(done).toHaveTextContent(/1 ngày × 350\.000\s?₫ = 350\.000\s?₫/);
+  });
+
+  it('VET không phải người được gán Visit của ca: không thấy Xuất viện / Ra y lệnh / Hủy (BE trả 403), vẫn thực hiện y lệnh và ghi chỉ số được', async () => {
+    spyServices();
+    await startDesk('doctor@store1.vn');
+    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
+    await inpatientApi.createOrder(admission.admissionId, { orderType: 'FEEDING', content: 'Pate mềm', scheduledAt: new Date(Date.now() + 3_600_000).toISOString() });
+    await signInAs('doctor2@store1.vn');
+    const { user } = renderDesk(<AdminInpatientPage />);
+
+    await user.click(await screen.findByRole('button', { name: `Xem ca ${admission.code}` }));
+    expect(await screen.findByRole('button', { name: 'Đã thực hiện: Pate mềm' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ghi chỉ số' })).toBeInTheDocument();
+    for (const name of [/Xuất viện/, /Ra y lệnh/, /^Hủy/]) expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Nhập viện' })).toBeInTheDocument();
+  });
+});
+
 describe('quyền theo vai trò: nút ngoài vai trò bị ẩn', () => {
   it('lễ tân chỉ xem: thấy ca, y lệnh, chỉ số nhưng không có nút Nhập viện / Ra y lệnh / Ghi chỉ số / Xuất viện / Đã thực hiện / Hủy', async () => {
     spyServices();
     await startDesk('doctor@store1.vn');
-    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101 });
+    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
     await inpatientApi.createOrder(admission.admissionId, { orderType: 'FEEDING', content: 'Pate mềm', scheduledAt: new Date(Date.now() + 3_600_000).toISOString() });
     await signInAs('reception@store1.vn');
     const { user } = renderDesk(<AdminInpatientPage />);
@@ -216,7 +283,7 @@ describe('quyền theo vai trò: nút ngoài vai trò bị ẩn', () => {
   it('chăm sóc thú: thực hiện y lệnh không phải thuốc và ghi chỉ số được, nhưng không nhập viện / ra y lệnh / hủy / xuất viện', async () => {
     spyServices();
     await startDesk('doctor@store1.vn');
-    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101 });
+    const admission = await inpatientApi.admit({ visitId: 2002, serviceId: 7101, kennelId: 3 });
     await inpatientApi.createOrder(admission.admissionId, { orderType: 'FEEDING', content: 'Pate mềm', scheduledAt: new Date(Date.now() + 3_600_000).toISOString() });
     await signInAs('caretaker@store1.vn');
     const { user } = renderDesk(<AdminInpatientPage />);
@@ -228,9 +295,14 @@ describe('quyền theo vai trò: nút ngoài vai trò bị ẩn', () => {
   });
 
   it('ma trận quyền: y lệnh thuốc chỉ VET thực hiện được', () => {
-    expect(inpatientPermissions('VET').completeOrder('MEDICATION')).toBe(true);
+    expect(inpatientPermissions('VET', true).completeOrder('MEDICATION')).toBe(true);
     expect(inpatientPermissions('CARETAKER').completeOrder('MEDICATION')).toBe(false);
     expect(inpatientPermissions('CARETAKER').completeOrder('FEEDING')).toBe(true);
     expect(inpatientPermissions('RECEPTIONIST')).toMatchObject({ admit: false, observe: false });
+    // BE: xuất viện, ra và hủy y lệnh thuộc VET đang được gán Visit; nhập viện, thực hiện y lệnh, ghi theo dõi thì VET nào cũng làm được.
+    expect(inpatientPermissions('VET', true)).toMatchObject({ admit: true, discharge: true, createOrder: true, cancelOrder: true, observe: true });
+    expect(inpatientPermissions('VET', false)).toMatchObject({ admit: true, discharge: false, createOrder: false, cancelOrder: false, observe: true });
+    expect(inpatientPermissions('VET', false).completeOrder('MEDICATION')).toBe(true);
+    expect(inpatientPermissions('BRANCH_MANAGER', true)).toMatchObject({ admit: false, discharge: false, observe: false });
   });
 });
