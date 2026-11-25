@@ -1,6 +1,6 @@
 # ADR-0017: Luồng NORMAL của ST20 gửi theo lô trên một kết nối SMTP
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted (mục 3 tự quản `Transport` và mục 4 ngân sách lô → ADR-0154: gửi bằng `JavaMailSender.send(MimeMessage...)` ngoài transaction, `SmtpBatchSender` đã xóa)
 - **Ngày:** 2026-10-07
 - **Supersedes:** ADR-0012 mục 3 ("mỗi dòng một transaction") **cho luồng NORMAL**. Luồng HIGH và mọi mục khác của ADR-0012 giữ nguyên.
 - **Liên quan:**

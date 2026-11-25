@@ -1,6 +1,6 @@
 # ADR-0012: Worker ST20 gửi email từ `notification_outbox`
 
-- **Trạng thái:** Accepted (mục 1, 9 → ADR-0014; mục 3 cho luồng NORMAL → ADR-0017)
+- **Trạng thái:** Accepted (mục 1, 9 → ADR-0014; mục 3 cho luồng NORMAL → ADR-0017; mục 3 và phần idle timeout của mục 10 → ADR-0154: SMTP ngoài transaction)
 - **Ngày:** 2026-10-07
 - **Liên quan:**
   - `docs/01-business-operations.md` ST20 (gửi thông báo & thử lại khi thất bại); `docs/02-business-rules.md` BR-TK-04, 05 (OTP qua email, hiệu lực 5 phút [CFG]), BR-TK-16 (thông báo tới email cũ và mới), BR-QT-14 (mẫu, biến bắt buộc), BR-LH-12, BR-TB-01, BR-TB-06 ("gửi thất bại thì thử lại theo ST20").

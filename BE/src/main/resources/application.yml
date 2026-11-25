@@ -66,6 +66,10 @@ spring:
     scheduling:
       pool:
         size: 4
+    # Executor riêng mailKickExecutor (docs/adr/0154) làm Boot bỏ applicationTaskExecutor mặc định (mode auto);
+    # force giữ nó cho các chỗ Spring tự dùng (MVC async…); không chỗ nào dùng @Async không ghi tên executor.
+    execution:
+      mode: force
 
 # Khóa HS256 ký access token (platform/security/JwtProperties, docs/adr/0003), tối thiểu 32 byte.
 # Hạn phiên không cấu hình ở đây mà là tham số [CFG] session.ttl_hours; không có refresh token.
@@ -212,8 +216,9 @@ app:
       cron: "${VACCINE_OVERDUE_CRON:30 25 7-20 * * *}"
       batch-size: 100
       time-budget: 60s
-    # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường.
-    # IN_APP (docs/adr/0014): giao vào bảng notifications, job riêng, không qua SMTP.
+    # ST20 từ notification_outbox. Email (docs/adr/0012): hai luồng priority (OTP, mật khẩu tạm) và thường; SMTP chạy
+    # ngoài transaction: nhận dòng → gửi → ghi kết quả (docs/adr/0154). IN_APP (docs/adr/0014): giao vào bảng
+    # notifications, job riêng, không qua SMTP.
     notification-outbox:
       cron: "${NOTIFICATION_OUTBOX_CRON:*/10 * * * * *}"
       priority-cron: "${NOTIFICATION_OUTBOX_PRIORITY_CRON:*/5 * * * * *}"
@@ -227,9 +232,14 @@ app:
       in-app-cron: "${NOTIFICATION_IN_APP_CRON:*/5 * * * * *}"
       in-app-time-budget: 4s
       lag-warn-in-app: 60s
-      # Luồng NORMAL gửi theo lô trên một kết nối SMTP (docs/adr/0017); budget tối đa 15s.
+      # Luồng NORMAL gửi theo lô trên một kết nối SMTP (docs/adr/0017).
       normal-batch-size: 20
-      normal-batch-send-budget: 10s
+      # Hạn giữ dòng đã nhận (docs/adr/0154): chết giữa chừng thì dòng hiện lại sau hạn này. HIGH ≥ 60s; NORMAL
+      # ≥ normal-batch-size × 30s (JavaMailSender gửi tiếp sau timeout từng thư). Đổi MAIL_*_TIMEOUT_MS thì tính lại.
+      priority-claim-lease: 60s
+      normal-claim-lease: 10m
+      # Gửi OTP / mật khẩu tạm ngay sau commit trên luồng nền (docs/adr/0154); job HIGH vẫn quét bù.
+      kick-enabled: ${NOTIFICATION_KICK_ENABLED:true}
     # Xóa dòng notification_outbox đã xử lý (docs/adr/0016): SENT sau 30 ngày, FAILED sau 90 ngày (tính từ created_at).
     # 03:40 để không trùng dọn phiên (03:00) và các mốc 15 phút của ST02.
     notification-outbox-cleanup:

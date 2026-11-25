@@ -111,6 +111,8 @@ services:
       NOTIFICATION_OUTBOX_CRON: ${NOTIFICATION_OUTBOX_CRON:-*/10 * * * * *}
       NOTIFICATION_OUTBOX_PRIORITY_CRON: ${NOTIFICATION_OUTBOX_PRIORITY_CRON:-*/5 * * * * *}
       NOTIFICATION_IN_APP_CRON: ${NOTIFICATION_IN_APP_CRON:-*/5 * * * * *}
+      # Gửi OTP / mật khẩu tạm ngay sau commit (docs/adr/0154); mặc định trùng application.yml.
+      NOTIFICATION_KICK_ENABLED: ${NOTIFICATION_KICK_ENABLED:-true}
       # Lịch dọn notification_outbox đã xử lý (docs/adr/0016); mặc định trùng application.yml.
       NOTIFICATION_OUTBOX_CLEANUP_CRON: ${NOTIFICATION_OUTBOX_CLEANUP_CRON:-0 40 3 * * *}
       # Lịch dọn refresh token hết hạn (docs/adr/0114, D054); mặc định trùng application.yml.

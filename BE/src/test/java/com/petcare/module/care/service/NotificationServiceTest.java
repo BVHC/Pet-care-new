@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -13,6 +14,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.api.NotificationApi.NotificationRequest;
@@ -27,7 +30,37 @@ class NotificationServiceTest {
     private static final Instant NOW = Instant.parse("2026-10-06T03:00:00Z");
 
     private final NotificationOutboxRepository outbox = mock(NotificationOutboxRepository.class);
-    private final NotificationService service = new NotificationService(outbox, Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE));
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    private final NotificationService service = new NotificationService(outbox, Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE),
+            events);
+
+    /**
+     * Email luồng HIGH phát {@link PriorityEmailQueued} với id của dòng vừa ghi (docs/adr/0154); listener chỉ chạy sau
+     * commit nên rollback thì không có gì được gửi.
+     */
+    @Test
+    void highLaneEmailPublishesPriorityEventWithRowId() {
+        org.mockito.Mockito.doAnswer(inv -> {
+            NotificationOutbox row = inv.getArgument(0);
+            ReflectionTestUtils.setField(row, "id", 77L);
+            return inv.getArgument(0);
+        }).when(outbox).save(any(NotificationOutbox.class));
+
+        service.enqueue(new NotificationRequest("OTP_REGISTER", Channel.EMAIL, null, "a@petcare.test",
+                Map.of("ma_otp", "123456"), null));
+
+        verify(events).publishEvent(new PriorityEmailQueued(77L));
+    }
+
+    /** Thư hàng loạt (NORMAL) và IN_APP không phát: chỉ job gửi. */
+    @Test
+    void normalLaneEmailAndInAppPublishNothing() {
+        service.enqueue(new NotificationRequest("VACCINE_REMINDER", Channel.EMAIL, null, "a@petcare.test",
+                Map.of(), null));
+        service.enqueue(new NotificationRequest("OTP_REGISTER", Channel.IN_APP, 7L, null, Map.of(), null));
+
+        verify(events, never()).publishEvent(any(Object.class));
+    }
 
     @Test
     void writesPendingRowDueNow() {

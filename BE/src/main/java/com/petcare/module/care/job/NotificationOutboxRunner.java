@@ -18,9 +18,12 @@ import com.petcare.module.care.repository.LaneBacklog;
 import com.petcare.module.care.service.DeliveryLane;
 import com.petcare.module.care.service.InAppNotificationDeliveryService;
 import com.petcare.module.care.service.NotificationDispatchService;
-import com.petcare.module.care.service.NotificationDispatchService.BatchOutcome;
+import com.petcare.module.care.service.NotificationDispatchService.Claim;
 import com.petcare.module.care.service.NotificationDispatchService.DispatchPolicy;
 import com.petcare.module.care.service.NotificationDispatchService.DispatchResult;
+import com.petcare.module.care.service.NotificationDispatchService.Settled;
+import com.petcare.module.care.service.OutboxMailSender;
+import com.petcare.module.care.service.OutboxMailSender.SendReport;
 import com.petcare.platform.config.TraceContext;
 
 import io.micrometer.core.instrument.Gauge;
@@ -29,13 +32,14 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Một lượt chạy của một luồng ST20, dùng chung cho {@link PriorityNotificationJob}, {@link NotificationOutboxJob}
- * (email, docs/adr/0012) và {@link InAppNotificationJob} (docs/adr/0014). Gọi
- * {@link NotificationDispatchService#dispatchNext} (HIGH), {@link NotificationDispatchService#dispatchNextBatch} (NORMAL,
- * theo lô — docs/adr/0017) hoặc {@link InAppNotificationDeliveryService#deliverNext} — mỗi lời gọi một transaction —
- * tới khi hết dòng đến hạn, gặp lỗi kết nối SMTP, hoặc hết ngân sách thời gian của luồng. Không
- * {@code @Transactional}. Cuối lượt đếm tồn đọng để cập nhật gauge và cảnh báo trễ; riêng IN_APP, lượt kết thúc vì hết
- * dòng thì tồn đọng là 0 (chỉ luồng này chọn dòng IN_APP), không chạy câu đếm. Lỗi được log và nuốt (docs/adr/0007
- * mục 5).
+ * (email, docs/adr/0012) và {@link InAppNotificationJob} (docs/adr/0014). Email (docs/adr/0154): mỗi vòng <b>nhận</b>
+ * dòng (HIGH một dòng, NORMAL một lô — docs/adr/0017; một transaction) → <b>gửi</b> ngoài transaction
+ * ({@link OutboxMailSender}) → <b>ghi kết quả</b> (một transaction). IN_APP: mỗi vòng
+ * {@link InAppNotificationDeliveryService#deliverNext}. Lặp tới khi hết dòng đến hạn, gặp lỗi cấp máy chủ SMTP, hoặc
+ * hết ngân sách thời gian của luồng (kiểm giữa các vòng). Không {@code @Transactional}. Cuối lượt đếm tồn đọng để cập
+ * nhật gauge và cảnh báo trễ; riêng IN_APP, lượt kết thúc vì hết dòng thì tồn đọng là 0 (chỉ luồng này chọn dòng
+ * IN_APP), không chạy câu đếm. Lỗi được log và nuốt (docs/adr/0007 mục 5). {@link #sendNow} gửi ngay một dòng HIGH vừa
+ * commit (kích sau commit).
  */
 @Slf4j
 @Component
@@ -43,6 +47,7 @@ import lombok.extern.slf4j.Slf4j;
 public class NotificationOutboxRunner {
 
     private final NotificationDispatchService dispatch;
+    private final OutboxMailSender sender;
     private final InAppNotificationDeliveryService inApp;
     private final NotificationOutboxProperties properties;
     private final Clock clock;
@@ -52,14 +57,17 @@ public class NotificationOutboxRunner {
     private final Map<DeliveryLane, AtomicLong> overdueSeconds = new EnumMap<>(DeliveryLane.class);
 
     @Autowired
-    public NotificationOutboxRunner(NotificationDispatchService dispatch, InAppNotificationDeliveryService inApp,
-            NotificationOutboxProperties properties, Clock clock, MeterRegistry meters) {
-        this(dispatch, inApp, properties, clock, meters, System::nanoTime);
+    public NotificationOutboxRunner(NotificationDispatchService dispatch, OutboxMailSender sender,
+            InAppNotificationDeliveryService inApp, NotificationOutboxProperties properties, Clock clock,
+            MeterRegistry meters) {
+        this(dispatch, sender, inApp, properties, clock, meters, System::nanoTime);
     }
 
-    NotificationOutboxRunner(NotificationDispatchService dispatch, InAppNotificationDeliveryService inApp,
-            NotificationOutboxProperties properties, Clock clock, MeterRegistry meters, LongSupplier ticker) {
+    NotificationOutboxRunner(NotificationDispatchService dispatch, OutboxMailSender sender,
+            InAppNotificationDeliveryService inApp, NotificationOutboxProperties properties, Clock clock,
+            MeterRegistry meters, LongSupplier ticker) {
         this.dispatch = dispatch;
+        this.sender = sender;
         this.inApp = inApp;
         this.properties = properties;
         this.clock = clock;
@@ -87,8 +95,7 @@ public class NotificationOutboxRunner {
             case NORMAL -> properties.lagWarn();
             case IN_APP -> properties.lagWarnInApp();
         };
-        DispatchPolicy policy = new DispatchPolicy(properties.maxAttempts(), properties.initialBackoff(),
-                properties.mailFrom());
+        DispatchPolicy policy = policy();
         Map<DispatchResult, Integer> counts = new EnumMap<>(DispatchResult.class);
 
         MDC.put(TraceContext.MDC_KEY, "job-" + UUID.randomUUID());
@@ -97,23 +104,21 @@ public class NotificationOutboxRunner {
         try {
             while (ticker.getAsLong() - started < budget.toNanos()) {
                 Instant at = Instant.now(clock);
-                if (lane == DeliveryLane.NORMAL) {
-                    BatchOutcome batch = dispatch.dispatchNextBatch(at, policy, properties.normalBatchSize(),
-                            properties.normalBatchSendBudget());
-                    if (batch.locked() == 0) {
+                if (lane.isEmail()) {
+                    Claim claim = lane == DeliveryLane.HIGH
+                            ? dispatch.claimNextHigh(at, policy, properties.priorityClaimLease())
+                            : dispatch.claimNextNormalBatch(at, policy, properties.normalBatchSize(),
+                                    properties.normalClaimLease());
+                    if (claim.locked() == 0) {
                         drained = true;
                         break;
                     }
-                    record(counts, lane, DispatchResult.SENT, batch.sent());
-                    record(counts, lane, DispatchResult.RETRY, batch.retried());
-                    record(counts, lane, DispatchResult.FAILED, batch.failed());
-                    if (batch.stopRun()) {
-                        record(counts, lane, DispatchResult.STOP_RUN, 1);
+                    if (deliver(lane, claim, policy, counts)) {
                         break;
                     }
                     continue;
                 }
-                DispatchResult result = lane.isEmail() ? dispatch.dispatchNext(lane, at, policy) : inApp.deliverNext(at);
+                DispatchResult result = inApp.deliverNext(at);
                 if (result == DispatchResult.NONE) {
                     drained = true;
                     break;
@@ -151,6 +156,57 @@ public class NotificationOutboxRunner {
     }
 
     /**
+     * Gửi ngay dòng HIGH {@code outboxId} vừa commit (docs/adr/0154), gọi từ luồng nền của lần kích. Dòng đã được job
+     * HIGH nhận hoặc xử lý thì không làm gì. Không ném: lỗi được log, dòng còn {@code PENDING} để job HIGH quét lại.
+     */
+    public void sendNow(Long outboxId) {
+        MDC.put(TraceContext.MDC_KEY, "kick-" + UUID.randomUUID());
+        Map<DispatchResult, Integer> counts = new EnumMap<>(DispatchResult.class);
+        try {
+            DispatchPolicy policy = policy();
+            Claim claim = dispatch.claimHighById(outboxId, Instant.now(clock), policy, properties.priorityClaimLease());
+            if (claim.locked() == 0) {
+                log.debug("NOTIFICATION_KICK_SKIPPED id={}", outboxId);
+                return;
+            }
+            deliver(DeliveryLane.HIGH, claim, policy, counts);
+            log.debug("NOTIFICATION_KICK id={} sent={} retried={} failed={}", outboxId,
+                    count(counts, DispatchResult.SENT), count(counts, DispatchResult.RETRY),
+                    count(counts, DispatchResult.FAILED));
+        } catch (RuntimeException e) {
+            log.error("NOTIFICATION_KICK_FAILED id={}", outboxId, e);
+        } finally {
+            MDC.remove(TraceContext.MDC_KEY);
+        }
+    }
+
+    /**
+     * Gửi các thư đã nhận rồi ghi kết quả; trả {@code true} khi có lỗi cấp máy chủ (lượt nên dừng). Dòng đếm theo kết
+     * quả thật; {@code STOP_RUN} đếm số lượt dừng vì lỗi máy chủ (docs/adr/0017 mục 6).
+     */
+    private boolean deliver(DeliveryLane lane, Claim claim, DispatchPolicy policy,
+            Map<DispatchResult, Integer> counts) {
+        record(counts, lane, DispatchResult.RETRY, claim.retried());
+        record(counts, lane, DispatchResult.FAILED, claim.failed());
+        SendReport report = sender.send(claim.mails(), lane);
+        if (!report.deliveries().isEmpty()) {
+            Settled settled = dispatch.settle(lane, Instant.now(clock), policy, report.deliveries());
+            record(counts, lane, DispatchResult.SENT, settled.sent());
+            record(counts, lane, DispatchResult.RETRY, settled.retried());
+            record(counts, lane, DispatchResult.FAILED, settled.failed());
+        }
+        if (report.stopRun()) {
+            record(counts, lane, DispatchResult.STOP_RUN, 1);
+            return true;
+        }
+        return false;
+    }
+
+    private DispatchPolicy policy() {
+        return new DispatchPolicy(properties.maxAttempts(), properties.initialBackoff(), properties.mailFrom());
+    }
+
+    /**
      * IN_APP chỉ có một luồng chọn dòng: kết thúc vì {@code NONE} nghĩa là không còn dòng đến hạn, nên bỏ câu đếm —
      * lúc rảnh mỗi lượt còn một transaction (docs/adr/0014). Email giữ câu đếm vì {@code NONE} có thể do dòng đang bị
      * lượt kia khóa và lượt dừng sớm khi SMTP lỗi.
@@ -162,11 +218,7 @@ public class NotificationOutboxRunner {
         return drained ? new LaneBacklog(0, null) : inApp.backlog(now);
     }
 
-    /**
-     * Cộng {@code amount} dòng có kết quả {@code result}. Luồng NORMAL theo lô: dòng đếm theo kết quả thật, còn
-     * {@code STOP_RUN} đếm số lượt dừng vì lỗi máy chủ (docs/adr/0017); luồng một dòng: dòng gặp lỗi máy chủ đếm là
-     * {@code STOP_RUN} như trước.
-     */
+    /** Cộng {@code amount} dòng có kết quả {@code result} vào bộ đếm của lượt và counter của luồng. */
     private void record(Map<DispatchResult, Integer> counts, DeliveryLane lane, DispatchResult result, int amount) {
         if (amount == 0) {
             return;
