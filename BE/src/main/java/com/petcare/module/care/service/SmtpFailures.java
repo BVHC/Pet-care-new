@@ -13,7 +13,8 @@ import jakarta.mail.AuthenticationFailedException;
 import jakarta.mail.SendFailedException;
 
 /**
- * Phân loại lỗi gửi SMTP của ST20 (docs/adr/0012 mục 5), dùng chung cho gửi từng thư và gửi theo lô (docs/adr/0017):
+ * Phân loại lỗi gửi SMTP của ST20 (docs/adr/0012 mục 5), dùng ở bước gửi ({@link OutboxMailSender}) và bước ghi kết quả
+ * ({@link NotificationDispatchService#settle}) (docs/adr/0154):
  * máy chủ từ chối người nhận → lỗi vĩnh viễn; không kết nối / hết thời gian / sai xác thực → lỗi cấp máy chủ, dừng lượt.
  */
 final class SmtpFailures {

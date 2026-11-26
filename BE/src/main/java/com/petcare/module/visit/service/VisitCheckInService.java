@@ -39,6 +39,7 @@ import com.petcare.module.visit.repository.VisitRepository;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -76,12 +77,14 @@ public class VisitCheckInService {
     private final VisitTransitionHandler transitions;
     private final VisitMapper mapper;
     private final Clock clock;
+    private final BusinessMetrics metrics;
 
     public VisitCheckInService(BranchScope branchScope, PetQueryApi pets, AppointmentQueryApi appointmentQueries,
             AppointmentApi appointments, CatalogQueryApi catalog, BranchQueryApi branches, CustomerQueryApi customers,
             VisitOrderApi visitOrders, FollowUpApi followUps, SystemConfigApi configs, VisitCodeGenerator codes,
             VisitRepository visits,
-            VisitTransitionHandler transitions, VisitMapper mapper, Clock clock) {
+            VisitTransitionHandler transitions, VisitMapper mapper, Clock clock, BusinessMetrics metrics) {
+        this.metrics = metrics;
         this.branchScope = branchScope;
         this.pets = pets;
         this.appointmentQueries = appointmentQueries;
@@ -159,6 +162,8 @@ public class VisitCheckInService {
         if (service.medicalType() == MedicalType.EXAM) {
             followUps.cancelPendingFollowUps(pet.petId(), now);
         }
+        metrics.increment(BusinessMetrics.VISIT_CHECKED_IN, "branch", branchId.toString(),
+                "kind", appointmentId != null ? "APPOINTMENT" : "WALK_IN");
 
         CustomerContact contact = customers.findContact(pet.customerId())
                 .orElseThrow(() -> new IllegalStateException("Thú #" + pet.petId() + " trỏ tới hồ sơ khách không có: "

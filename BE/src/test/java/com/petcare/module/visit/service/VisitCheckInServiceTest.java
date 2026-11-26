@@ -59,6 +59,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -96,9 +97,10 @@ class VisitCheckInServiceTest {
     private final VisitRepository visits = mock(VisitRepository.class);
     private final Clock clock = mock(Clock.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
+    private final BusinessMetrics metrics = mock(BusinessMetrics.class);
     private final VisitCheckInService service = new VisitCheckInService(scope, pets, appointmentQueries, appointments,
             catalog, branches, customers, visitOrders, followUps, configs, codes, visits,
-            new VisitTransitionHandler(), Mappers.getMapper(VisitMapper.class), clock);
+            new VisitTransitionHandler(), Mappers.getMapper(VisitMapper.class), clock, metrics);
 
     @BeforeEach
     void setUp() {
@@ -148,6 +150,7 @@ class VisitCheckInServiceTest {
         order.verify(visitOrders).openForVisit(VISIT_ID, BRANCH, CUSTOMER, SERVICE, null, ACCOUNT);
         order.verify(followUps).cancelPendingFollowUps(PET, NOW);
         order.verify(customers).findContact(CUSTOMER);
+        verify(metrics).increment(BusinessMetrics.VISIT_CHECKED_IN, "branch", "3", "kind", "APPOINTMENT");
         verify(catalog, never()).findService(99L);
         verify(branches, never()).isServiceEnabled(anyLong(), anyLong());
 
@@ -215,6 +218,7 @@ class VisitCheckInServiceTest {
         assertThat(saved.getPriorityClass()).isEqualTo(PriorityClass.WALK_IN);
         assertThat(saved.getQueueSortKey()).isEqualTo(NOW);
         assertThat(response.appointmentId()).isNull();
+        verify(metrics).increment(BusinessMetrics.VISIT_CHECKED_IN, "branch", "3", "kind", "WALK_IN");
     }
 
     @Test

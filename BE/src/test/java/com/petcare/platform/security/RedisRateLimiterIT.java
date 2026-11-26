@@ -26,6 +26,8 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.petcare.support.MutableClock;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * {@link RedisRateLimiter} trên Redis 7 thật, không cần Spring context (docs/adr/0100): đếm atomic dưới tải đồng
  * thời (G4), khóa luôn có TTL và tự sửa khóa mất TTL (G3), Retry-After lấy từ TTL còn lại, và kiểu dữ liệu script trả
@@ -65,7 +67,7 @@ class RedisRateLimiterIT {
         RateLimitProperties properties = new RateLimitProperties(true, new RateLimitProperties.Rule(30, 60),
                 new RateLimitProperties.Rule(10, 60), new RateLimitProperties.Rule(10, 60),
                 new RateLimitProperties.Rule(10, 60), new RateLimitProperties.Rule(60, 3600), 10);
-        limiter = new RedisRateLimiter(redis, clock, properties);
+        limiter = new RedisRateLimiter(redis, clock, properties, new SimpleMeterRegistry());
     }
 
     @Test

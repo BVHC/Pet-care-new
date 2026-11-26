@@ -2,6 +2,7 @@ package com.petcare.module.visit.job;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -15,6 +16,7 @@ import com.petcare.module.visit.service.DueDateWindow;
 import com.petcare.module.visit.service.VaccineReminderService;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,6 +35,7 @@ public class VaccineReminderJob {
     private final VaccineReminderService reminders;
     private final VaccineReminderProperties properties;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public VaccineReminderJob(VaccineReminderService reminders, VaccineReminderProperties properties) {
@@ -43,6 +46,12 @@ public class VaccineReminderJob {
         this.reminders = reminders;
         this.properties = properties;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.vaccine-reminder.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -85,8 +94,14 @@ public class VaccineReminderJob {
             log.info("VACCINE_REMINDER reminded={} tasks={} notSent={} skipped={} failed={} stoppedByBudget={} "
                     + "window={} durationMs={}", reminded, tasks, notSent, skipped, failed, stoppedByBudget, window,
                     elapsedMs(started));
+            jobMetrics.record("vaccine_reminder", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("reminded", reminded, "tasks", tasks, "not_sent", notSent, "skipped", skipped,
+                            "failed", failed));
         } catch (RuntimeException e) {
             log.error("VACCINE_REMINDER_FAILED remindedSoFar={} durationMs={}", reminded + tasks, elapsedMs(started), e);
+            jobMetrics.record("vaccine_reminder", JobMetrics.Outcome.FAILED,
+                    Map.of("reminded", reminded, "tasks", tasks, "not_sent", notSent, "skipped", skipped,
+                            "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

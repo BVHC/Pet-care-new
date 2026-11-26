@@ -37,6 +37,7 @@ import com.petcare.module.visit.api.FollowUpApi;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -83,12 +84,13 @@ public class AppointmentBookingService {
     private final AppointmentTransitionHandler transitions;
     private final AppointmentMapper mapper;
     private final Clock clock;
+    private final BusinessMetrics metrics;
 
     public AppointmentBookingService(BranchScope branchScope, CustomerQueryApi customers, PetQueryApi pets,
             CatalogQueryApi catalog, BranchApi branchLocks, BranchQueryApi branches,
             BookingRestrictionApi restrictions, FollowUpApi followUps, SystemConfigApi configs, AppointmentLocks locks,
             AppointmentCodeGenerator codes, AppointmentRepository appointments,
-            AppointmentTransitionHandler transitions, AppointmentMapper mapper, Clock clock) {
+            AppointmentTransitionHandler transitions, AppointmentMapper mapper, Clock clock, BusinessMetrics metrics) {
         this.branchScope = branchScope;
         this.customers = customers;
         this.pets = pets;
@@ -104,6 +106,7 @@ public class AppointmentBookingService {
         this.transitions = transitions;
         this.mapper = mapper;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -180,6 +183,8 @@ public class AppointmentBookingService {
         if (service.group() == ServiceGroup.MEDICAL) {
             followUps.cancelRemindedFollowUpTasks(pet.petId());
         }
+        metrics.increment(BusinessMetrics.APPOINTMENT_BOOKED, "branch", branchId.toString(),
+                "channel", saved.getChannel().name());
 
         String branchName = branches.findBranch(branchId)
                 .orElseThrow(() -> new IllegalStateException("Chi nhánh đã khóa nhưng không đọc được: " + branchId))

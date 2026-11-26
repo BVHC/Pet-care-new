@@ -6,13 +6,18 @@ import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.entity.NotificationOutbox;
 import com.petcare.module.care.entity.OutboxStatus;
+
+import jakarta.persistence.LockModeType;
 
 /**
  * Worker ST20 lấy từng dòng đến hạn theo luồng. Luồng IN_APP xem các câu {@code …InApp} bên dưới (docs/adr/0014).
@@ -33,17 +38,30 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
     Optional<NotificationOutbox> lockNextDueEmailIn(@Param("now") Instant now,
             @Param("codes") Collection<String> codes);
 
+    /**
+     * Kích gửi ngay sau commit (docs/adr/0154): khóa đúng dòng vừa ghi nếu nó còn đến hạn và thuộc luồng HIGH; dòng job
+     * HIGH đã nhận ({@code next_attempt_at} ở tương lai) hoặc đang bị khóa thì không trả gì.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
     @Query(value = """
             SELECT * FROM notification_outbox
-            WHERE status = 'PENDING' AND channel = 'EMAIL' AND template_code NOT IN (:codes) AND next_attempt_at <= :now
-            ORDER BY next_attempt_at, id
-            LIMIT 1
+            WHERE id = :id AND status = 'PENDING' AND channel = 'EMAIL' AND template_code IN (:codes)
+              AND next_attempt_at <= :now
             FOR UPDATE SKIP LOCKED
             """, nativeQuery = true)
-    Optional<NotificationOutbox> lockNextDueEmailNotIn(@Param("now") Instant now,
+    Optional<NotificationOutbox> lockDueEmailById(@Param("id") Long id, @Param("now") Instant now,
             @Param("codes") Collection<String> codes);
 
-    /** Luồng NORMAL theo lô (docs/adr/0017): khóa tối đa {@code limit} dòng đến hạn, cùng thứ tự như câu một dòng. */
+    /**
+     * Ghi kết quả gửi (docs/adr/0154): {@code FOR NO KEY UPDATE} (Hibernate 6), đọc dòng dưới khóa rồi kiểm vé.
+     * {@code MANDATORY}: ngoài transaction khóa nhả ngay mà không báo lỗi.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT o FROM NotificationOutbox o WHERE o.id = :id")
+    Optional<NotificationOutbox> findByIdForUpdate(@Param("id") Long id);
+
+    /** Luồng NORMAL theo lô (docs/adr/0017): khóa tối đa {@code limit} dòng đến hạn theo hạn rồi id. */
     @Query(value = """
             SELECT * FROM notification_outbox
             WHERE status = 'PENDING' AND channel = 'EMAIL' AND template_code NOT IN (:codes) AND next_attempt_at <= :now
@@ -103,8 +121,8 @@ public interface NotificationOutboxRepository extends JpaRepository<Notification
 
     /**
      * Giới hạn thời gian "idle in transaction" của transaction hiện tại ({@code set_config(…, true)} = {@code SET LOCAL}).
-     * Gửi SMTP chạy giữa transaction: nếu timeout SMTP không cắt được, Postgres tự hủy phiên thay vì giữ khóa và
-     * connection vô hạn (docs/adr/0012).
+     * SMTP đã chạy ngoài transaction (docs/adr/0154); giới hạn này còn là lưới an toàn cho transaction nhận dòng: lỗi
+     * lập trình làm nó treo thì Postgres hủy phiên thay vì giữ khóa và connection vô hạn (docs/adr/0012).
      */
     @Query(value = "SELECT set_config('idle_in_transaction_session_timeout', :timeout, true)", nativeQuery = true)
     String limitIdleInTransaction(@Param("timeout") String timeout);

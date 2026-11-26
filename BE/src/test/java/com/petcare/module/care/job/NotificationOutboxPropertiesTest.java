@@ -40,7 +40,8 @@ class NotificationOutboxPropertiesTest {
             assertThat(p.inAppTimeBudget()).isEqualTo(Duration.ofSeconds(4));
             assertThat(p.lagWarnInApp()).isEqualTo(Duration.ofSeconds(60));
             assertThat(p.normalBatchSize()).isEqualTo(20);
-            assertThat(p.normalBatchSendBudget()).isEqualTo(Duration.ofSeconds(10));
+            assertThat(p.priorityClaimLease()).isEqualTo(Duration.ofSeconds(60));
+            assertThat(p.normalClaimLease()).isEqualTo(Duration.ofMinutes(10));
         });
     }
 
@@ -86,11 +87,25 @@ class NotificationOutboxPropertiesTest {
                 .run(context -> assertThat(context).getFailure().hasStackTraceContaining("normalBatchSize"));
     }
 
-    /** Ngân sách lô > 15 s: transaction giữ khóa có thể vượt idle_in_transaction_session_timeout 60 s (ADR-0017). */
+    /** Hạn giữ HIGH dưới 60 s: lần gửi tệ nhất (35 s) chưa xong đã bị lượt khác nhận lại, gửi trùng (ADR-0154). */
     @Test
-    void batchSendBudgetAboveFifteenSecondsRejected() {
-        runner.withPropertyValues("app.jobs.notification-outbox.normal-batch-send-budget=16s")
-                .run(context -> assertThat(context).getFailure().hasStackTraceContaining("normalBatchSendBudget"));
+    void priorityClaimLeaseBelowSixtySecondsRejected() {
+        runner.withPropertyValues("app.jobs.notification-outbox.priority-claim-lease=59s")
+                .run(context -> assertThat(context).getFailure().hasStackTraceContaining("priorityClaimLease"));
+    }
+
+    /** Hạn giữ NORMAL phải phủ cả lô: 20 thư × 30 s = 10 phút (ADR-0154). */
+    @Test
+    void normalClaimLeaseShorterThanBatchRejected() {
+        runner.withPropertyValues("app.jobs.notification-outbox.normal-claim-lease=599s")
+                .run(context -> assertThat(context).getFailure()
+                        .hasStackTraceContaining("normalClaimLeaseCoveringBatch"));
+        runner.withPropertyValues("app.jobs.notification-outbox.normal-batch-size=40")
+                .run(context -> assertThat(context).getFailure()
+                        .hasStackTraceContaining("normalClaimLeaseCoveringBatch"));
+        runner.withPropertyValues("app.jobs.notification-outbox.normal-batch-size=40",
+                "app.jobs.notification-outbox.normal-claim-lease=20m")
+                .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test

@@ -66,6 +66,7 @@ import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -98,9 +99,10 @@ class VisitCompletionServiceTest {
     private final PetQueryApi pets = mock(PetQueryApi.class);
     private final CustomerQueryApi customers = mock(CustomerQueryApi.class);
     private final AdmissionQueryApi admissions = mock(AdmissionQueryApi.class);
+    private final BusinessMetrics metrics = mock(BusinessMetrics.class);
     private final VisitCompletionService service = new VisitCompletionService(scope, staff, appointments, visitOrders,
             catalog, visits, records, new VisitTransitionHandler(), orders, pets, customers,
-            Mappers.getMapper(VisitMapper.class), Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE), admissions);
+            Mappers.getMapper(VisitMapper.class), Clock.fixed(NOW, TimeConfig.BUSINESS_ZONE), admissions, metrics);
 
     @BeforeEach
     void setUp() {
@@ -296,6 +298,7 @@ class VisitCompletionServiceTest {
         assertThat(response.needsReassign()).isFalse();
         assertThat(response.assigneeId()).isEqualTo(VET);
         assertThat(response.orderId()).isEqualTo(10_001L);
+        verify(metrics).increment(BusinessMetrics.VISIT_COMPLETED, "branch", "3");
     }
 
     @Test
@@ -356,6 +359,7 @@ class VisitCompletionServiceTest {
 
         assertRule(() -> service.completeVisit(9001L), "BR-KB-02");
         verify(records, never()).flush();
+        verifyNoInteractions(metrics);
     }
 
     @Test

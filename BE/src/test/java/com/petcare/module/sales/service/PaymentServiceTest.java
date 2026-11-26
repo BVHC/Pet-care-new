@@ -57,6 +57,7 @@ import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 import com.petcare.platform.sequence.DocumentCodeGenerator;
@@ -88,6 +89,8 @@ class PaymentServiceTest {
     @Mock
     AuditRecorder audit;
     @Mock
+    BusinessMetrics metrics;
+    @Mock
     BranchScope branchScope;
     @Mock
     SecurityPrincipal principal;
@@ -100,7 +103,7 @@ class PaymentServiceTest {
     @BeforeEach
     void setUp() {
         service = new PaymentService(shifts, orders, payments, stock, codes, new OrderTransitionHandler(), assembler,
-                audit, branchScope, Clock.fixed(NOW, ZONE));
+                audit, branchScope, Clock.fixed(NOW, ZONE), metrics);
         lenient().when(branchScope.current()).thenReturn(principal);
         lenient().when(principal.accountId()).thenReturn(ME);
         lenient().when(shift.getId()).thenReturn(SHIFT_ID);
@@ -180,6 +183,9 @@ class PaymentServiceTest {
         assertThat(saved.getValue().getReceivedBy()).isEqualTo(ME);
         assertThat(saved.getValue().getCustomerId()).isEqualTo(CUSTOMER);
         assertThat(saved.getValue().getBranchId()).isEqualTo(BRANCH);
+        verify(metrics, times(2)).increment(BusinessMetrics.ORDER_PAID, "branch", "3", "source", "RETAIL");
+        verify(metrics).add(BusinessMetrics.ORDER_PAID_AMOUNT, 200, "branch", "3", "source", "RETAIL");
+        verify(metrics).add(BusinessMetrics.ORDER_PAID_AMOUNT, 300, "branch", "3", "source", "RETAIL");
     }
 
     @Test
@@ -297,6 +303,7 @@ class PaymentServiceTest {
         verify(codes, never()).next(anyString(), anyString(), any());
         verify(payments, never()).saveAndFlush(any());
         verify(audit, never()).record(any());
+        verifyNoInteractions(metrics);
         assertThat(a.getStatus()).isEqualTo(OrderStatus.PENDING);
     }
 

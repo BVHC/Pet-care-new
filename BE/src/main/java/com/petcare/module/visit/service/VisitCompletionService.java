@@ -34,6 +34,7 @@ import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -66,11 +67,13 @@ public class VisitCompletionService {
     private final VisitResponder responder;
     private final AdmissionQueryApi admissions;
     private final Clock clock;
+    private final BusinessMetrics metrics;
 
     public VisitCompletionService(BranchScope branchScope, StaffDirectoryApi staffDirectory, AppointmentApi appointments,
             VisitOrderApi visitOrders, CatalogQueryApi catalog, VisitRepository visits,
             MedicalRecordRepository records, VisitTransitionHandler transitions, OrderQueryApi orders, PetQueryApi pets,
-            CustomerQueryApi customers, VisitMapper mapper, Clock clock, AdmissionQueryApi admissions) {
+            CustomerQueryApi customers, VisitMapper mapper, Clock clock, AdmissionQueryApi admissions,
+            BusinessMetrics metrics) {
         this.branchScope = branchScope;
         this.appointments = appointments;
         this.visitOrders = visitOrders;
@@ -81,6 +84,7 @@ public class VisitCompletionService {
         this.responder = new VisitResponder(orders, pets, customers, staffDirectory, mapper);
         this.admissions = admissions;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     @Transactional
@@ -127,6 +131,7 @@ public class VisitCompletionService {
             r.lock(at);
             records.flush();
         });
+        metrics.increment(BusinessMetrics.VISIT_COMPLETED, "branch", visit.getBranchId().toString());
         return responder.one(visit);
     }
 

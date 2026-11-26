@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -17,6 +18,7 @@ import com.petcare.module.appointment.service.AppointmentReminderService;
 import com.petcare.module.appointment.service.ReminderWindow;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,6 +38,7 @@ public class AppointmentReminderJob {
     private final AppointmentReminderProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public AppointmentReminderJob(AppointmentReminderService reminders, AppointmentReminderProperties properties,
@@ -49,6 +52,12 @@ public class AppointmentReminderJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.appointment-reminder.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -89,9 +98,13 @@ public class AppointmentReminderJob {
             } while (ids.size() == properties.batchSize());
             log.info("APPOINTMENT_REMINDER reminded={} notSent={} skipped={} failed={} stoppedByBudget={} window={} "
                     + "durationMs={}", reminded, notSent, skipped, failed, stoppedByBudget, window, elapsedMs(started));
+            jobMetrics.record("appointment_reminder", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("reminded", reminded, "not_sent", notSent, "skipped", skipped, "failed", failed));
         } catch (RuntimeException e) {
             log.error("APPOINTMENT_REMINDER_FAILED remindedSoFar={} now={} durationMs={}", reminded, now,
                     elapsedMs(started), e);
+            jobMetrics.record("appointment_reminder", JobMetrics.Outcome.FAILED,
+                    Map.of("reminded", reminded, "not_sent", notSent, "skipped", skipped, "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -17,6 +18,7 @@ import com.petcare.module.identity.service.PendingAccountCleanupService;
 import com.petcare.module.identity.service.PendingAccountCleanupService.PurgeResult;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,6 +38,7 @@ public class PendingAccountCleanupJob {
     private final PendingAccountCleanupProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public PendingAccountCleanupJob(PendingAccountCleanupService cleanup, PendingAccountCleanupProperties properties,
@@ -49,6 +52,12 @@ public class PendingAccountCleanupJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.pending-account-cleanup.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -76,9 +85,12 @@ public class PendingAccountCleanupJob {
                     + "stoppedByBudget={} now={} durationMs={}", stats.deleted, stats.skipped, stats.failed,
                     toMs(stats.maxPurgeNanos), toMs(stats.averagePurgeNanos()), stats.stoppedByBudget, now,
                     elapsedMs(started));
+            jobMetrics.record("pending_account_cleanup", JobMetrics.Outcome.finished(stats.stoppedByBudget),
+                    Map.of("deleted", stats.deleted, "skipped", stats.skipped, "failed", stats.failed));
         } catch (RuntimeException e) {
             log.error("PENDING_ACCOUNT_CLEANUP_FAILED deletedSoFar={} now={} durationMs={}", stats.deleted, now,
                     elapsedMs(started), e);
+            jobMetrics.record("pending_account_cleanup", JobMetrics.Outcome.FAILED, Map.of("deleted", stats.deleted));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

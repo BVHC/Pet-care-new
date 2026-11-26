@@ -1,0 +1,28 @@
+# Prometheus của Pet Care (docs/adr/0155). Chạy bằng `docker compose --profile monitoring up -d`.
+# Mọi target nằm trong mạng docker `petcare-network`; không target nào publish cổng số liệu ra host.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    # Lên máy thật: đổi theo môi trường (staging, prod) để phân biệt khi gom nhiều Prometheus về một chỗ.
+    environment: demo
+
+scrape_configs:
+  # BE Spring Boot: cổng management riêng 9091 (application-docker.yml), không cần token.
+  - job_name: petcare-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["backend:9091"]
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
