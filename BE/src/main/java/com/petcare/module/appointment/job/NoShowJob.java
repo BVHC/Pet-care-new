@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -18,6 +19,7 @@ import com.petcare.module.appointment.service.AppointmentNoShowService.NoShowRes
 import com.petcare.module.appointment.service.NoShowCutoff;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,6 +39,7 @@ public class NoShowJob {
     private final NoShowProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public NoShowJob(AppointmentNoShowService noShows, NoShowProperties properties, Clock clock) {
@@ -48,6 +51,12 @@ public class NoShowJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.no-show.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -86,8 +95,12 @@ public class NoShowJob {
             } while (ids.size() == properties.batchSize());
             log.info("NO_SHOW marked={} skipped={} failed={} stoppedByBudget={} cutoff={} now={} durationMs={}", marked,
                     skipped, failed, stoppedByBudget, cutoff, now, elapsedMs(started));
+            jobMetrics.record("no_show", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("marked", marked, "skipped", skipped, "failed", failed));
         } catch (RuntimeException e) {
             log.error("NO_SHOW_FAILED markedSoFar={} now={} durationMs={}", marked, now, elapsedMs(started), e);
+            jobMetrics.record("no_show", JobMetrics.Outcome.FAILED,
+                    Map.of("marked", marked, "skipped", skipped, "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

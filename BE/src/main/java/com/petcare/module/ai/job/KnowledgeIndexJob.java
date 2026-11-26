@@ -8,6 +8,7 @@ import java.util.UUID;
 import java.util.function.IntSupplier;
 
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -20,6 +21,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,6 +45,7 @@ public class KnowledgeIndexJob {
     private final SystemConfigApi config;
     private final Clock clock;
     private volatile Instant lastCatalogSync;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     public KnowledgeIndexJob(CatalogProtocolSync catalogSync, ArticleSync articleSync, KnowledgeIndexer indexer,
             SystemConfigApi config, Clock clock) {
@@ -51,6 +54,12 @@ public class KnowledgeIndexJob {
         this.indexer = indexer;
         this.config = config;
         this.clock = clock;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.knowledge-index.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -67,8 +76,10 @@ public class KnowledgeIndexJob {
                 }
             }
             indexer.requestPending();
+            jobMetrics.record("knowledge_index", JobMetrics.Outcome.OK);
         } catch (RuntimeException e) {
             log.error("KNOWLEDGE_INDEX_JOB_FAILED", e);
+            jobMetrics.record("knowledge_index", JobMetrics.Outcome.FAILED);
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

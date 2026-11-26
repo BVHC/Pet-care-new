@@ -3,6 +3,7 @@ package com.petcare.module.care.job;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 import com.petcare.module.care.service.NotificationCleanupService;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,6 +38,7 @@ public class NotificationCleanupJob {
     private final NotificationCleanupProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public NotificationCleanupJob(NotificationCleanupService cleanup, NotificationCleanupProperties properties,
@@ -49,6 +52,12 @@ public class NotificationCleanupJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.notification-cleanup.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -67,9 +76,13 @@ public class NotificationCleanupJob {
             }
             log.info("NOTIFICATION_CLEANUP read={} unread={} readCutoff={} unreadCutoff={} budgetHit={} durationMs={}",
                     deleted[0], deleted[1], readCutoff, unreadCutoff, budgetHit, elapsedMs(started));
+            jobMetrics.record("notification_cleanup", JobMetrics.Outcome.finished(budgetHit),
+                    Map.of("deleted_read", deleted[0], "deleted_unread", deleted[1]));
         } catch (RuntimeException e) {
             log.error("NOTIFICATION_CLEANUP_FAILED readSoFar={} unreadSoFar={} durationMs={}", deleted[0], deleted[1],
                     elapsedMs(started), e);
+            jobMetrics.record("notification_cleanup", JobMetrics.Outcome.FAILED,
+                    Map.of("deleted_read", deleted[0], "deleted_unread", deleted[1]));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

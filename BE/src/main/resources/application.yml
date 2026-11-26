@@ -297,10 +297,25 @@ management:
   endpoints:
     web:
       exposure:
+        # prometheus chỉ được thêm ở profile có cổng management riêng (application-docker.yml); ManagementExposureGuard
+        # chặn khởi động nếu prometheus lộ trên cổng app (docs/adr/0155).
         include: health,info
   endpoint:
     health:
       show-details: when-authorized
+      # /livez, /readyz trên cổng app: smoke test ngoài host vẫn kiểm được khi actuator chuyển sang cổng management.
+      # probes chỉ tự bật trên Kubernetes / Cloud Foundry, nên bật tay (docs/adr/0155).
+      probes:
+        enabled: true
+        add-additional-paths: true
+  metrics:
+    tags:
+      application: petcare-api
+    distribution:
+      percentiles-histogram:
+        "[http.server.requests]": true
+      slo:
+        "[http.server.requests]": 100ms,500ms,2s
 
 # Tài liệu OpenAPI sinh từ annotation (docs/adr/0040, docs/convention/backend/10-swagger-api-docs.md §7).
 springdoc:

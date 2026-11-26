@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -18,6 +19,7 @@ import com.petcare.module.sales.service.PendingOrderDigestService;
 import com.petcare.module.sales.service.PendingOverdueCutoff;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,6 +39,7 @@ public class PendingOrderDigestJob {
     private final PendingOrderDigestProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public PendingOrderDigestJob(PendingOrderDigestService digest, PendingOverdueCutoff cutoff,
@@ -51,6 +54,12 @@ public class PendingOrderDigestJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.pending-order-digest.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -82,9 +91,13 @@ public class PendingOrderDigestJob {
             }
             log.info("PENDING_ORDER_DIGEST_RUN branches={} sent={} failed={} stoppedByBudget={} now={} durationMs={}",
                     branches.size(), sent, failed, stoppedByBudget, now, elapsedMs(started));
+            jobMetrics.record("pending_order_digest", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("sent", sent, "failed", failed));
         } catch (RuntimeException e) {
             log.error("PENDING_ORDER_DIGEST_FAILED sentSoFar={} now={} durationMs={}", sent, now, elapsedMs(started),
                     e);
+            jobMetrics.record("pending_order_digest", JobMetrics.Outcome.FAILED,
+                    Map.of("sent", sent, "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

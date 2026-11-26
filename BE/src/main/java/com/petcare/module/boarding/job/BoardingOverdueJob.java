@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -19,6 +20,7 @@ import com.petcare.module.boarding.service.BoardingOverdueService.FollowUpResult
 import com.petcare.module.boarding.service.BoardingOverdueService.OverdueResult;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -38,6 +40,7 @@ public class BoardingOverdueJob {
     private final BoardingOverdueProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public BoardingOverdueJob(BoardingOverdueService overdue, BoardingOverdueProperties properties, Clock clock) {
@@ -50,6 +53,12 @@ public class BoardingOverdueJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.boarding-overdue.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -119,9 +128,13 @@ public class BoardingOverdueJob {
             } while (rows.size() == properties.batchSize());
             log.info("BOARDING_OVERDUE marked={} updated={} skipped={} failed={} stoppedByBudget={} today={} "
                     + "durationMs={}", marked, updated, skipped, failed, stoppedByBudget, today, elapsedMs(started));
+            jobMetrics.record("boarding_overdue", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("marked", marked, "updated", updated, "skipped", skipped, "failed", failed));
         } catch (RuntimeException e) {
             log.error("BOARDING_OVERDUE_FAILED markedSoFar={} today={} durationMs={}", marked, today,
                     elapsedMs(started), e);
+            jobMetrics.record("boarding_overdue", JobMetrics.Outcome.FAILED,
+                    Map.of("marked", marked, "updated", updated, "skipped", skipped, "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

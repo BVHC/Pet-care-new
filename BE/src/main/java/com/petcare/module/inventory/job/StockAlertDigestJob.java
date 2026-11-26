@@ -2,6 +2,7 @@ package com.petcare.module.inventory.job;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -15,6 +16,7 @@ import com.petcare.module.branch.api.BranchQueryApi.BranchSummary;
 import com.petcare.module.inventory.service.StockAlertDigestService;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,6 +34,7 @@ public class StockAlertDigestJob {
     private final StockAlertDigestService digest;
     private final StockAlertDigestProperties properties;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public StockAlertDigestJob(StockAlertDigestService digest, StockAlertDigestProperties properties) {
@@ -42,6 +45,12 @@ public class StockAlertDigestJob {
         this.digest = digest;
         this.properties = properties;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.stock-alert-digest.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -73,8 +82,12 @@ public class StockAlertDigestJob {
             }
             log.info("STOCK_ALERT_DIGEST_RUN branches={} sent={} skipped={} failed={} stoppedByBudget={} durationMs={}",
                     branches.size(), sent, skipped, failed, stoppedByBudget, elapsedMs(started));
+            jobMetrics.record("stock_alert_digest", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("sent", sent, "skipped", skipped, "failed", failed));
         } catch (RuntimeException e) {
             log.error("STOCK_ALERT_DIGEST_FAILED sentSoFar={} durationMs={}", sent, elapsedMs(started), e);
+            jobMetrics.record("stock_alert_digest", JobMetrics.Outcome.FAILED,
+                    Map.of("sent", sent, "skipped", skipped, "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

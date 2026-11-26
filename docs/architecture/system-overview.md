@@ -5,14 +5,17 @@
 >
 > Nhật ký (mới nhất trước, giữ 5 dòng; cũ hơn: `git log` của file này):
 <<<<<<< HEAD
+<<<<<<< HEAD
 > - 2026-11-24 — T94 (ADR-0152, Proposed; FE-1 làm thay BE-1): đăng nhập / đăng ký bằng Google `POST /api/auth/google` (identity-v1 #40, public): `GoogleLoginService` (không tx) kiểm ID token qua `NimbusGoogleIdentityVerifier` rồi gọi `LoginAttemptService.loginWithGoogle`; V64 `accounts.google_sub` (UNIQUE, CHECK chỉ khách); `ErrorCode.SERVICE_UNAVAILABLE` (503, status mới); `Account.changeEmail` và `Account.resetPassword` gỡ `google_sub`; chung cửa sổ giới hạn tần suất `login`. Ghim `OpenApiContractParityIT` 238, 281 handler. Dòng V62 (gallery ảnh sản phẩm, ADR-0151) bổ sung vào bảng 4b cùng lúc.
 =======
+=======
+> - 2026-11-25 — Giám sát (ADR-0155, Proposed; D088 mới): `micrometer-registry-prometheus`; actuator ở cổng management 9091 của profile docker (`/actuator/prometheus` không token, không publish; `ManagementExposureGuard`); `/readyz` / `/livez` trên cổng app; `platform/metrics/JobMetrics` (26 job + runner ST20), `BusinessMetrics` (sau commit: lịch đặt, tiếp nhận, Visit hoàn tất, Order PAID), rate limit 429 / Redis fail-open; compose profile `monitoring` + `monitoring/` (Prometheus, Grafana, exporter Postgres / Redis, 5 dashboard).
+>>>>>>> a44ba635 (feat(platform): giám sát Prometheus + Grafana, metric cho job và nghiệp vụ (ADR-0155))
 > - 2026-11-25 — ST20 (ADR-0154, Proposed; D087 mới): gửi email ngoài transaction — nhận dòng (vé = `next_attempt_at` hạn giữ) → `JavaMailSender.send(MimeMessage...)` → ghi kết quả kiểm vé dưới khóa; xóa `SmtpBatchSender`; OTP / mật khẩu tạm gửi ngay sau commit (`@EnableAsync`, `mailKickExecutor`), job HIGH quét bù; config `priority-claim-lease`, `normal-claim-lease`, `kick-enabled` (test: `false`).
 >>>>>>> 894c4bbb (feat(care): ST20 gửi email ngoài transaction và kick OTP sau commit (ADR-0154))
 > - 2026-11-24 — T69 N8 (ADR-0149 mục 42, Proposed; D064): hoàn thiện nội trú — `VisitOrderApi.openTreatmentOrder` / `addServiceLine` bỏ `default` (bản thật `VisitOrderService` từ N0, không còn stand-in; `docs/06` §6b hàng 6); Swagger 4xx của 10 endpoint khớp `inpatient-v1.yaml`. T69 xong; phần `boarding` / `catalog` chờ BE-2 duyệt. Không migration, không endpoint (pin 247)
 > - 2026-11-24 — T69 N7 (ADR-0149 mục 37–41, Proposed; D082 mới, D079 / D064): nội trú chạm sang module khác — guard 409 `BR-LT-17` ở `BoardingCheckoutService` (bắt đầu trả thú #16, giao thú #17, thú mất #18) và `BoardingCheckInService.checkIn` (#14) qua `AdmissionQueryApi.hasActiveAdmission` đọc sau khóa đặt chỗ (`BoardingConflictException`); 400 `BR-LT-18` ở `AppointmentBookingService`, `AvailableSlotService`, `VisitCheckInService.checkService` (walk-in và lịch hẹn mang dịch vụ nội trú) và `ServiceCatalogService.updateService` (đổi `medicalType` sang / khỏi `INPATIENT`). IT mới `AdmissionBoardingGuardIT` 2109, `AdmissionDeceasedChainIT` 2110 (chuỗi thú mất bốn bước), `AdmissionBoardingLockIT` 2111; contract `appointment-v1`, `visit-v1`, `boarding-v1`, `catalog-v1` sinh lại. Không migration, không endpoint (pin 247)
 > - 2026-11-24 — T69 N6 (ADR-0149 mục 31–36, Proposed; D081 mới, D064 / D080): `inpatient-v1` #9–#10 theo dõi — `AdmissionObservationController`, `AdmissionObservationService` (khóa `admissions FOR NO KEY UPDATE` rồi đọc; thứ tự lỗi 403 → 409 → 400 `BR-LT-16`; cân nặng vào `weight_records` nguồn `VET` + Visit của ca qua `PetApi.recordWeight`; `abnormal` → outbox cho khách theo BR-TB-02 và VET phụ trách trừ người ghi), `AdmissionObservationNotices`, `AdmissionObservationMapper`, `AdmissionReadService.listObservations`; `AdmissionObservation.invalidReason` so biên trước `setScale` (số mũ cực lớn); `createdAt` đọc lại từ DB (micro giây). Pin parity 247. Không migration, không [CFG], không mẫu mới. Chưa kiểm đột biến
-> - 2026-11-24 — T69 N5 (ADR-0149 mục 26–30, Proposed; D080 mở rộng): `inpatient-v1` #5–#8 y lệnh — `AdmissionOrderController`, `AdmissionOrderService` (ra y lệnh khóa `admissions` rồi `prescription_items FOR KEY SHARE`; thực hiện / hủy chỉ khóa dòng y lệnh; thứ tự lỗi 403 → 409 → 400 `BR-LT-15`), `AdmissionAssignees` (tách từ xuất viện), `AdmissionOrderMapper`, `AdmissionReadService.listOrders`; mới `PrescriptionApi.findItemOfVisitForKeyShare` (BE-1). Quyết định (Mạnh chốt): `MEDICATION` chỉ liên kết dòng đơn của phòng khám (cấm mua ngoài), loại khác thuốc cấm có dòng đơn, giờ dự kiến tự do. Schema lý do hủy đổi tên `AdmissionOrderReasonRequest`. Pin parity 245. IT `AdmissionOrder{,Security,Rollback,Lock}IT` era 2101–2104
 
 ## 1. Tóm tắt
 
@@ -33,6 +36,8 @@ Trình duyệt ──► FE (Vite :5173 khi dev | nginx :3000 trong Docker, /api
                BE Spring Boot (petcare-api) ──► PostgreSQL 17 + pgvector (petcare)
                                              ├─► Redis 7 (chỉ bộ đếm giới hạn tần suất, ADR-0100)
                                              └─► SMTP (worker ST20; dev: Mailpit :1025, UI :8025)
+Prometheus (:9090, chỉ localhost) ──► backend:9091/actuator/prometheus, postgres-exporter, redis-exporter
+Grafana (:3001) ──► Prometheus          (profile compose `monitoring`, ADR-0155, monitoring/README.md)
 ```
 
 | Môi trường | Cách chạy | BE port | Profile | DB |

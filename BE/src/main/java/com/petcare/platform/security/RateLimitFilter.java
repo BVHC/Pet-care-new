@@ -18,6 +18,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.petcare.platform.exception.TooManyRequestsException;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,6 +42,8 @@ import jakarta.servlet.http.HttpServletResponse;
  * {@link JwtAuthenticationFilter}, nên có envelope chuẩn, {@code traceId} và {@code Retry-After}. Không đăng ký làm
  * bean (tránh Spring Boot gắn thành filter servlet thứ hai); {@link SecurityConfig} đặt nó sau {@code CorsFilter} để
  * response 429 vẫn mang header CORS.
+ *
+ * <p>Mỗi lần từ chối tăng {@code petcare.ratelimit.rejected{group, window}} (docs/adr/0155).
  */
 public class RateLimitFilter extends OncePerRequestFilter {
 
@@ -60,12 +64,17 @@ public class RateLimitFilter extends OncePerRequestFilter {
             post("/api/public/ai/chat"), post("/api/me/ai/chat"));
     private static final RequestMatcher ANY = new OrRequestMatcher(LOGIN, REGISTER, PASSWORD, AI);
 
+    static final String REJECTED = "petcare.ratelimit.rejected";
+
     private final RateLimiter limiter;
     private final Map<Group, List<Window>> windows;
     private final HandlerExceptionResolver resolver;
+    private final MeterRegistry meters;
 
-    public RateLimitFilter(RateLimiter limiter, RateLimitProperties properties, HandlerExceptionResolver resolver) {
+    public RateLimitFilter(RateLimiter limiter, RateLimitProperties properties, HandlerExceptionResolver resolver,
+            MeterRegistry meters) {
         this.limiter = limiter;
+        this.meters = meters;
         this.windows = Map.of(
                 Group.LOGIN, List.of(new Window("login", properties.login())),
                 Group.REGISTER, List.of(new Window("register", properties.register())),
@@ -95,6 +104,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             RateLimiter.Decision decision = limiter.tryAcquire("rl:" + window.name() + ":" + client, rule.limit(),
                     Duration.ofSeconds(rule.windowSeconds()));
             if (!decision.allowed()) {
+                meters.counter(REJECTED, "group", group.name(), "window", window.name()).increment();
                 resolver.resolveException(request, response, null,
                         new TooManyRequestsException(decision.retryAfterSeconds()));
                 return;

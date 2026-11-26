@@ -3,9 +3,11 @@ package com.petcare.module.care.job;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -14,6 +16,7 @@ import com.petcare.module.care.entity.OutboxStatus;
 import com.petcare.module.care.service.NotificationOutboxCleanupService;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -32,12 +35,19 @@ public class NotificationOutboxCleanupJob {
     private final NotificationOutboxCleanupService cleanup;
     private final NotificationOutboxCleanupProperties properties;
     private final Clock clock;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     public NotificationOutboxCleanupJob(NotificationOutboxCleanupService cleanup,
             NotificationOutboxCleanupProperties properties, Clock clock) {
         this.cleanup = cleanup;
         this.properties = properties;
         this.clock = clock;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.notification-outbox-cleanup.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -53,9 +63,13 @@ public class NotificationOutboxCleanupJob {
             deleteAll(OutboxStatus.FAILED, failedCutoff, deleted, 1);
             log.info("NOTIFICATION_OUTBOX_CLEANUP sent={} failed={} sentCutoff={} failedCutoff={} durationMs={}",
                     deleted[0], deleted[1], sentCutoff, failedCutoff, elapsedMs(started));
+            jobMetrics.record("notification_outbox_cleanup", JobMetrics.Outcome.OK,
+                    Map.of("deleted_sent", deleted[0], "deleted_failed", deleted[1]));
         } catch (RuntimeException e) {
             log.error("NOTIFICATION_OUTBOX_CLEANUP_FAILED sentSoFar={} failedSoFar={} durationMs={}", deleted[0],
                     deleted[1], elapsedMs(started), e);
+            jobMetrics.record("notification_outbox_cleanup", JobMetrics.Outcome.FAILED,
+                    Map.of("deleted_sent", deleted[0], "deleted_failed", deleted[1]));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

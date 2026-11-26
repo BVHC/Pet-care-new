@@ -168,6 +168,8 @@ Xóa mũi tiêm ghi nhầm (ADR-0075): cùng tiền tố khóa `pets FOR SHARE` 
 
 Bên sở hữu phải có implementation thật trước ngày bên gọi bắt đầu dùng. Trước ngày đó bên gọi dùng mock / placeholder (§1). Ngày theo `timeline_petcare_v15.xlsx`.
 
+**Lưu ý cho BE-2 (ADR-0155, 25/11/2026, BE-1 làm):** giám sát Prometheus chạm code của BE-2, chỉ thêm số liệu, không đổi hành vi nghiệp vụ: (1) 11 job (`boarding` 2, `inventory`, `sales` 2, `shop` 2, `payment`, `returns`, `content`) có setter `@Autowired setJobMetrics(JobMetrics)` và gọi `jobMetrics.record(...)` cạnh dòng log tổng kết và trong `catch` ngoài cùng; `GatewayRefundJob` thêm `try` ngoài cùng (log `GATEWAY_REFUND_JOB_FAILED`) theo quy ước job. (2) `sales/service/PaymentService` nhận thêm `BusinessMetrics` (tham số cuối của constructor) và đếm `petcare.order.paid` / `.amount` sau commit. Job mới của BE-2 phải theo mẫu này, nếu không `JobMetricsCoverageTest` đỏ. Khi merge: giữ các dòng `jobMetrics.record`.
+
 **Lưu ý cho BE-1 (task 117, ADR-0144, 17/11/2026):** `CustomerQueryApi.findAddress` nay trừu tượng (bản thật), `StockApi.reserve` / `lockAvailableQuantity` và `StockQueryApi.findAvailableQuantity` là bản thật, không còn placeholder. Khi merge sang `manh`: `JdbcPetCustomerModule`, `LinkProfileIT.JdbcCustomerModule` (cần override `findAddress`) và `Tier3Be2ContractWiringIT` (bỏ assert placeholder của `reserve` / `findAvailableQuantity` / `findAddress`) sẽ xung đột hoặc đỏ.
 
 | Interface | Owner · xong | Bên gọi · bắt đầu | Ghi chú |

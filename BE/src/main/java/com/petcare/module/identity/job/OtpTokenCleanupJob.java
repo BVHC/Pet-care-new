@@ -3,6 +3,7 @@ package com.petcare.module.identity.job;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 import com.petcare.module.identity.service.OtpTokenCleanupService;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +37,7 @@ public class OtpTokenCleanupJob {
     private final OtpTokenCleanupProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public OtpTokenCleanupJob(OtpTokenCleanupService cleanup, OtpTokenCleanupProperties properties, Clock clock) {
@@ -47,6 +50,12 @@ public class OtpTokenCleanupJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.otp-token-cleanup.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -70,9 +79,12 @@ public class OtpTokenCleanupJob {
             } while (batch == batchSize);
             log.info("OTP_TOKEN_CLEANUP deleted={} cutoff={} budgetHit={} durationMs={}", deleted, cutoff, budgetHit,
                     elapsedMs(started));
+            jobMetrics.record("otp_token_cleanup", JobMetrics.Outcome.finished(budgetHit),
+                    Map.of("deleted", deleted));
         } catch (RuntimeException e) {
             log.error("OTP_TOKEN_CLEANUP_FAILED deletedSoFar={} cutoff={} durationMs={}", deleted, cutoff,
                     elapsedMs(started), e);
+            jobMetrics.record("otp_token_cleanup", JobMetrics.Outcome.FAILED, Map.of("deleted", deleted));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

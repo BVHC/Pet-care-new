@@ -3,6 +3,7 @@ package com.petcare.module.content.job;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -17,6 +18,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -50,6 +52,7 @@ public class FeedbackCleanupJob {
     private final Clock clock;
     private final LongSupplier ticker;
     private final Sleeper sleeper;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public FeedbackCleanupJob(FeedbackCleanupService cleanup, FeedbackCleanupProperties properties,
@@ -67,6 +70,12 @@ public class FeedbackCleanupJob {
         this.sleeper = sleeper;
     }
 
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
+    }
+
     @Scheduled(cron = "${app.jobs.feedback-cleanup.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
     public void run() {
         MDC.put(TraceContext.MDC_KEY, "job-" + UUID.randomUUID());
@@ -80,6 +89,7 @@ public class FeedbackCleanupJob {
             if (retentionDays < MIN_RETENTION_DAYS || retentionDays > MAX_RETENTION_DAYS) {
                 log.error("FEEDBACK_CLEANUP_SKIPPED retentionDays={} allowed={}..{} durationMs={}", retentionDays,
                         MIN_RETENTION_DAYS, MAX_RETENTION_DAYS, elapsedMs(started));
+                jobMetrics.record("feedback_cleanup", JobMetrics.Outcome.FAILED);
                 return;
             }
             cutoff = Instant.now(clock).minus(Duration.ofDays(retentionDays));
@@ -100,9 +110,12 @@ public class FeedbackCleanupJob {
             } while (batch == batchSize);
             log.info("FEEDBACK_CLEANUP deleted={} batches={} cutoff={} budgetHit={} durationMs={}", deleted, batches,
                     cutoff, budgetHit, elapsedMs(started));
+            jobMetrics.record("feedback_cleanup", JobMetrics.Outcome.finished(budgetHit),
+                    Map.of("deleted", deleted));
         } catch (RuntimeException e) {
             log.error("FEEDBACK_CLEANUP_FAILED deletedSoFar={} batches={} cutoff={} durationMs={}", deleted, batches,
                     cutoff, elapsedMs(started), e);
+            jobMetrics.record("feedback_cleanup", JobMetrics.Outcome.FAILED, Map.of("deleted", deleted));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

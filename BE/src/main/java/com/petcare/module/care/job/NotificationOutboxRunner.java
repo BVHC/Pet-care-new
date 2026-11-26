@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
@@ -25,6 +26,7 @@ import com.petcare.module.care.service.NotificationDispatchService.Settled;
 import com.petcare.module.care.service.OutboxMailSender;
 import com.petcare.module.care.service.OutboxMailSender.SendReport;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -53,6 +55,7 @@ public class NotificationOutboxRunner {
     private final Clock clock;
     private final MeterRegistry meters;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
     private final Map<DeliveryLane, AtomicLong> pending = new EnumMap<>(DeliveryLane.class);
     private final Map<DeliveryLane, AtomicLong> overdueSeconds = new EnumMap<>(DeliveryLane.class);
 
@@ -77,6 +80,12 @@ public class NotificationOutboxRunner {
             pending.put(lane, gauge("notification.outbox.pending", lane));
             overdueSeconds.put(lane, gauge("notification.outbox.oldest.overdue.seconds", lane));
         }
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); runner dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     public void run(DeliveryLane lane) {
@@ -148,8 +157,10 @@ public class NotificationOutboxRunner {
                 log.warn("NOTIFICATION_OUTBOX_LAGGING lane={} pending={} overdueSeconds={}", lane, backlog.pending(),
                         overdue);
             }
+            jobMetrics.record(job.toLowerCase(Locale.ROOT), JobMetrics.Outcome.OK);
         } catch (RuntimeException e) {
             log.error("{}_FAILED processedSoFar={} durationMs={}", job, processed(counts), elapsedMs(started), e);
+            jobMetrics.record(job.toLowerCase(Locale.ROOT), JobMetrics.Outcome.FAILED);
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

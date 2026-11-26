@@ -36,6 +36,7 @@ import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.InvalidStateTransitionException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 import com.petcare.platform.sequence.DocumentCodeGenerator;
@@ -68,6 +69,7 @@ public class PaymentService {
     private final AuditRecorder audit;
     private final BranchScope branchScope;
     private final Clock clock;
+    private final BusinessMetrics metrics;
 
     @Transactional
     public PaymentResponse collectPayment(CreatePaymentRequest request) {
@@ -116,6 +118,11 @@ public class PaymentService {
         locked.forEach(order -> order.markPaid(payment.getId(), now));
         orders.flush();
         locked.forEach(order -> auditPaid(order, payment));
+        locked.forEach(order -> {
+            String[] tags = {"branch", branchId.toString(), "source", order.getSource().name()};
+            metrics.increment(BusinessMetrics.ORDER_PAID, tags);
+            metrics.add(BusinessMetrics.ORDER_PAID_AMOUNT, order.getTotalAmount(), tags);
+        });
         log.info("PAYMENT_COLLECTED paymentId={} code={} shiftId={} amount={} orders={}", payment.getId(), code,
                 shift.getId(), total, request.orderIds());
         return assembler.toResponse(payment, locked);

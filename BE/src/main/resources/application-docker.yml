@@ -29,6 +29,13 @@ server:
   port: 8080
 
 management:
+  # Cổng riêng chỉ mở trong mạng docker (không publish ra host); Prometheus đọc /actuator/prometheus ở đây (docs/adr/0155).
+  server:
+    port: ${MANAGEMENT_PORT:9091}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when_authorized

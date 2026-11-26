@@ -155,8 +155,12 @@ services:
       # ST10 hủy đơn online quá hạn thanh toán và ST12 tự xác nhận đã nhận (docs/adr/0146); mặc định trùng application.yml.
       ONLINE_ORDER_PAYMENT_EXPIRY_CRON: ${ONLINE_ORDER_PAYMENT_EXPIRY_CRON:-20 6/15 * * * *}
       ONLINE_ORDER_AUTO_CONFIRM_CRON: ${ONLINE_ORDER_AUTO_CONFIRM_CRON:-40 12 * * * *}
+      # Cổng management (actuator, /actuator/prometheus) — chỉ trong mạng docker, không publish (docs/adr/0155).
+      MANAGEMENT_PORT: 9091
     ports:
       - "8080:8080"
+    expose:
+      - "9091"
     depends_on:
       postgres:
         condition: service_healthy
@@ -165,7 +169,8 @@ services:
       mailpit:
         condition: service_started
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8080/actuator/health || exit 1"]
+      # Actuator ở cổng management 9091 (docs/adr/0155); health vẫn gồm db / redis như trước.
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:9091/actuator/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -184,12 +189,110 @@ services:
     depends_on:
       - backend
 
+  # ===========================================
+  # Giám sát (docs/adr/0155) — chỉ chạy khi bật profile:
+  #   docker compose --profile monitoring up -d
+  # Grafana http://localhost:3001 · Prometheus http://localhost:9090 (chỉ máy này). Hướng dẫn: monitoring/README.md
+  # ===========================================
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_IMAGE_TAG:-v3.1.0}
+    container_name: petcare-prometheus
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-7d}
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      # Chỉ localhost: Prometheus không có đăng nhập. Grafana là cửa xem số liệu.
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    mem_limit: 300m
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:${GRAFANA_IMAGE_TAG:-11.4.0}
+    container_name: petcare-grafana
+    profiles: ["monitoring"]
+    environment:
+      # Mặc định chỉ hợp cho demo trên máy cá nhân (cổng bind 127.0.0.1). Máy thật: đặt GRAFANA_ADMIN_PASSWORD mạnh trong
+      # .env và GRAFANA_BIND=0.0.0.0 sau reverse proxy có TLS (monitoring/README.md).
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-petcare-grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/petcare-overview.json
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_BIND:-127.0.0.1}:${GRAFANA_PORT:-3001}:3000"
+    depends_on:
+      - prometheus
+    mem_limit: 256m
+    restart: unless-stopped
+
+  # Tạo / cập nhật role chỉ-đọc petcare_monitor (pg_monitor) rồi thoát; chạy lại được, kể cả trên DB đã có dữ liệu.
+  monitoring-db-init:
+    image: pgvector/pgvector:pg17
+    container_name: petcare-monitoring-db-init
+    profiles: ["monitoring"]
+    environment:
+      PGPASSWORD: ${DB_PASSWORD:-123456}
+    command:
+      - psql
+      - --host=postgres
+      - --username=${DB_USERNAME:-postgres}
+      - --dbname=${DB_NAME:-petcare}
+      - --set=ON_ERROR_STOP=1
+      - --set=monitor_password=${MONITOR_DB_PASSWORD:-petcare-monitor}
+      - --file=/sql/monitor-role.sql
+    volumes:
+      - ./monitoring/postgres/monitor-role.sql:/sql/monitor-role.sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:${POSTGRES_EXPORTER_IMAGE_TAG:-v0.16.0}
+    container_name: petcare-postgres-exporter
+    profiles: ["monitoring"]
+    environment:
+      DATA_SOURCE_URI: postgres:5432/${DB_NAME:-petcare}?sslmode=disable
+      DATA_SOURCE_USER: petcare_monitor
+      DATA_SOURCE_PASS: ${MONITOR_DB_PASSWORD:-petcare-monitor}
+    depends_on:
+      monitoring-db-init:
+        condition: service_completed_successfully
+    mem_limit: 64m
+    restart: unless-stopped
+
+  redis-exporter:
+    image: oliver006/redis_exporter:${REDIS_EXPORTER_IMAGE_TAG:-v1.66.0}
+    container_name: petcare-redis-exporter
+    profiles: ["monitoring"]
+    environment:
+      REDIS_ADDR: redis://redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    mem_limit: 64m
+    restart: unless-stopped
+
 # ===========================================
 # Volumes
 # ===========================================
 volumes:
   postgres_data:
   redis_data:
+  prometheus_data:
+  grafana_data:
 
 # ===========================================
 # Networks

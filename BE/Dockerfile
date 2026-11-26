@@ -35,13 +35,13 @@ RUN chown -R spring:spring /app
 
 USER spring:spring
 
-# Health check
+# Health check — actuator chạy ở cổng management 9091 trong profile docker (docs/adr/0155)
 HEALTHCHECK --interval=30s --timeout=3s \
     --start-period=5s --retries=3 \
-    CMD wget --quiet --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+    CMD wget --quiet --tries=1 --spider http://localhost:9091/actuator/health || exit 1
 
-# Expose port
-EXPOSE 8080
+# Expose port: 8080 API; 9091 actuator + /actuator/prometheus, chỉ dùng trong mạng docker (không publish ra host)
+EXPOSE 8080 9091
 
 # Run application
 ENTRYPOINT ["java", "-jar", "app.jar"]
