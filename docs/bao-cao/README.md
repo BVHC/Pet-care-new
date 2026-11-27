@@ -20,6 +20,7 @@ Báo cáo của đề tài **"Xây dựng hệ thống quản lý chuỗi dịch
 | [`07-ket-luan.md`](./07-ket-luan.md) | Kết luận và hướng phát triển | Khung |
 | [`08-tai-lieu-tham-khao.md`](./08-tai-lieu-tham-khao.md) | Tài liệu tham khảo | Bản nháp |
 | [`09-phu-luc.md`](./09-phu-luc.md) | Phụ lục | Khung |
+| [`10-bieu-do-tuan-tu.md`](./10-bieu-do-tuan-tu.md) | Biểu đồ tuần tự cho mục 3.3.3 của `D:/Do-an/BAO CAO.docx` (10 hình mới, 3 hình dùng lại); PNG ở `hinh/` | Bản nháp 26/11/2026 |
 | [`danh-muc-hinh.md`](./danh-muc-hinh.md) | Danh mục hình: mã, loại, nguồn, công cụ, trạng thái | 9 hình đã dựng, 11 chưa |
 
 Bố cục file hiện giữ theo hàng T86: 1 Giới thiệu; 2 Khảo sát và phân tích yêu cầu; 3 Thiết kế hệ thống; 4 Cài đặt; 5 Kiểm thử; 6 Phân hệ AI; rồi Kết luận, Tài liệu tham khảo, Phụ lục. Thứ tự và tên chương sẽ đổi theo mẫu khi xuất docx (mục dưới).

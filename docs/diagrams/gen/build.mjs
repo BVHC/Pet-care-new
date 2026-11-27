@@ -7,6 +7,7 @@ import { parseSchema } from './parse-schema.mjs';
 import { USE_CASES, ACTORS, MODULES_UC, ucLinks, layoutUC } from './usecases.mjs';
 import { DETAIL } from './ucdetail.mjs';
 import { parseApi } from './parse-api.mjs';
+import { parseSequences } from './sequence.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '../../..');
@@ -191,6 +192,7 @@ const data = {
   db: dbTables, classes, rels,
   uc: { actors: ACTORS, modules: MODULES_UC, cases: USE_CASES, links: ucLinks(), pos: layoutUC(ucLinks()) },
   ucd,
+  seq: parseSequences(ROOT),
 };
 const tpl = readFileSync(join(HERE, 'template.html'), 'utf8');
 const out = join(ROOT, 'docs/diagrams/petcare-system-diagrams.html');

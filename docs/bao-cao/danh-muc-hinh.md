@@ -1,6 +1,6 @@
 # Danh mục hình
 
-> Cập nhật 18/11/2026 (T86-1). Mặc định các hình viết bằng **Mermaid** ngay trong tệp Markdown của chương (GitHub và VS Code hiển thị được). Khi xuất docx, Mermaid không tự thành ảnh: phải xuất PNG hoặc SVG trước và đặt vào `docs/bao-cao/hinh/` (thư mục này chưa tạo vì chưa có ảnh nào). Hình lớn (ERD đầy đủ, sơ đồ chuỗi) có thể dựng bằng skill `diagram-design` để ra SVG và PNG; chưa dùng ở phiên này.
+> Cập nhật 18/11/2026 (T86-1). Mặc định các hình viết bằng **Mermaid** ngay trong tệp Markdown của chương (GitHub và VS Code hiển thị được). Khi xuất docx, Mermaid không tự thành ảnh: phải xuất PNG hoặc SVG trước và đặt vào `docs/bao-cao/hinh/` (thư mục đã tạo ngày 26/11/2026, hiện có 13 hình tuần tự `TT.1` đến `TT.13`, xem [`10-bieu-do-tuan-tu.md`](./10-bieu-do-tuan-tu.md)). Hình lớn (ERD đầy đủ, sơ đồ chuỗi) có thể dựng bằng skill `diagram-design` để ra SVG và PNG; chưa dùng ở phiên này.
 >
 > **Đã kiểm cú pháp, chưa xem hình.** Cả 9 khối Mermaid đã qua trình phân tích của Mermaid 11 (chạy bằng Node, 18/11/2026; 9 qua, 0 lỗi). Phiên T86-1 không có công cụ hiển thị, nên chưa ai nhìn thấy hình đã vẽ; cần mở thử trên GitHub hoặc VS Code trước khi dùng (nhãn dài hoặc tiếng Việt có thể bị cắt).
 
@@ -26,5 +26,20 @@
 | H6.1 | Kiến trúc RAG | Khối | `docs/07` mục 5, 6 | Mermaid | Chưa dựng | `06-phan-he-ai.md` 6.2 |
 | H6.2 | Chuỗi các lớp chặn của chatbot | Lưu đồ | `docs/07` mục 0, 5 | Mermaid | Chưa dựng | 6.2 |
 | H6.3 | Mô hình dữ liệu AI | ER | `docs/07` mục 8 | Mermaid | Chưa dựng | 6.5 |
+| TT.1 | Đăng ký và xác thực OTP (UC01) | Trình tự | `RegistrationService`; BR-TK-01 đến 08 | Mermaid, PNG | Đã dựng (26/11); nhánh Google chưa kiểm tay | `10-bieu-do-tuan-tu.md` |
+| TT.2 | Đăng nhập, làm mới token (UC03) | Trình tự | Hình 3.5 | Mermaid, PNG | Dùng lại | `03-thiet-ke.md` 3.6 |
+| TT.3 | Đặt lịch hẹn (UC39) | Trình tự | `AppointmentBookingService`; BR-LH | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+| TT.4 | Tiếp nhận khách (UC44) | Trình tự | `VisitCheckInService`; BR-TN | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+| TT.5 | Hoàn tất lượt khám, khóa bệnh án (UC48) | Trình tự | Hình 3.6 | Mermaid, PNG | Dùng lại (PNG rút tên cột) | `03-thiet-ke.md` 3.7 |
+| TT.6 | Ghi nhận mũi tiêm (UC49) | Trình tự | `VaccinationRecordService`; BR-KB-04 | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+| TT.7 | Nhận và trả thú lưu trú (UC59) | Trình tự | `BoardingCheckInService`, `BoardingCheckoutService`; BR-LT | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+| TT.8 | Đặt hàng online (UC62) | Trình tự | `OnlineOrderService`; BR-BH-08, 09 | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+| TT.9 | Thanh toán online (UC63) | Trình tự | `docs/08` mục C; BR-TG-06 đến 11 | Mermaid, PNG | Đã dựng từ đặc tả; **chưa cài đặt** | `10-bieu-do-tuan-tu.md` |
+| TT.10 | Bán lẻ tại quầy (UC66) | Trình tự | `RetailOrderService`, `OrderLineService` | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+| TT.11 | Thu tiền tại quầy (UC70) | Trình tự | Hình 3.7 | Mermaid, PNG | Dùng lại | `03-thiet-ke.md` 3.7 |
+| TT.12 | Hỏi đáp chatbot (UC90) | Trình tự | `docs/07` mục 5.2; BR-AI | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+| TT.13 | Vòng đời tài liệu tri thức (UC93) | Trình tự | `docs/07` mục 5.3, 9; BR-AI-14 đến 17 | Mermaid, PNG | Đã dựng (26/11) | `10-bieu-do-tuan-tu.md` |
+
+Số `TT.n` là số tạm; đánh lại theo chương khi xuất docx. Hàng H3.4 và H3.5 ở trên ghi "Chưa dựng" đã lỗi thời: hai hình đó có từ Hình 3.6 và 3.7 của `03-thiet-ke.md` (tức TT.5 và TT.11).
 
 Quy ước: mã hình `H<chương>.<số>`; chú thích hình đặt **dưới** hình, dạng "Hình C.N. Tên." kèm dòng nguồn. Ảnh chụp màn hình giao diện (nếu cần ở chương 4) chỉ chụp từ bản chạy thật và ghi ngày chụp; chưa có ảnh nào.

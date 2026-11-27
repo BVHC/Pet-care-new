@@ -98,6 +98,11 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .dg .bound{fill:none;stroke:var(--ink);stroke-width:1.2}
 .dg .mk-f{fill:var(--ink)} .dg .mk-h{fill:#fff;stroke:var(--ink);stroke-width:1} .dg .mk-o{fill:none;stroke:var(--muted);stroke-width:1}
 .dg .mk-d{fill:var(--muted)}
+.dg .msg{font-size:11px;fill:var(--ink)}
+.dg .cnd{font-size:11px;font-style:italic;fill:var(--muted)}
+.dg .frm{fill:rgba(45,49,66,.018);stroke:rgba(45,49,66,.45);stroke-width:1}
+.dg .snote{fill:#fbf3db;stroke:#efe2b0;stroke-width:1}
+.dg .snote-t{font-size:11px;fill:#6b4a00}
 .dg.focus .edge:not(.hl){opacity:.1}
 .dg.focus .node:not(.hl){opacity:.3}
 .dg .edge.hl path.ln,.dg .edge.hl line.ln{stroke:var(--accent)!important;stroke-width:2!important;opacity:1!important}
@@ -111,6 +116,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
   <div class="tabs" role="tablist" aria-label="Loại sơ đồ">
     <button role="tab" data-tab="uc">UC tổng quát</button>
     <button role="tab" data-tab="ucd">UC chi tiết</button>
+    <button role="tab" data-tab="seq">Tuần tự</button>
     <button role="tab" data-tab="class">Lớp thực thể</button>
     <button role="tab" data-tab="db">Database</button>
   </div>
@@ -150,7 +156,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 
 /* ---------- trạng thái ---------- */
-const S={tab:'uc',mode:'view',keysOnly:false,sel:{class:new Set([DATA.groups[0].id]),db:new Set([DATA.groups[0].id]),ucd:'UC01'},k:1,tx:0,ty:0,pick:null,hover:null};
+const S={tab:'uc',mode:'view',keysOnly:false,sel:{class:new Set([DATA.groups[0].id]),db:new Set([DATA.groups[0].id]),ucd:'UC01',seq:'TT.1'},k:1,tx:0,ty:0,pick:null,hover:null};
 let nodes=new Map(),edges=[],zones=[],stage=$('#stage'),vp=null,gEdges=null,gNodes=null,gZones=null,info=null;
 const grpTitle=Object.fromEntries(DATA.groups.map(g=>[g.id,g.title]));
 
@@ -185,6 +191,7 @@ function defs(svg){
   mk('m-tri',14,12,13,6,'auto',m=>el('path',{d:'M1,1 L13,6 L1,11 Z',class:'mk-h'},m));
   mk('m-dia',16,10,15,5,'auto',m=>el('path',{d:'M1,5 L8,1 L15,5 L8,9 Z',class:'mk-f'},m));
   mk('m-dot',6,6,3,3,'auto',m=>el('circle',{cx:3,cy:3,r:2.4,class:'mk-d'},m));
+  mk('m-fill',10,10,9,5,'auto',m=>el('path',{d:'M1,1 L9,5 L1,9 Z',class:'mk-f'},m));
 }
 
 /* ---------- nút (node) ---------- */
@@ -481,7 +488,7 @@ let raf=0;
 stage.addEventListener('pointermove',e=>{
   if(!drag){hoverAt(e);return}
   const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;if(Math.abs(dx)+Math.abs(dy)>3)drag.moved=true;
-  if(drag.node){drag.node.x=drag.nx+dx/S.k;drag.node.y=drag.ny+dy/S.k;place(drag.node);if(!raf)raf=requestAnimationFrame(()=>{raf=0;routeAll()})}
+  if(drag.node){drag.node.x=drag.nx+dx/S.k;if(!drag.node.lockY)drag.node.y=drag.ny+dy/S.k;place(drag.node);if(!raf)raf=requestAnimationFrame(()=>{raf=0;routeAll()})}
   else{S.tx=drag.tx+dx;S.ty=drag.ty+dy;applyView()}
 });
 stage.addEventListener('pointerup',e=>{
@@ -504,7 +511,7 @@ function focus(){
 }
 
 /* lưu vị trí kéo */
-const viewKey=()=>S.tab==='uc'?'uc':S.tab==='ucd'?'ucd:'+S.sel.ucd:`${S.tab}:${[...S.sel[S.tab]].sort().join(',')}:${S.keysOnly?'k':'f'}`;
+const viewKey=()=>S.tab==='uc'?'uc':S.tab==='ucd'?'ucd:'+S.sel.ucd:S.tab==='seq'?'seq:'+S.sel.seq:`${S.tab}:${[...S.sel[S.tab]].sort().join(',')}:${S.keysOnly?'k':'f'}`;
 function savePos(){const o={};nodes.forEach(n=>o[n.id]=[Math.round(n.x),Math.round(n.y)]);store.set('pcd:'+viewKey(),o)}
 function loadPos(){const o=store.get('pcd:'+viewKey());if(!o)return;nodes.forEach(n=>{if(o[n.id]){n.x=o[n.id][0];n.y=o[n.id][1]}})}
 
@@ -654,6 +661,86 @@ function buildUCD(){
   routeAll();
 }
 
+/* ---------- sơ đồ tuần tự: mỗi cột là tác nhân / module / hệ thống ngoài; kéo cột theo chiều ngang, thông điệp và khung bám theo ---------- */
+const curSeq=()=>DATA.seq.find(x=>x.id===S.sel.seq)||DATA.seq[0];
+const SKIND={actor:['#2e5aa8','người dùng','Người dùng'],svc:['#5f7f4f','dịch vụ','Dịch vụ / module'],db:['#9a7432','cơ sở dữ liệu','Cơ sở dữ liệu'],ext:['#6b7280','bên ngoài','Bên ngoài']};
+const seqArea=u=>AREA[MAREA[(DATA.uc.cases.find(c=>c.c===u.uc)||{}).m]||'ops'][0];
+function buildSeq(){
+  const d=curSeq(),F11=`11px ${SANS}`,LH=13,HH=52;
+  const hw=Math.ceil(Math.max(130,...d.parts.map(p=>Math.min(190,tw(p.name,F.nm)+24)))/4)*4,P=Math.max(hw+44,230);
+  const idx=Object.fromEntries(d.parts.map((p,i)=>[p.id,i])),xc=id=>hw/2+idx[id]*P,nodeOf=id=>nodes.get('P:'+id);
+  // đầu trang: mã sơ đồ, use case, trạng thái, tên
+  const ac=seqArea(d),bz=el('g',null,gZones),lab=d.id+(d.uc?' · '+d.uc:''),cw=tw(lab,F.eye)+16;
+  el('rect',{x:0,y:-62,width:cw,height:17,rx:3,fill:tint(ac,.14),stroke:dark(ac,.9),'stroke-width':.8},bz);
+  txt(bz,cw/2,-50,lab,'eye',{'text-anchor':'middle',style:`fill:${dark(ac,.7)};font-weight:600`});
+  if(d.status){const sw=tw(d.status,F.eye)+14;el('rect',{x:cw+10,y:-62,width:sw,height:16,rx:3,fill:'#fbf3db',stroke:'#efe2b0','stroke-width':.8},bz);txt(bz,cw+10+sw/2,-50.5,d.status,'eye',{'text-anchor':'middle',style:'fill:#956400;font-weight:600'})}
+  txt(bz,0,-20,cut(d.title,`600 13px ${SANS}`,Math.max((d.parts.length-1)*P+hw,420)),'nm',{style:'font-size:13px'});
+  // cột
+  for(const p of d.parts){
+    const [col,tag]=SKIND[p.kind],n=mkNode('P:'+p.id,xc(p.id)-hw/2,0,hw,HH,{part:p,lockY:true});
+    el('title',null,n.g).textContent=`${p.name} (${tag})`;
+    el('rect',{class:'box',width:hw,height:HH,rx:6,style:`fill:${tint(col,.1)};stroke:${dark(col,.9)}`},n.g);
+    el('path',{d:`M0,4Q0,0 4,0H${hw-4}Q${hw},0 ${hw},4Z`,style:`fill:${col}`},n.g);
+    txt(n.g,hw/2,18,tag,'eye',{'text-anchor':'middle',style:`fill:${dark(col,.8)};font-weight:600`});
+    wrapN(p.name,F.nm,hw-16,2).forEach((s,k)=>txt(n.g,hw/2,33+k*14,s,'nm',{'text-anchor':'middle'}));
+    place(n);
+  }
+  let y=HH+26,endY=0;
+  const gl=el('g',null,gZones);
+  for(const p of d.parts){ // đường sống
+    const n=nodeOf(p.id),g=el('g',{class:'edge'},gl),ln=el('line',{class:'ln',style:'stroke:var(--rule-solid);stroke-dasharray:4 4;opacity:1'},g);
+    edges.push({a:n,b:n,g,ln,e:{},straight:()=>{const x=n.x+n.w/2;ln.setAttribute('x1',x);ln.setAttribute('x2',x);ln.setAttribute('y1',n.y+n.h);ln.setAttribute('y2',endY)}});
+  }
+  const inv=its=>its.flatMap(it=>it.t==='msg'?[it.f,it.to]:it.t==='note'?[it.from,it.to]:it.branches.flatMap(b=>inv(b.items)));
+  const hgt=it=>it.t==='frag'?1+Math.max(0,...it.branches.flatMap(b=>b.items.map(hgt))):0;
+  function msg(m){
+    const self=m.f===m.to,a=nodeOf(m.f),b=nodeOf(m.to),g=el('g',{class:'edge'},gEdges);
+    const ln=el('path',{class:'ln',style:'stroke:#2d3142;stroke-width:1.2'+(m.ret?';stroke-dasharray:5 4':''),'marker-end':m.ret?'url(#m-open)':'url(#m-fill)'},g);
+    const lines=wrapN(m.text,F11,self?190:Math.max(110,Math.abs(xc(m.to)-xc(m.f))-24),6),ts=lines.map(s=>txt(g,0,0,s,'msg',{'text-anchor':self?'start':'middle'}));
+    const top=y,ay=self?top+5:top+lines.length*LH+5;
+    y=self?top+Math.max(lines.length*LH,24)+14:ay+16;
+    edges.push({a,b,g,ln,e:{},straight:()=>{
+      const xa=a.x+a.w/2,xb=b.x+b.w/2;
+      if(self){ln.setAttribute('d',`M${xa},${ay}H${xa+34}V${ay+14}H${xa+1}`);ts.forEach((t,k)=>{t.setAttribute('x',xa+44);t.setAttribute('y',top+11+k*LH)})}
+      else{ln.setAttribute('d',`M${xa},${ay}H${xb}`);ts.forEach((t,k)=>{t.setAttribute('x',(xa+xb)/2);t.setAttribute('y',top+11+k*LH)})}
+    }});
+  }
+  function note(nt){
+    const a=nodeOf(nt.from),b=nodeOf(nt.to),g=el('g',{class:'edge'},gEdges),top=y;
+    const lines=wrapN(nt.text,F11,Math.max(Math.abs(xc(nt.to)-xc(nt.from))+80,170)-20,5),h=lines.length*LH+12;
+    const r=el('rect',{class:'snote',height:h,rx:4},g),ts=lines.map(s=>txt(g,0,0,s,'snote-t',{'text-anchor':'middle'}));
+    y=top+h+14;
+    edges.push({a,b,g,ln:null,e:{},straight:()=>{
+      const xa=a.x+a.w/2,xb=b.x+b.w/2,c=(xa+xb)/2,w=Math.max(Math.abs(xb-xa)+80,170);
+      r.setAttribute('x',c-w/2);r.setAttribute('y',top);r.setAttribute('width',w);ts.forEach((t,k)=>{t.setAttribute('x',c);t.setAttribute('y',top+14+k*LH)});
+    }});
+  }
+  function frag(f){
+    const ids=[...new Set(inv([f]))],pad=20+10*(hgt(f)-1),top=y,g=el('g',{class:'edge'},gZones),r=el('rect',{class:'frm',rx:4},g);
+    const tagW=tw(f.k,F.eye)+14,tr=el('rect',{class:'tag',height:16,rx:2,width:tagW,style:'stroke:#2d3142;fill:#fff'},g),tt=txt(g,0,0,f.k,'eye',{'text-anchor':'middle',style:'fill:#2d3142;font-weight:600'});
+    const w0=Math.max(...ids.map(xc))-Math.min(...ids.map(xc))+2*pad,seps=[],conds=[];
+    f.branches.forEach((b,bi)=>{
+      const cond=b.cond?`[${b.cond}]`:'',lines=cond?wrapN(cond,F11,w0-(bi?24:tagW+24),3):[];
+      const ts=lines.map(s=>txt(g,0,0,s,'cnd'));
+      if(bi===0){conds.push({ts,bi,y0:top+12});y=top+Math.max(24,lines.length*LH+10)}
+      else{const sy=y,sl=el('line',{stroke:'rgba(45,49,66,.45)','stroke-dasharray':'5 4','stroke-width':1},g);seps.push({sl,y:sy});conds.push({ts,bi,y0:sy+14});y=sy+lines.length*LH+12}
+      lay(b.items);
+    });
+    y+=6;const bot=y;y+=10;
+    const first=nodeOf(ids[0]);
+    edges.push({a:first,b:first,g,ln:null,e:{},straight:()=>{
+      const xs=ids.map(i=>{const n=nodeOf(i);return n.x+n.w/2}),L=Math.min(...xs)-pad,R=Math.max(...xs)+pad;
+      r.setAttribute('x',L);r.setAttribute('y',top);r.setAttribute('width',R-L);r.setAttribute('height',bot-top);
+      tr.setAttribute('x',L);tr.setAttribute('y',top);tt.setAttribute('x',L+tagW/2);tt.setAttribute('y',top+11);
+      conds.forEach(c=>c.ts.forEach((t,k)=>{t.setAttribute('x',L+(c.bi?10:tagW+10));t.setAttribute('y',c.y0+k*LH)}));
+      seps.forEach(s=>{s.sl.setAttribute('x1',L);s.sl.setAttribute('x2',R);s.sl.setAttribute('y1',s.y);s.sl.setAttribute('y2',s.y)});
+    }});
+  }
+  function lay(its){for(const it of its){if(it.t==='msg')msg(it);else if(it.t==='note')note(it);else frag(it)}}
+  lay(d.items);endY=y+4;
+  routeAll();
+}
+
 function buildUC(){
   const U=DATA.uc,P=U.pos,GR=P.grid,TR=P.tr;
   const RX=GR.rx,RY=GR.ry,BX=P.bound.x,BY=P.bound.y,BW=P.bound.w,BH=P.bound.h;
@@ -735,6 +822,12 @@ function legend(tab){
     item(40,p=>el('path',{d:`M0,${Y}H40`,fill:'none',stroke:'#4f5d75','stroke-width':1.2,'stroke-dasharray':'6 4','marker-end':'url(#m-open)'},p),'«include» / «extend»');
     item(36,p=>el('rect',{class:'ext',x:0,y:Y-9,width:36,height:18,rx:4},p),'Hệ thống ngoài');
     item(36,p=>el('rect',{class:'bound',x:0,y:Y-9,width:36,height:18,rx:4},p),'Ranh giới = use case');
+  }else if(tab==='seq'){
+    for(const k of['actor','svc','db','ext'])item(0,p=>{const [c,tg]=SKIND[k],w=tw(tg,F.eye)+14;el('rect',{x:0,y:Y-9,width:w,height:18,rx:3,fill:tint(c,.12),stroke:dark(c,.9),'stroke-width':.8},p);el('rect',{x:0,y:Y-9,width:w,height:3,rx:1.5,fill:c},p);txt(p,w/2,Y+5,tg,'eye',{'text-anchor':'middle',style:`fill:${dark(c,.8)};font-weight:600`});return w},SKIND[k][2]);
+    item(40,p=>line(p,'url(#m-fill)'),'Gọi');
+    item(40,p=>el('path',{d:`M0,${Y}H40`,fill:'none',stroke:'#4f5d75','stroke-width':1.2,'stroke-dasharray':'5 4','marker-end':'url(#m-open)'},p),'Trả về');
+    item(36,p=>el('rect',{class:'frm',x:0,y:Y-9,width:36,height:18,rx:3},p),'Khung alt / opt / loop');
+    item(36,p=>el('rect',{class:'snote',x:0,y:Y-9,width:36,height:18,rx:3},p),'Ghi chú');
   }else{
     for(const [k,l] of [['ROOT','gốc'],['PART','thuộc ROOT'],['REF','danh mục'],['LOG','chỉ thêm']])item(0,p=>tag(p,k),l);
     item(36,head,'Màu đầu = phân hệ');
@@ -758,6 +851,7 @@ function legend(tab){
 const CAP={
   uc:()=>`Tác nhân và phân hệ theo <code>docs/01</code> (85 UC hiệu lực, tác vụ hệ thống S01 không vẽ). Hai tác nhân trừu tượng gom các liên kết chung: Người dùng đăng nhập (A02–A08: đăng nhập, hồ sơ cá nhân, thông báo) và Nhân viên chi nhánh (A05–A08, mỗi người thuộc đúng một chi nhánh). A02 kế thừa A01 nên xem được mọi thông tin công khai. Một đường nối nghĩa là tác nhân tham gia ít nhất một use case của phân hệ. Nhấp một khối để xem danh sách use case.`,
   ucd:()=>'Mỗi use case phân rã thành các chức năng con = thao tác trong <code>docs/api</code> (bảng thao tác và ma trận tác nhân); một chức năng con có thể gộp các thao tác cùng loại, ví dụ xem danh sách và chi tiết. Tác nhân gộp theo quy ước của sơ đồ tổng quát. Quan hệ include/extend lấy từ <code>docs/01</code> mục C. Quy tắc nghiệp vụ gom từ cột Rule của hợp đồng API.',
+  seq:()=>`Thứ tự thao tác lấy từ phần mô tả đầu lớp dịch vụ trong mã nguồn (ngày 26/11/2026) và từ quy tắc nghiệp vụ; <b>chưa chạy thử từng luồng để quan sát</b>. <code>alt</code>: các trường hợp loại trừ nhau; <code>opt</code>: bước có điều kiện; <code>loop</code>: lặp. Nguồn: ${curSeq().src}`,
   class:()=>`Lớp có entity Java thật: ${DATA.classes.filter(c=>c.java).length}/${DATA.classes.length}, thao tác lấy từ method nghiệp vụ (bỏ get/set); lớp còn lại suy ra từ bảng. Khóa ngoại thể hiện bằng quan hệ, không liệt kê trong thuộc tính. Mọi lớp kế thừa <code>TimestampedEntity</code> (createdAt, updatedAt). Chỉ vẽ quan hệ đi ra khỏi phân hệ đang xem. Bỏ 2 bảng không dùng (surgeries, branch_home_visit_fees).`,
   db:()=>`Schema thật theo ${DATA.meta.migrations} migration (V1–V64): ${DATA.meta.tables} bảng, ${DATA.meta.fks} khóa ngoại, <b>mọi khóa ngoại đều ON DELETE RESTRICT</b> (không CASCADE). Chỉ vẽ khóa ngoại đi ra khỏi phân hệ đang xem. surgeries và branch_home_visit_fees còn trong DB nhưng không dùng (nét đứt). Tạo ngày ${DATA.meta.builtAt}.`,
 };
@@ -775,6 +869,18 @@ function renderSide(){
     const on=$('.chip[aria-pressed=true]',side);if(on)on.scrollIntoView({block:'nearest'});
     return;
   }
+  if(S.tab==='seq'){
+    const cur=S.sel.seq,ix=DATA.seq.findIndex(u=>u.id===cur);
+    side.innerHTML=`<h2>${DATA.seq.length} sơ đồ tuần tự</h2><div class="row"><button class="btn" id="bPrev">Trước</button><button class="btn" id="bNext">Sau</button></div>
+    <div class="chips">${DATA.seq.map(u=>`<button class="chip" style="--c:${seqArea(u)}" data-u="${u.id}" aria-pressed="${u.id===cur}"><span><i class="dot"></i>${u.id} · ${u.title}</span><small>${u.msgs}</small></button>`).join('')}</div>
+    <p class="hint">Mỗi cột là một tác nhân, module hoặc hệ thống ngoài. Ở chế độ Di chuyển khối, kéo một cột sang ngang để đổi chỗ; thông điệp và khung bám theo. Số bên phải là số thông điệp.</p>`;
+    const go=u=>{S.sel.seq=u;rebuild()};
+    $$('.chip',side).forEach(b=>b.onclick=()=>go(b.dataset.u));
+    $('#bPrev',side).onclick=()=>go(DATA.seq[(ix+DATA.seq.length-1)%DATA.seq.length].id);
+    $('#bNext',side).onclick=()=>go(DATA.seq[(ix+1)%DATA.seq.length].id);
+    const on=$('.chip[aria-pressed=true]',side);if(on)on.scrollIntoView({block:'nearest'});
+    return;
+  }
   if(S.tab==='uc'){side.innerHTML='<h2>Chi tiết</h2><div id="ucinfo"></div>';onPick(null);return}
   const tab=S.tab,src=tab==='db'?DATA.db:DATA.classes;
   const cnt=Object.fromEntries(DATA.groups.map(g=>[g.id,src.filter(t=>t.group===g.id).length]));
@@ -789,9 +895,10 @@ function renderSide(){
 }
 
 /* ---------- vòng đời ---------- */
-const TITLES={uc:'Biểu đồ Use Case tổng quát',ucd:'Sơ đồ use case chi tiết',class:'Biểu đồ lớp thực thể',db:'Cơ sở dữ liệu (Database schema)'};
+const TITLES={uc:'Biểu đồ Use Case tổng quát',ucd:'Sơ đồ use case chi tiết',seq:'Sơ đồ tuần tự',class:'Biểu đồ lớp thực thể',db:'Cơ sở dữ liệu (Database schema)'};
 function viewLabel(){
   if(S.tab==='ucd'){const d=curUc(),ids=[...new Set(d.subs.flatMap(x=>x.a))].map(a=>a==='USER'?'A02–A08':a==='STAFF'?'A05–A08':a);return 'Phân hệ '+DATA.uc.modules.find(m=>m.id===d.module).title+' · '+d.subs.length+' chức năng · tác nhân '+ids.join(', ')}
+  if(S.tab==='seq'){const d=curSeq();return `${d.uc?d.uc+' · ':''}${d.msgs} thông điệp · ${d.parts.length} cột`}
   if(S.tab==='uc')return 'Toàn hệ thống · 19 phân hệ · 85 use case';
   const s=S.sel[S.tab];if(s.size===DATA.groups.length)return 'Tất cả phân hệ';
   return 'Phân hệ: '+[...s].map(g=>grpTitle[g]).join(', ');
@@ -799,7 +906,7 @@ function viewLabel(){
 function rebuild(keepView){
   S.pick=null;S.hover=null;stage.classList.remove('focus');
   clearScene();
-  if(S.tab==='uc')buildUC();else if(S.tab==='ucd')buildUCD();else buildRelational(S.tab);
+  if(S.tab==='uc')buildUC();else if(S.tab==='ucd')buildUCD();else if(S.tab==='seq')buildSeq();else buildRelational(S.tab);
   loadPos();nodes.forEach(place);routeAll();
   renderSide();
   const lg=legend(S.tab);const lb=$('#legendbox');lb.innerHTML='';lb.appendChild(lg.svg);
@@ -825,7 +932,7 @@ function buildExport(){
   const dd=stage.querySelector('defs').cloneNode(true);out.appendChild(dd);
   const pt=el('pattern',{id:'x-dots',width:22,height:22,patternUnits:'userSpaceOnUse'},dd);el('circle',{cx:1,cy:1,r:1,fill:'rgba(45,49,66,.16)'},pt);
   el('rect',{width:W,height:H,fill:'#f5f5f5'},out);el('rect',{width:W,height:H,fill:'url(#x-dots)'},out);
-  txt(out,PAD,34,S.tab==='ucd'?'Use case '+curUc().uc+': '+curUc().title:TITLES[S.tab]+' — Pet Care','ttl');
+  txt(out,PAD,34,S.tab==='ucd'?'Use case '+curUc().uc+': '+curUc().title:S.tab==='seq'?'Tuần tự '+curSeq().id+': '+curSeq().title:TITLES[S.tab]+' — Pet Care','ttl');
   txt(out,PAD,52,viewLabel(),'stt');
   const cp=vp.cloneNode(true);cp.removeAttribute('id');cp.setAttribute('transform',`translate(${PAD-b.x + (W-2*PAD-b.width)/2},${TOP-b.y})`);
   $$('.hl,.pick,.focus',cp).forEach(x=>x.classList.remove('hl','pick','focus'));
@@ -841,7 +948,7 @@ function inlineVars(xml){
   return out;
 }
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
-function fname(ext){if(S.tab==='ucd')return 'petcare-uc-chi-tiet-'+S.sel.ucd+'.'+ext;const v=S.tab==='uc'?'usecase':S.tab==='class'?'lop-thuc-the':'db-schema';const s=S.tab==='uc'?'':'-'+(S.sel[S.tab].size===DATA.groups.length?'tat-ca':[...S.sel[S.tab]].join('+'));return `petcare-${v}${s}.${ext}`}
+function fname(ext){if(S.tab==='seq')return 'petcare-tuan-tu-'+S.sel.seq.replace('.','')+'.'+ext;if(S.tab==='ucd')return 'petcare-uc-chi-tiet-'+S.sel.ucd+'.'+ext;const v=S.tab==='uc'?'usecase':S.tab==='class'?'lop-thuc-the':'db-schema';const s=S.tab==='uc'?'':'-'+(S.sel[S.tab].size===DATA.groups.length?'tat-ca':[...S.sel[S.tab]].join('+'));return `petcare-${v}${s}.${ext}`}
 async function doExport(kind){
   try{
     const{svg,W,H}=buildExport();
