@@ -20,6 +20,7 @@ import {
   type VaccineType,
 } from '../../../shared/types/catalog';
 import { ActiveBadge, Checkbox, EmptyRow, Field, FormError, NoticeBar, selectClass, type Notice } from '../../../components/admin/form-ui';
+import { ImageUploadButton } from '../../../components/admin/ImageUploadButton';
 
 const PAGE_SIZE = 20;
 /** Giới hạn ảnh phụ của BE (`galleryUrls`, tối đa 8) và độ dài mỗi đường dẫn (như `imageUrl`). */
@@ -210,6 +211,8 @@ interface ProductDraft {
   unit: string;
   price: string;
   description: string;
+  /** Ảnh bìa: dán URL hoặc tải lên Cloudinary (ADR-0156). */
+  imageUrl: string;
   /** Mỗi phần tử là một ô nhập; ô trống bị bỏ khi lưu. */
   gallery: string[];
 }
@@ -225,6 +228,7 @@ const draftOf = (p: Product | null): ProductDraft => ({
   unit: p?.unit ?? '',
   price: p ? String(p.price) : '',
   description: p?.description ?? '',
+  imageUrl: p?.imageUrl ?? '',
   gallery: p?.galleryUrls ?? [], // BE cũ chưa có trường thì vắng
 });
 
@@ -243,7 +247,11 @@ function ProductForm({
 }) {
   const [form, setForm] = useState(() => draftOf(product));
   const [error, setError] = useState('');
+  const [uploading, setUploading] = useState(0); // số lần tải ảnh đang chạy (ảnh bìa + ảnh phụ)
   const set = (patch: Partial<ProductDraft>) => setForm((f) => ({ ...f, ...patch }));
+  const onUploadBusy = (busy: boolean) => setUploading((n) => n + (busy ? 1 : -1));
+  // Cập nhật theo state mới nhất: người dùng có thể đã sửa dòng khác trong lúc ảnh đang tải.
+  const appendGallery = (urls: string[]) => setForm((f) => ({ ...f, gallery: [...f.gallery, ...urls].slice(0, GALLERY_MAX) }));
 
   const isVaccine = form.productType === 'VACCINE';
   const isDrug = form.productType === 'DRUG';
@@ -257,6 +265,8 @@ function ProductForm({
     // Ảnh phụ: gửi mảng ĐẦY ĐỦ (BE thay cả danh sách; [] là xóa hết, vắng là giữ nguyên). Sửa mà chưa đụng tới thì không gửi; tạo mới luôn gửi.
     const gallery = uniqueUrls(f.gallery);
     const galleryUnchanged = product && JSON.stringify(gallery) === JSON.stringify(uniqueUrls(product.galleryUrls ?? []));
+    // Ảnh bìa: như mô tả. PATCH vắng / null = giữ nguyên, "" = xóa; sửa mà chưa đụng tới thì không gửi.
+    const imageUrl = f.imageUrl.trim();
     const body = {
       categoryId: Number(f.categoryId),
       name: f.name.trim(),
@@ -266,6 +276,7 @@ function ProductForm({
       unit: f.unit.trim(),
       price: Number(f.price),
       description: product ? (description === (product.description ?? '') ? undefined : description) : description || undefined,
+      imageUrl: product ? (imageUrl === (product.imageUrl ?? '') ? undefined : imageUrl) : imageUrl || undefined,
       galleryUrls: galleryUnchanged ? undefined : gallery,
     };
     return product
@@ -275,6 +286,7 @@ function ProductForm({
 
   const submit = async () => {
     const invalid =
+      (uploading > 0 && 'Đợi ảnh tải lên xong rồi lưu.') ||
       (!form.categoryId && 'Chọn danh mục.') ||
       (!product && !form.sku.trim() && 'Nhập SKU.') ||
       (!form.name.trim() && 'Nhập tên sản phẩm.') ||
@@ -395,7 +407,23 @@ function ProductForm({
           />
         )}
       </Field>
-      <GalleryField urls={form.gallery} onChange={(gallery) => set({ gallery })} />
+      <Field label="Ảnh bìa" hint="Hiện ở thẻ sản phẩm trong cửa hàng, giỏ hàng và gợi ý AI. Tải ảnh lên hoặc dán đường dẫn.">
+        {(id) => (
+          <div className="flex flex-wrap items-center gap-2">
+            <Thumb key={form.imageUrl.trim()} url={form.imageUrl.trim()} />
+            <Input
+              id={id}
+              className="min-w-0 flex-1"
+              value={form.imageUrl}
+              maxLength={URL_MAX}
+              placeholder="/imgs/anh.jpg hoặc https://…"
+              onChange={(e) => set({ imageUrl: e.target.value })}
+            />
+            <ImageUploadButton label="Tải ảnh bìa lên" onUploaded={([url]) => set({ imageUrl: url })} onBusyChange={onUploadBusy} />
+          </div>
+        )}
+      </Field>
+      <GalleryField urls={form.gallery} onChange={(gallery) => set({ gallery })} onAppend={appendGallery} onBusyChange={onUploadBusy} />
       <FormError message={error} />
     </FormModal>
   );
@@ -415,8 +443,18 @@ function Thumb({ url }: { url: string }) {
   );
 }
 
-/** Ảnh phụ (catalog-v1 `galleryUrls`): các ô nhập URL có thứ tự; thêm (tối đa 8), xóa, đưa lên / xuống (không kéo thả). */
-function GalleryField({ urls, onChange }: { urls: string[]; onChange: (urls: string[]) => void }) {
+/** Ảnh phụ (catalog-v1 `galleryUrls`): các ô nhập URL có thứ tự; thêm (tối đa 8), tải lên Cloudinary, xóa, đưa lên / xuống (không kéo thả). */
+function GalleryField({
+  urls,
+  onChange,
+  onAppend,
+  onBusyChange,
+}: {
+  urls: string[];
+  onChange: (urls: string[]) => void;
+  onAppend: (urls: string[]) => void;
+  onBusyChange: (busy: boolean) => void;
+}) {
   const labelId = useId();
   const swap = (i: number, j: number) => {
     const next = [...urls];
@@ -454,11 +492,14 @@ function GalleryField({ urls, onChange }: { urls: string[]; onChange: (urls: str
           </Button>
         </div>
       ))}
-      <Button type="button" size="sm" variant="outline" disabled={urls.length >= GALLERY_MAX} onClick={() => onChange([...urls, ''])}>
-        <Plus className="h-4 w-4" />
-        Thêm ảnh phụ
-      </Button>
-      <p className="text-xs text-(--text-tertiary)">Hiện ở trang chi tiết sản phẩm, sau ảnh bìa. Dán đường dẫn ảnh; dòng trống bị bỏ khi lưu.</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" size="sm" variant="outline" disabled={urls.length >= GALLERY_MAX} onClick={() => onChange([...urls, ''])}>
+          <Plus className="h-4 w-4" />
+          Thêm ảnh phụ
+        </Button>
+        <ImageUploadButton label="Tải ảnh phụ lên" multiple limit={GALLERY_MAX - urls.length} onUploaded={onAppend} onBusyChange={onBusyChange} />
+      </div>
+      <p className="text-xs text-(--text-tertiary)">Hiện ở trang chi tiết sản phẩm, sau ảnh bìa. Tải ảnh lên hoặc dán đường dẫn; dòng trống bị bỏ khi lưu.</p>
     </div>
   );
 }

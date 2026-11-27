@@ -58,6 +58,15 @@ public class PersonalIntentRouter {
         return Optional.empty();
     }
 
+    /**
+     * Câu mơ hồ (docs/adr/0157): có từ khóa lịch hẹn hoặc tiêm, không có cụm chỉ giá, nhưng luật {@link #detect} không nhận
+     * vì thiếu dấu hiệu sở hữu đủ mạnh. Chỉ những câu này mới được hỏi mô hình một nhãn.
+     */
+    public boolean isAmbiguous(String question, List<String> petNames) {
+        return (PhraseMatcher.anyPhrase(question, appointment) || PhraseMatcher.anyPhrase(question, vaccination))
+                && !PhraseMatcher.anyPhrase(question, price) && detect(question, petNames).isEmpty();
+    }
+
     /** BR-AI-28b: hỏi bệnh án, đơn thuốc, kết quả xét nghiệm của thú mình (dấu hiệu sở hữu mạnh hoặc tên thú). */
     public boolean isMedicalRecordQuestion(String question, List<String> petNames) {
         return PhraseMatcher.anyPhrase(question, record) && hasStrongSign(question, petNames);

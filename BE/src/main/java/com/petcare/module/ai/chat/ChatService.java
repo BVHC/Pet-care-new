@@ -59,6 +59,8 @@ public class ChatService {
     private static final int MAX_SOURCES = 3;
     private static final String COUNTER = "ai.chat.result";
     private static final String NO_ERROR = "NONE";
+    private static final List<String> INTENT_LABELS = List.of(PersonalIntent.APPOINTMENT_UPCOMING.name(),
+            PersonalIntent.VACCINATION_SCHEDULE.name(), "NONE");
 
     private final SystemConfigApi config;
     private final EmergencyDetector emergency;
@@ -140,6 +142,11 @@ public class ChatService {
             return finish(ChatResponse.canned(ChatResult.MEDICAL_REFUSAL, ChatTexts.MEDICAL_RECORD, false), trace, true);
         }
         Optional<PersonalIntent> intent = router.detect(masked, petNames);
+        // docs/adr/0157: chỉ /me, đọc công tắc mỗi lượt; endpoint công khai không bao giờ chạm tới công tắc lẫn mô hình.
+        if (intent.isEmpty() && viewer.signedIn() && config.getBool(ConfigKey.AI_CHAT_INTENT_LLM_ENABLED)
+                && router.isAmbiguous(masked, petNames)) {
+            intent = classifyAmbiguous(withoutPetNames);
+        }
         if (intent.isPresent()) {
             trace.intent = intent.get() == PersonalIntent.APPOINTMENT_UPCOMING ? ChatIntent.APPOINTMENT_UPCOMING
                     : ChatIntent.VACCINATION_SCHEDULE;
@@ -187,6 +194,31 @@ public class ChatService {
             log.warn("PET_CONTEXT_FAILED exception={}", e.getClass().getSimpleName());
             return null;
         }
+    }
+
+    /**
+     * Câu mơ hồ (docs/adr/0157): mô hình chỉ trả một nhãn cho câu đã che PII và tên thú. Lỗi nhà cung cấp, nhãn {@code NONE}
+     * hay {@code null} đều là "không phải câu cá nhân" và đi tiếp đường cũ (BR-AI-10, không thử lại). Log và bộ đếm chỉ có
+     * kết quả và thời gian, không có nội dung câu (BR-AI-24).
+     */
+    private Optional<PersonalIntent> classifyAmbiguous(String question) {
+        long started = System.nanoTime();
+        Optional<PersonalIntent> intent = Optional.empty();
+        String outcome;
+        try {
+            String label = llm.classify(ChatPrompt.INTENT_SYSTEM, ChatPrompt.intentBlock(question), INTENT_LABELS);
+            if (PersonalIntent.APPOINTMENT_UPCOMING.name().equals(label)) {
+                intent = Optional.of(PersonalIntent.APPOINTMENT_UPCOMING);
+            } else if (PersonalIntent.VACCINATION_SCHEDULE.name().equals(label)) {
+                intent = Optional.of(PersonalIntent.VACCINATION_SCHEDULE);
+            }
+            outcome = intent.map(Enum::name).orElse("NONE");
+        } catch (AiProviderException e) {
+            outcome = "ERROR";
+        }
+        meters.counter("ai.chat.intent_llm", "outcome", outcome).increment();
+        log.info("PERSONAL_INTENT_LLM outcome={} durationMs={}", outcome, (System.nanoTime() - started) / 1_000_000);
+        return intent;
     }
 
     /** Chỉ đổi dạng chữ khi khách có thú: khách vãng lai giữ nguyên câu hỏi. */

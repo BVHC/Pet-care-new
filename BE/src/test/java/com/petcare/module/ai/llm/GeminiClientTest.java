@@ -213,6 +213,49 @@ class GeminiClientTest {
                 e -> assertThat(e.kind()).isEqualTo(ChatErrorKind.PROVIDER_ERROR));
     }
 
+    // ---------------------------------------------------------------- phân loại (docs/adr/0157)
+
+    private static final List<String> INTENTS = List.of("APPOINTMENT_UPCOMING", "VACCINATION_SCHEDULE", "NONE");
+
+    @Test
+    void classifyAsksForAnIntentEnumWithTemperatureZeroAndReturnsTheLabel() {
+        body = generateJson("{\"intent\":\"APPOINTMENT_UPCOMING\"}");
+
+        String label = client().classify("HỆ THỐNG", "NGƯỜI DÙNG", INTENTS);
+
+        assertThat(label).isEqualTo("APPOINTMENT_UPCOMING");
+        Recorded request = requests.get(0);
+        assertThat(request.path()).isEqualTo("/v1beta/models/gemini-3.1-flash-lite:generateContent");
+        assertThat(request.body().at("/systemInstruction/parts/0/text").asText()).isEqualTo("HỆ THỐNG");
+        assertThat(request.body().at("/contents/0/parts/0/text").asText()).isEqualTo("NGƯỜI DÙNG");
+        JsonNode generation = request.body().path("generationConfig");
+        assertThat(generation.path("temperature").asDouble(-1)).isZero();
+        // 20 token cắt cụt JSON ở Gemini thật (đo 27/11/2026: 16/16 "Unterminated string"); 64 đủ cho nhãn dài nhất.
+        assertThat(generation.path("maxOutputTokens").asInt()).isEqualTo(64);
+        assertThat(generation.at("/thinkingConfig/thinkingBudget").asInt(-1)).isZero();
+        assertThat(generation.path("responseMimeType").asText()).isEqualTo("application/json");
+        assertThat(generation.at("/responseSchema/properties").fieldNames()).toIterable().containsExactly("intent");
+        assertThat(generation.at("/responseSchema/required")).extracting(JsonNode::asText).containsExactly("intent");
+        assertThat(generation.at("/responseSchema/properties/intent/enum")).extracting(JsonNode::asText)
+                .containsExactlyElementsOf(INTENTS);
+    }
+
+    @Test
+    void aLabelOutsideTheListIsAProviderError() {
+        body = generateJson("{\"intent\":\"WEATHER\"}");
+
+        assertThatThrownBy(() -> client().classify("s", "u", INTENTS)).isInstanceOfSatisfying(AiProviderException.class,
+                e -> assertThat(e.kind()).isEqualTo(ChatErrorKind.PROVIDER_ERROR));
+    }
+
+    @Test
+    void aClassificationWithoutTheIntentFieldIsAProviderError() {
+        body = generateJson("{\"label\":\"NONE\"}");
+
+        assertThatThrownBy(() -> client().classify("s", "u", INTENTS)).isInstanceOfSatisfying(AiProviderException.class,
+                e -> assertThat(e.kind()).isEqualTo(ChatErrorKind.PROVIDER_ERROR));
+    }
+
     @Test
     void answerThatIsNotTheExpectedJsonIsAProviderError() {
         body = generateJson("không phải JSON");

@@ -20,6 +20,7 @@ Báo cáo của đề tài **"Xây dựng hệ thống quản lý chuỗi dịch
 | [`07-ket-luan.md`](./07-ket-luan.md) | Kết luận và hướng phát triển | Khung |
 | [`08-tai-lieu-tham-khao.md`](./08-tai-lieu-tham-khao.md) | Tài liệu tham khảo | Bản nháp |
 | [`09-phu-luc.md`](./09-phu-luc.md) | Phụ lục | Khung |
+| [`pdf/`](./pdf/) | Bản PDF (A4) của từng tệp `.md` ở trên, dựng ngày 27/11/2026; không sửa tay, dựng lại bằng `node D:/Do-an/.c2-tmp/t86/pdf/make-pdf.mjs` sau khi sửa md | Sinh tự động |
 | [`10-bieu-do-tuan-tu.md`](./10-bieu-do-tuan-tu.md) | Biểu đồ tuần tự cho mục 3.3.3 của `D:/Do-an/BAO CAO.docx` (10 hình mới, 3 hình dùng lại); PNG ở `hinh/` | Bản nháp 26/11/2026 |
 | [`danh-muc-hinh.md`](./danh-muc-hinh.md) | Danh mục hình: mã, loại, nguồn, công cụ, trạng thái | 9 hình đã dựng, 11 chưa |
 

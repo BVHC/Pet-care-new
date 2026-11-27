@@ -1204,9 +1204,9 @@ describe('bộ đọc SQL của ca đối chiếu seed — DELETE trên notifica
 });
 
 describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, V46, V48, V51, V52, V53, V56, V57, V59, V61)', () => {
-  it.skipIf(!hasMigrations)('đúng 86 khóa, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
+  it.skipIf(!hasMigrations)('đúng 87 khóa, từng dòng giống hệt SQL (key, value, valueType, minValue, maxValue, unit, description), sắp theo key', async () => {
     const expected = sqlConfigs();
-    expect(expected).toHaveLength(86); // = 86 hằng số ConfigKey của BE: 52 của V2 + V27, 23 ai.* của V35 + V52 + V53 + V56 + V57 + V59, 2 workforce.* của V40 + workforce.weekly_required_shifts của V61 (6 complaint.* của V40 đã bị V51 xóa), 7 của V44…V48, feedback.retention_days của V51
+    expect(expected).toHaveLength(87); // = 87 hằng số ConfigKey của BE: 52 của V2 + V27, 24 ai.* của V35 + V52 + V53 + V56 + V57 + V59 + V66, 2 workforce.* của V40 + workforce.weekly_required_shifts của V61 (6 complaint.* của V40 đã bị V51 xóa), 7 của V44…V48, feedback.retention_days của V51
     const rows = await getConfigs();
     expect(rows.map((r) => r.key)).toEqual(expected.map((r) => r.key));
     for (const [i, row] of rows.entries()) {
@@ -1218,7 +1218,7 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
   it('dòng gõ tay theo V2 + V27 (+ V35, V40, V44…V48): khóa thật của BE có mặt, khóa bịa của bản mock cũ và khóa V27 đã xóa không còn', async () => {
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
-    expect(rows).toHaveLength(86);
+    expect(rows).toHaveLength(87);
     expect(by['feedback.retention_days']).toEqual({ key: 'feedback.retention_days', value: '30', valueType: 'INT', minValue: '7', maxValue: '365', unit: 'ngày', description: 'Số ngày giữ feedback kể từ lúc gửi; quá hạn thì ST24 xóa cứng (BR-DG-05)' }); // V51
     expect(by['otp.ttl_minutes']).toEqual({ key: 'otp.ttl_minutes', value: '5', valueType: 'INT', minValue: '1', maxValue: '15', unit: 'phút', description: 'Thời gian hiệu lực của mã OTP (BR-TK-05)' });
     expect(by['boarding.checkout_time']).toMatchObject({ value: '12:00', valueType: 'TIME', minValue: '06:00', maxValue: '22:00', unit: 'giờ' });
@@ -1234,12 +1234,13 @@ describe('UC10 — tham số [CFG] seed khớp BE (V2, V27, V35, V40, V44, V45, 
     const rows = await getConfigs();
     const by = Object.fromEntries(rows.map((r) => [r.key, r]));
     const prefixCount = (prefix: string) => rows.filter((r) => r.key.startsWith(prefix)).length;
-    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([23, 0, 3, 3, 2, 1, 1]);
+    expect([prefixCount('ai.'), prefixCount('complaint.'), prefixCount('workforce.'), prefixCount('shop.'), prefixCount('payment.'), prefixCount('returns.'), prefixCount('content.')]).toEqual([24, 0, 3, 3, 2, 1, 1]);
     expect(rows.filter((r) => r.valueType === 'DECIMAL').map((r) => r.key)).toEqual(['ai.reco.weight_attr', 'ai.reco.weight_history', 'ai.reco.weight_popularity', 'ai.retrieval.min_similarity']);
-    expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['ai.chat.business_intent_enabled', 'ai.chat.general_knowledge_enabled', 'ai.chat.open_domain_enabled', 'ai.chat.pet_context_enabled', 'boarding.checkout_time']); // BOOL: bốn công tắc V52 (T92), V53 (T90), V56 (T91) và V57 (T92 phần 2); tầng 3 không thêm TIME
+    expect(rows.filter((r) => r.valueType !== 'INT' && r.valueType !== 'DECIMAL').map((r) => r.key)).toEqual(['ai.chat.business_intent_enabled', 'ai.chat.general_knowledge_enabled', 'ai.chat.intent_llm_enabled', 'ai.chat.open_domain_enabled', 'ai.chat.pet_context_enabled', 'boarding.checkout_time']); // BOOL: bốn công tắc V52 (T92), V53 (T90), V56 (T91) và V57 (T92 phần 2); tầng 3 không thêm TIME
     expect(by['ai.retrieval.min_similarity']).toEqual({ key: 'ai.retrieval.min_similarity', value: '0.6', valueType: 'DECIMAL', minValue: '0.3', maxValue: '0.9', unit: 'cosine', description: 'Ngưỡng độ tương đồng cosine tối thiểu để một đoạn được dùng; dưới ngưỡng thì ngoài phạm vi (BR-AI-04)' });
     expect(by['ai.chat.business_intent_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt (BR-AI-31)
     expect(by['ai.chat.general_knowledge_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt (BR-AI-33)
+    expect(by['ai.chat.intent_llm_enabled']).toMatchObject({ value: 'true', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định BẬT (V66, docs/adr/0157)
     expect(by['ai.chat.open_domain_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt, chế độ mở chỉ có tác dụng khi kiến thức chung bật (BR-AI-33, V57)
     expect(by['ai.chat.pet_context_enabled']).toMatchObject({ value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt' }); // mặc định tắt, chỉ bật sau khi xác minh điều khoản dữ liệu (BR-AI-32)
     expect(by['ai.ingest.max_file_kb']).toEqual({ key: 'ai.ingest.max_file_kb', value: '2048', valueType: 'INT', minValue: '256', maxValue: '10240', unit: 'kB', description: 'Cỡ tối đa của một file nạp tri thức (.md, .txt, .docx, .pdf); file lớn hơn bị từ chối (BR-AI-29)' }); // trần cỡ file nạp tri thức (BR-AI-29)

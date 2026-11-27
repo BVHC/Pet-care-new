@@ -747,7 +747,8 @@ body {
 }
 
 
-/* Nhãn nguồn dữ liệu lúc dev (html[data-api] do main.tsx đặt, từ API_MODE trong shared/api/axios.ts). Không chặn chuột. */
+/* Nhãn nguồn dữ liệu lúc dev (html[data-api] do main.tsx đặt, từ API_MODE trong shared/api/axios.ts). Không chặn chuột.
+   TẠM TẮT 27/11/2026 (Hiến yêu cầu ẩn nhãn này trên UI): bỏ dấu comment bao quanh khối dưới để bật lại.
 html[data-api]::after {
   content: 'BE THẬT';
   position: fixed;
@@ -770,3 +771,4 @@ html[data-api='hybrid']::after {
   content: 'HỖN HỢP: BE thật + mock một phần';
   background: #6d28d9;
 }
+*/

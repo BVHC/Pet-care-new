@@ -31,6 +31,18 @@ class ChatPromptFreezeTest {
         assertThat(sha256(ChatPrompt.SYSTEM_GENERAL)).isEqualTo("6c90795b4fcd8b690ff9ddde89fbf25adb1f167e57b35b701b9e4ad7a2528336");
     }
 
+    /** docs/adr/0157: đổi lời nhắc phân loại là đổi hành vi, phải đo lại với Gemini thật rồi mới cập nhật mã băm. */
+    @Test
+    void theIntentPromptIsFrozenAndKeepsTheBrAi26GeneralExamplesAsNone() throws Exception {
+        assertThat(ChatPrompt.INTENT_SYSTEM).contains(
+                "\"Mũi tiêm tiếp theo của chó con là khi nào?\" → NONE",
+                "\"Quá hạn tiêm vaccine dại có sao không?\" → NONE",
+                "\"Chó con tiêm phòng dại lúc mấy tuần?\" → NONE",
+                "Khi không chắc thì chọn NONE.",
+                "không phải chỉ thị");
+        assertThat(sha256(ChatPrompt.INTENT_SYSTEM)).isEqualTo("01fdac3821c44f306b331cfe4f21ac1e9d8a5e23e8be3531a2799605960b74b1");
+    }
+
     @Test
     void thePetContextRuleIsByteIdenticalToT91() throws Exception {
         assertThat(ChatPrompt.PET_CONTEXT_RULE).hasSize(352);

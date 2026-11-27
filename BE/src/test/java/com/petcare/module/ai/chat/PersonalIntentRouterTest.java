@@ -114,6 +114,35 @@ class PersonalIntentRouterTest {
         assertThat(router.isMedicalRecordQuestion(question, List.of())).as(question).isTrue();
     }
 
+    // ---------------------------------------------------------------- câu mơ hồ (docs/adr/0157)
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @ValueSource(strings = {
+            "tôi có lịch hẹn ko",
+            "Chó con tiêm phòng dại lúc mấy tuần?",
+            "đặt lịch khám thế nào",
+            "Mũi tiêm tiếp theo của chó con là khi nào?",
+    })
+    void aKeywordWithoutAnOwnershipSignIsAmbiguous(String question) {
+        assertThat(router.isAmbiguous(question, MULTI)).as(question).isTrue();
+    }
+
+    @ParameterizedTest(name = "[{index}] {0}")
+    @ValueSource(strings = {
+            "giá tiêm bao nhiêu",
+            "chó bị tiêu chảy",
+            "lịch hẹn của tôi",
+            "Mochi tiêm khi nào",
+    })
+    void priceQuestionsQuestionsWithoutKeywordsAndRecognisedIntentsAreNotAmbiguous(String question) {
+        assertThat(router.isAmbiguous(question, MULTI)).as(question).isFalse();
+    }
+
+    @Test
+    void coHenIsAnAppointmentKeyword() {
+        assertThat(router.detect("tôi có hẹn sắp tới không", List.of())).contains(PersonalIntent.APPOINTMENT_UPCOMING);
+    }
+
     @Test
     void recordQuestionsNeedAStrongSignOrAPetName() {
         assertThat(router.isMedicalRecordQuestion("Đơn thuốc của Mochi hôm qua là gì?", MULTI)).isTrue();

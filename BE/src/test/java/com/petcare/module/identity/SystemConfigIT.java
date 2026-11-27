@@ -108,6 +108,7 @@ class SystemConfigIT {
         expect("ai.chat.business_intent_enabled", "false", "BOOL", "false", "true"); // BR-AI-31, V53
         expect("ai.chat.pet_context_enabled", "false", "BOOL", "false", "true"); // BR-AI-32, V56
         expect("ai.chat.open_domain_enabled", "false", "BOOL", "false", "true"); // BR-AI-33 (chế độ mở), V57
+        expect("ai.chat.intent_llm_enabled", "true", "BOOL", "false", "true");   // BR-AI-26 câu mơ hồ, V66 (docs/adr/0157)
         expect("ai.ingest.max_file_kb", "2048", "INT", "256", "10240");           // BR-AI-29, V59
         // V51 (docs/adr/0122, 0131): 6 khóa complaint.* của V40 đã gỡ; thêm feedback.retention_days (BR-DG-05)
         expect("feedback.retention_days", "30", "INT", "7", "365");               // BR-DG-05
@@ -147,7 +148,7 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
-        assertThat(EXPECTED).hasSize(86);
+        assertThat(EXPECTED).hasSize(87);
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

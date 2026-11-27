@@ -29,12 +29,19 @@ public class FakeLlmClient implements LlmClient {
     }
 
     private final List<Call> calls = new CopyOnWriteArrayList<>();
+    /** Lệnh gọi {@link LlmClient#classify} ghi riêng (docs/adr/0157), để số đếm của {@link #calls()} giữ nguyên nghĩa cũ. */
+    private final List<Call> classifyCalls = new CopyOnWriteArrayList<>();
+    private volatile String classifyReply = "NONE";
+    private volatile AiProviderException classifyFailure;
     private volatile Function<Call, LlmAnswer> reply = call -> DEFAULT_ANSWER;
     private volatile AiProviderException failure;
     private volatile Runnable beforeCall = () -> { };
 
     public void reset() {
         calls.clear();
+        classifyCalls.clear();
+        classifyReply = "NONE";
+        classifyFailure = null;
         reply = call -> DEFAULT_ANSWER;
         failure = null;
         beforeCall = () -> { };
@@ -68,6 +75,20 @@ public class FakeLlmClient implements LlmClient {
         return calls;
     }
 
+    /** Nhãn mà {@link #classify} trả (mặc định {@code NONE}); {@code null} mô phỏng mock Mockito chưa được dạy. */
+    public void classifyReply(String label) {
+        this.classifyReply = label;
+    }
+
+    /** Chỉ {@link #classify} ném {@code error}; {@link #generate} vẫn trả lời (lỗi riêng bước phân loại). */
+    public void classifyFailWith(AiProviderException error) {
+        this.classifyFailure = error;
+    }
+
+    public List<Call> classifyCalls() {
+        return classifyCalls;
+    }
+
     @Override
     public String llmModel() {
         return MODEL;
@@ -81,6 +102,18 @@ public class FakeLlmClient implements LlmClient {
     @Override
     public LlmAnswer generateCategorized(String systemPrompt, String userBlock) {
         return answer(new Call(systemPrompt, userBlock, true));
+    }
+
+    @Override
+    public String classify(String systemPrompt, String userBlock, List<String> labels) {
+        classifyCalls.add(new Call(systemPrompt, userBlock));
+        if (classifyFailure != null) {
+            throw classifyFailure;
+        }
+        if (failure != null) {
+            throw failure;
+        }
+        return classifyReply;
     }
 
     private LlmAnswer answer(Call call) {

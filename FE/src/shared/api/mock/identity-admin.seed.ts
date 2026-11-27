@@ -1,5 +1,6 @@
 // UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V51 + V52 + V53 + V56 + V57 + V59 + V61 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER, V51 xóa 7 mẫu COMPLAINT_*).
 // T81 (V51, ADR-0122 / 0131): 88 → 83 khóa so với BE trước V51 (xóa 6 `complaint.*`, thêm `feedback.retention_days`); mẫu 70 → 63 (xóa 7 `COMPLAINT_*`).
+// ADR-0157 (V66, 27/11/2026): 86 → 87 khóa (thêm `ai.chat.intent_llm_enabled`, công tắc BOOL câu mơ hồ hỏi mô hình, mặc định bật).
 // T58 (V61, ADR-0123): 85 → 86 khóa (thêm `workforce.weekly_required_shifts`, định mức ca đăng ký mỗi tuần, INT 10 ca/tuần, 1–30, BR-NS-12).
 // T89 (V59, ADR-0147): 84 → 85 khóa (thêm `ai.ingest.max_file_kb`, trần cỡ file nạp tri thức, INT 2048 kB, 256–10240).
 // T92 (phần 2): 83 → 84 khóa (thêm `ai.chat.open_domain_enabled` của V57, công tắc BOOL thứ tư).
@@ -12,12 +13,13 @@
 // Không viết tay: identity-admin.mock.test.ts đọc lại SQL và so từng trường nên lệch BE là test đỏ. BE thêm khóa / mã mới thì thêm vào đây theo cùng migration.
 import type { NotificationTemplate, SystemConfig } from '../../types/identity';
 
-/** 86 tham số [CFG] của BE (`ConfigKey`), sắp theo key như `ORDER BY key`. `value` là mặc định. DECIMAL (4 khóa `ai.*`) là chuỗi chuẩn hóa như `ConfigValues`: '0.6', không '0.60'. */
+/** 87 tham số [CFG] của BE (`ConfigKey`), sắp theo key như `ORDER BY key`. `value` là mặc định. DECIMAL (4 khóa `ai.*`) là chuỗi chuẩn hóa như `ConfigValues`: '0.6', không '0.60'. */
 export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'account.pending_ttl_hours', value: '24', valueType: 'INT', minValue: '1', maxValue: '168', unit: 'giờ', description: 'Tài khoản chưa xác thực quá thời gian này thì bị xóa (BR-TK-08, ST02)' },
   { key: 'address.max_per_customer', value: '5', valueType: 'INT', minValue: '1', maxValue: '20', unit: 'địa chỉ', description: 'Số địa chỉ tối đa trong sổ địa chỉ của khách (BR-TK-18)' },
   { key: 'ai.chat.business_intent_enabled', value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt', description: 'Cho chatbot trả lời giá dịch vụ và thông tin chi nhánh trực tiếp từ cơ sở dữ liệu, không qua mô hình (BR-AI-31); tắt = các câu này đi theo đường tài liệu như trước' },
   { key: 'ai.chat.general_knowledge_enabled', value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt', description: 'Cho chatbot trả lời bằng kiến thức chăm sóc thú cưng phổ thông khi kho tri thức không có đáp án (BR-AI-33); tắt = chỉ trả lời từ tài liệu' },
+  { key: 'ai.chat.intent_llm_enabled', value: 'true', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt', description: 'Khách đã đăng nhập hỏi lịch hẹn / lịch tiêm theo cách gõ tự nhiên (thiếu "của tôi", tên thú…): chatbot hỏi mô hình AI một nhãn để nhận ra câu hỏi cá nhân (BR-AI-26, docs/adr/0157); tắt thì chỉ dùng luật từ khóa' },
   { key: 'ai.chat.max_previous_questions', value: '3', valueType: 'INT', minValue: '0', maxValue: '5', unit: 'câu', description: 'Số câu hỏi trước của chính người dùng được đưa vào ngữ cảnh (BR-AI-08)' },
   { key: 'ai.chat.max_question_chars', value: '500', valueType: 'INT', minValue: '100', maxValue: '2000', unit: 'ký tự', description: 'Độ dài tối đa của một câu hỏi chatbot (BR-AI-08)' },
   { key: 'ai.chat.open_domain_enabled', value: 'false', valueType: 'BOOL', minValue: 'false', maxValue: 'true', unit: 'bật/tắt', description: 'Cho chatbot của khách đã đăng nhập trả lời cả câu vô hại ngoài lĩnh vực thú cưng bằng kiến thức chung, kèm lưu ý tham khảo (BR-AI-33); chỉ có tác dụng khi kiến thức chung cũng bật; y khoa, liều thuốc và nội dung gây hại vẫn bị từ chối' },

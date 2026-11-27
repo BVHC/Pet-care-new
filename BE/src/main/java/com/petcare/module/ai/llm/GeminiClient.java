@@ -125,10 +125,33 @@ public class GeminiClient implements LlmClient, EmbeddingClient {
                 token(usage, "thoughtsTokenCount"), category);
     }
 
+    /**
+     * Nhiệt độ 0: chỉ cần một nhãn, càng ổn định càng tốt (docs/adr/0157). 64 token: 20 cắt cụt JSON ở Gemini thật (đo
+     * 27/11/2026, 16/16 câu "Unterminated string"), vì nhãn dài như VACCINATION_SCHEDULE tách thành nhiều token.
+     */
+    @Override
+    public String classify(String systemPrompt, String userBlock, List<String> labels) {
+        Map<String, Object> schema = Map.of(
+                "type", "OBJECT",
+                "properties", Map.of("intent", Map.of("type", "STRING", "enum", labels)),
+                "required", List.of("intent"));
+        JsonNode response = generateContent(systemPrompt, userBlock, schema, 0.0, 64);
+        String label = parsedAnswer(response).path("intent").asText(null);
+        if (label == null || !labels.contains(label)) {
+            throw providerError("Nhãn phân loại thiếu hoặc lạ (finishReason=" + finishReason(response) + ")");
+        }
+        return label;
+    }
+
     private JsonNode generateContent(String systemPrompt, String userBlock, Map<String, Object> schema) {
+        return generateContent(systemPrompt, userBlock, schema, 0.2, 600);
+    }
+
+    private JsonNode generateContent(String systemPrompt, String userBlock, Map<String, Object> schema, double temperature,
+            int maxOutputTokens) {
         Map<String, Object> generation = new LinkedHashMap<>();
-        generation.put("temperature", 0.2);
-        generation.put("maxOutputTokens", 600);
+        generation.put("temperature", temperature);
+        generation.put("maxOutputTokens", maxOutputTokens);
         generation.put("thinkingConfig", Map.of("thinkingBudget", 0));
         generation.put("responseMimeType", "application/json");
         generation.put("responseSchema", schema);
