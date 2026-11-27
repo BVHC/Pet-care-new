@@ -1,5 +1,5 @@
 // Mock shop-v1 (UC61, 62, 64, 65; docs/api/shop-v1.md #1–19): giỏ hàng, báo giá + đặt đơn online, đơn của tôi, xử lý và giao đơn của lễ tân.
-// BE đã cài shop #1–#18 (task 116, 125, 126); FE ghép BE thật ở T67 (#1–#11) và T68 (#12–#18), nên mock chỉ còn để chạy Vitest / toàn mock và phải khớp số đo ở A1–A9. #19 BE CHƯA có (task 138).
+// BE đã cài shop #1–#18 (task 116, 125, 126); FE ghép BE thật ở T67 (#1–#11) và T68 (#12–#18), nên mock chỉ còn để chạy Vitest / toàn mock và phải khớp số đo ở A1–A9. #19 (hủy sau giao thất bại) đã bỏ cùng hoàn tiền (ADR-0156).
 // Mọi chỗ hợp đồng im lặng là ASSUMPTION dưới đây (chung cho shop / payment / returns,
 // state và nghiệp vụ chéo module ở commerce.store.ts, phần HTTP dùng chung ở commerce.http.ts).
 //
@@ -7,13 +7,12 @@
 //      @NotNull / @NotBlank; @Valid chạy TRƯỚC @PreAuthorize, đo trên BE thật ở care.mock / cashier.mock) → 403 ACCESS_DENIED vai trò → 404 → 403 phạm vi chi nhánh
 //      (ACCESS_DENIED_SCOPE_MISMATCH, message chung) → 400 BR-… → 409 INVALID_STATE_TRANSITION. Đơn của người khác với khách là 404 (ADR-0006), với nhân viên chi nhánh
 //      khác là 403 phạm vi sau 404. Lệch có chủ đích so với dòng "400 VALIDATION_FAILED chạy SAU vai trò" của brief: dòng đó đúng cho tham số query (@Positive…),
-//      còn body @Valid đã đo là chạy trước vai trò. Xử lý đơn của lễ tân (#14–#19): 409 INVALID_STATE_TRANSITION đứng TRƯỚC 400 BR-BH-11 (BE thật đo 17/11, T68: `requireStatus`
+//      còn body @Valid đã đo là chạy trước vai trò. Xử lý đơn của lễ tân (#14–#18): 409 INVALID_STATE_TRANSITION đứng TRƯỚC 400 BR-BH-11 (BE thật đo 17/11, T68: `requireStatus`
 //      chạy trước `required(...)`, ADR-0146 F3; sales / cashier GĐ1 cũng 409 trước rule), khác dòng "BR trước 409" của 00-method §3.5.
 //  A2  Thiếu đơn vị vận chuyển / mã vận đơn (ship, redeliver) là 400 BUSINESS_RULE_VIOLATION BR-BH-11 do service kiểm ("Thiếu đơn vị vận chuyển (BR-BH-11)" / "Thiếu mã vận đơn (BR-BH-11)"),
 //      sau 404 / phạm vi và sau 409; `redeliver` kiểm "thiếu" rồi mới "hết lượt" ("Đơn đã giao lại tối đa N lần, không giao lại thêm được (BR-BH-11)"). Đã đo trên BE thật 17/11.
 //      `fail-delivery` thiếu / trắng lý do là 400 VALIDATION_FAILED "reason: Lý do là bắt buộc" (@NotBlank của ReasonRequest dùng chung; hợp đồng đã sửa chữ theo ADR-0146 F3), chạy
-//      trước vai trò và 404 như mọi body @Valid. `cancel-failed` (#19) BE CHƯA CÓ (task 138): mock theo chữ hợp đồng (400 BR-BH-11); task 138 sẽ dùng lại ReasonRequest nên BE thật
-//      nhiều khả năng trả VALIDATION_FAILED như #17: đo lại khi có controller. Mock chặt hơn BE ở một chỗ: `carrier: 123` (sai kiểu) mock trả MALFORMED_REQUEST, BE ép thành chuỗi.
+//      trước vai trò và 404 như mọi body @Valid. Mock chặt hơn BE ở một chỗ: `carrier: 123` (sai kiểu) mock trả MALFORMED_REQUEST, BE ép thành chuỗi.
 //      Kiểu sai hoặc quá maxLength vẫn là MALFORMED / VALIDATION_FAILED trước vai trò. Riêng khách hủy đơn (#10) thiếu `reason` là VALIDATION_FAILED. Số lượng giỏ ngoài 1–99 và thiếu
 //      `quantity` đều là 400 VALIDATION_FAILED ("quantity: Số lượng phải từ 1 đến 99" / "quantity: Số lượng là bắt buộc"), chạy trước vai trò: đo trên BE thật 17/11 (DTO dùng @Min / @Max).
 //  A3  Quyền (đúng dòng "Quyền:"): /me/cart, /me/online-orders… chỉ CUSTOMER; GET /online-orders và chi tiết: RECEPTIONIST + BRANCH_MANAGER của chi nhánh xử lý;
@@ -30,16 +29,12 @@
 //      400 BR-BH-08. `itemCount` của danh sách = số dòng hàng. Mã đơn `DH-yyMMdd-xxxx`. Mỗi đơn có `salesOrderId` = 7000 + id, KHÔNG nằm trong mock bán hàng GĐ1 (sales-v1 /
 //      report-v1 chưa có ONLINE trong enum nguồn; test báo cáo khẳng định tổng): `onlineRevenueRows()` ở commerce.store.ts cho luồng chính nối vào báo cáo sau.
 //  A7  Hủy đơn (#10): khách CHỈ hủy được ở PENDING_PAYMENT (nhả giữ hàng, hủy giao dịch PENDING); mọi trạng thái khác, kể cả PAID / PROCESSING, → 409 INVALID_STATE_TRANSITION
-//      cho tới task 138 (hoàn hàng + hoàn tiền; BE thật 17/11, ADR-0145 C1). Hoàn hàng về lô gốc và hoàn tiền GATEWAY toàn bộ gồm phí vận chuyển chỉ còn ở nhánh lễ tân
-//      hủy sau giao thất bại (#19). Không gửi thông báo ST20 (ONLINE_ORDER_*) và không ghi audit (BR-QT-15): ngoài phạm vi.
-//      `refundStatus` của OnlineOrder = trạng thái hoàn tiền gần nhất của đơn, null khi chưa có hoàn tiền (shop-v1, 08 §D Q4).
-//  A8  Lý do giao thất bại BE lưu ở `online_orders.delivery_failure_reason` (V58) nhưng `OnlineOrder` KHÔNG trả (đo 17/11; mock lưu `failReason` cũng không trả) — đề nghị Dũng thêm `deliveryFailureReason`;
-//      `OnlineOrderLine.orderLineId` cũng không có trong yaml (returns-v1 cần `order_lines.id`): mock trả `orderLineId` (types/shop.ts ghi rõ).
-//  A9  Job hệ thống ST10 / ST11 / ST12 / ST21 chạy lười mỗi request (commerce.store.ts `sweep`): ST10 hủy đơn PENDING_PAYMENT quá hạn + 15 phút; ST12 tự xác nhận đơn DELIVERED
-//      sau 7 ngày nếu không có yêu cầu trả hàng đang mở.
+//      (đơn đã thanh toán không hủy được trong hệ thống, ADR-0156). Không gửi thông báo ST20 (ONLINE_ORDER_*) và không ghi audit (BR-QT-15): ngoài phạm vi.
+//  A8  Lý do giao thất bại BE lưu ở `online_orders.delivery_failure_reason` (V58) nhưng `OnlineOrder` KHÔNG trả (đo 17/11; mock lưu `failReason` cũng không trả) — đề nghị Dũng thêm `deliveryFailureReason`.
+//  A9  Job hệ thống ST10 / ST11 / ST12 chạy lười mỗi request (commerce.store.ts `sweep`): ST10 hủy đơn PENDING_PAYMENT quá hạn + 15 phút; ST12 tự xác nhận đơn DELIVERED
+//      sau 7 ngày.
 import type { Role } from '../../types/auth';
 import type { Address } from '../../types/profile';
-import type { RefundStatus } from '../../types/returns';
 import type { Cart, OnlineOrder, OnlineOrderStatus, OnlineOrderSummary } from '../../types/shop';
 import { FULFILLMENT_DEFAULT_STATUSES, ONLINE_ORDER_STATUSES, SHOP_LIMITS } from '../../types/shop';
 import { branchBooking } from './branch.mock';
@@ -88,16 +83,12 @@ export { onlineRevenueRows, openOnlineOrderCount, registerShippingFeeSource } fr
 const CUSTOMER: readonly Role[] = ['CUSTOMER'];
 const STAFF_VIEW: readonly Role[] = ['RECEPTIONIST', 'BRANCH_MANAGER'];
 const RECEPTION: readonly Role[] = ['RECEPTIONIST'];
-/** Khách chỉ tự hủy ở PENDING_PAYMENT (ADR-0145 C1); PAID / PROCESSING chờ task 138. */
+/** Khách chỉ tự hủy ở PENDING_PAYMENT (ADR-0145 C1); đơn đã thanh toán không hủy được (ADR-0156). */
 const CUSTOMER_CANCELLABLE: readonly OnlineOrderStatus[] = ['PENDING_PAYMENT'];
 
 // ─── Hiển thị ───
 
-/** Hoàn tiền gần nhất của đơn (mới nhất trước); null khi chưa có (BE `OnlineOrder.refundStatus`). */
-const refundStatusOf = (s: State, onlineOrderId: number): RefundStatus | null =>
-  s.refunds.filter((r) => r.onlineOrderId === onlineOrderId).sort(newestFirst((r) => r.refundId))[0]?.status ?? null;
-
-function orderView(o: OnlineOrderRow, s: State): OnlineOrder {
+function orderView(o: OnlineOrderRow): OnlineOrder {
   return {
     onlineOrderId: o.onlineOrderId,
     salesOrderId: o.salesOrderId,
@@ -123,7 +114,6 @@ function orderView(o: OnlineOrderRow, s: State): OnlineOrder {
     cancelledAt: o.cancelledAt,
     cancelReason: o.cancelReason,
     createdAt: o.createdAt,
-    refundStatus: refundStatusOf(s, o.onlineOrderId),
   };
 }
 
@@ -301,7 +291,7 @@ const placeOnlineOrder: MockHandler = (req) => {
       Date.now(),
     );
     save(s);
-    return ok(orderView(row, s), 201, `Đã đặt hàng, vui lòng thanh toán trong ${CFG.paymentWindowHours} giờ`);
+    return ok(orderView(row), 201, `Đã đặt hàng, vui lòng thanh toán trong ${CFG.paymentWindowHours} giờ`);
   });
 };
 
@@ -328,11 +318,11 @@ const getMyOrder: MockHandler = (req) => {
   if (badId) return badId;
   return asCustomer(req, (s, customerId) => {
     const o = mineOr404(s, req, customerId);
-    return isReply(o) ? o : ok(orderView(o, s));
+    return isReply(o) ? o : ok(orderView(o));
   });
 };
 
-/** #10 Đơn hàng online#3: chỉ PENDING_PAYMENT → CANCELLED; PAID / PROCESSING và mọi trạng thái khác → 409 (ADR-0145 C1, task 138 mới mở hoàn hàng). */
+/** #10 Đơn hàng online#3: chỉ PENDING_PAYMENT → CANCELLED; PAID / PROCESSING và mọi trạng thái khác → 409 (ADR-0145 C1, ADR-0156). */
 const cancelMyOrder: MockHandler = (req) => {
   const badId = pathIds(req, ['onlineOrderId']);
   if (badId) return badId;
@@ -349,7 +339,7 @@ const cancelMyOrder: MockHandler = (req) => {
     if (!CUSTOMER_CANCELLABLE.includes(o.status)) return stateError('đơn hàng online', o.status, 'CANCELLED');
     cancelOrder(s, o, { reason: (b.reason as string).trim(), by: me(req).id, at: Date.now() });
     save(s);
-    return ok(orderView(o, s), 200, 'Đã hủy đơn hàng');
+    return ok(orderView(o), 200, 'Đã hủy đơn hàng');
   });
 };
 
@@ -364,11 +354,11 @@ const confirmReceived: MockHandler = (req) => {
     o.status = 'COMPLETED';
     o.completedAt = new Date().toISOString();
     save(s);
-    return ok(orderView(o, s), 200, 'Đã xác nhận nhận hàng');
+    return ok(orderView(o), 200, 'Đã xác nhận nhận hàng');
   });
 };
 
-// ─── Xử lý và giao đơn của chi nhánh: #12–19 (UC65, BR-BH-11) ───
+// ─── Xử lý và giao đơn của chi nhánh: #12–18 (UC65, BR-BH-11) ───
 
 /** #12: chi nhánh của người gọi; `status` vắng = PAID + PROCESSING + DELIVERY_FAILED; cũ nhất trước. */
 const listOrders: MockHandler = (req) => {
@@ -393,7 +383,7 @@ const getOrder: MockHandler = (req) => {
   if (!hasRole(req, STAFF_VIEW)) return denied();
   const s = loadFresh();
   const o = ofMyBranch(s, req);
-  return isReply(o) ? o : ok(orderView(o, s));
+  return isReply(o) ? o : ok(orderView(o));
 };
 
 type Body = Record<string, unknown>;
@@ -425,13 +415,9 @@ const transition = (t: Transition): MockHandler => (req) => {
   if (broken) return broken;
   t.apply(s, o, b, Date.now(), me(req).id);
   save(s);
-  return ok(orderView(o, s), 200, t.message);
+  return ok(orderView(o), 200, t.message);
 };
 
-const parseReason = (b: Body) => {
-  if (has(b.reason) && typeof b.reason !== 'string') return malformed();
-  return invalid([['reason', `Lý do tối đa ${SHOP_LIMITS.reason} ký tự`, tooLong(b.reason, SHOP_LIMITS.reason)]]);
-};
 const parseShip = (b: Body) => {
   if ((has(b.carrier) && typeof b.carrier !== 'string') || (has(b.trackingCode) && typeof b.trackingCode !== 'string')) return malformed();
   return invalid([
@@ -449,7 +435,6 @@ const parseFailReason = (b: Body) => {
 };
 const guardShip = (_o: OnlineOrderRow, b: Body) =>
   !isText(b.carrier) ? ruleFail('BR-BH-11', 'Thiếu đơn vị vận chuyển') : !isText(b.trackingCode) ? ruleFail('BR-BH-11', 'Thiếu mã vận đơn') : null;
-const guardReason = (what: string) => (_o: OnlineOrderRow, b: Body) => (isText(b.reason) ? null : ruleFail('BR-BH-11', what));
 
 const startProcessing = transition({
   from: ['PAID'],
@@ -510,15 +495,6 @@ const redeliver = transition({
   message: 'Đã chuyển giao lại',
 });
 
-const cancelFailed = transition({
-  from: ['DELIVERY_FAILED'],
-  to: 'CANCELLED',
-  parse: parseReason,
-  guard: guardReason('Vui lòng nhập lý do hủy đơn'),
-  apply: (s, o, b, at, by) => cancelOrder(s, o, { reason: (b.reason as string).trim(), by, at }),
-  message: 'Đã hủy đơn, hoàn hàng về kho và sinh yêu cầu hoàn tiền',
-});
-
 /** Khóa route: các đường tĩnh (`fulfillment-branches`, `quote`) đứng TRƯỚC `:onlineOrderId` vì mock-api khớp theo thứ tự khai báo. */
 export const shopRoutes: Record<string, MockHandler> = {
   'GET /api/me/cart': getCart, // 1
@@ -539,5 +515,4 @@ export const shopRoutes: Record<string, MockHandler> = {
   'POST /api/online-orders/:onlineOrderId/mark-delivered': markDelivered, // 16
   'POST /api/online-orders/:onlineOrderId/fail-delivery': failDelivery, // 17
   'POST /api/online-orders/:onlineOrderId/redeliver': redeliver, // 18
-  'POST /api/online-orders/:onlineOrderId/cancel-failed': cancelFailed, // 19
 };

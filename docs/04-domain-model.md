@@ -198,6 +198,6 @@ Ngoài ra các model có sẵn được mở rộng cột / giá trị (Appointm
 
 > Từ T54 (5/11/2026) các mục dưới đây đã có model ở §12. Đoạn giữ nguyên văn v16 để đối chiếu.
 
-Giữ trên sơ đồ use case, không thiết kế model: nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
+Giữ trên sơ đồ use case, không thiết kế model: nội trú (UC55, UC56), giỏ hàng & đơn online & thanh toán cổng (UC61–65), trả hàng (UC68, 69; bỏ ở ADR-0156), chuyển kho & kiểm kê & truy vết lô (UC77–79), bài viết của VET & bình luận (UC80, 82), gộp hồ sơ khách (UC27), tạm ngừng/đóng chi nhánh (UC13).
 
 Báo cáo (UC89) không có model; số liệu tính tại thời điểm xem từ Order, Payment, Visit, Appointment, Vaccination, InventoryItem, Feedback (BR-BC-01…04). Tỷ lệ quay lại tái chủng khớp theo VaccineType. *(v15: bỏ báo cáo công suất chuồng nên không dùng Kennel, BoardingBooking.)*

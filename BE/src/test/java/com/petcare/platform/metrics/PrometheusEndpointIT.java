@@ -124,7 +124,7 @@ class PrometheusEndpointIT {
                 notWired.add(entry.getKey());
             }
         }
-        assertThat(jobs).as("job + NotificationOutboxRunner (GatewayRefundJob chỉ có khi bật cờ)")
+        assertThat(jobs).as("job + NotificationOutboxRunner")
                 .isGreaterThanOrEqualTo(20);
         assertThat(notWired).isEmpty();
     }

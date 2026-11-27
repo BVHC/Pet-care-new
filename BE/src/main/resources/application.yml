@@ -280,7 +280,7 @@ app:
       cron: "${ONLINE_ORDER_PAYMENT_EXPIRY_CRON:20 6/15 * * * *}"
       batch-size: 100
       time-budget: 60s
-    # ST12 (docs/adr/0146): đơn online DELIVERED quá [CFG] shop.auto_confirm_days không có yêu cầu trả hàng đang mở thì
+    # ST12 (docs/adr/0146): đơn online DELIVERED quá [CFG] shop.auto_confirm_days thì
     # sang COMPLETED (BR-BH-12). Mỗi giờ ở 12:40 (phút 12, giây 40: không còn phút nào trống job dài 5 phút, ST12 chạy cạnh ST03; giây lệch giữ hai lần bắt đầu cách nhau).
     online-order-auto-confirm:
       cron: "${ONLINE_ORDER_AUTO_CONFIRM_CRON:40 12 * * * *}"

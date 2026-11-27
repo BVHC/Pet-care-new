@@ -25,7 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * ST12 — tự chuyển đơn online {@code DELIVERED} quá [CFG] {@code shop.auto_confirm_days} ngày sang {@code COMPLETED}
- * khi không có yêu cầu trả hàng đang mở (BR-BH-12, docs/adr/0146; cơ chế job: docs/adr/0007). Đọc theo lô (keyset theo
+ * (BR-BH-12, docs/adr/0146; cơ chế job: docs/adr/0007). Đọc theo lô (keyset theo
  * {@code delivered_at} rồi id), mỗi đơn một transaction riêng ở {@link OnlineOrderAutoConfirmService}. Không
  * {@code @Transactional} ở đây. Một đơn lỗi được log {@code ONLINE_ORDER_AUTO_CONFIRM_FAILED} rồi bỏ qua; lượt sau thử
  * lại. Mỗi lượt dừng khi hết {@code timeBudget}.

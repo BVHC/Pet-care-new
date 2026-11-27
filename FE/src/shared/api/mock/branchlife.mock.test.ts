@@ -6,7 +6,6 @@ import { bookedOfBranch } from './branch.mock';
 import { registerClosureSources } from './branchlife.mock';
 import { MOCK_PASSWORD } from './identity.mock';
 import { installMockApi } from './mock-api';
-import { pendingRefundCount } from './returns.mock';
 import { openOnlineOrderCount } from './shop.mock';
 import { inTransitTransfersOf } from './stockops.mock';
 
@@ -91,9 +90,9 @@ describe('xem trước tồn đọng (#1)', () => {
     expect(i.stockItemCount).toBeGreaterThan(0);
     expect(i.stockTotalQuantity).toBeGreaterThanOrEqual(i.stockItemCount);
     expect(i.activeStaff).toBeGreaterThanOrEqual(8); // quản lý, 2 lễ tân, 4 bác sĩ, 1 chăm sóc
-    // Nguồn chưa đăng ký đều 0; ba nguồn đã nối ở tier3-wiring.ts (đơn online, hoàn tiền, chuyển kho) trả đúng số của mock nguồn.
+    // Nguồn chưa đăng ký đều 0; hai nguồn đã nối ở tier3-wiring.ts (đơn online, chuyển kho) trả đúng số của mock nguồn.
     expect(i).toMatchObject({ activeBoardingStays: 0, openVisits: 0, openCashierShifts: 0, openCareTasks: 0, openStockCounts: 0 });
-    expect(i).toMatchObject({ unfinishedOnlineOrders: openOnlineOrderCount(1), pendingRefunds: pendingRefundCount(1), inTransitTransfers: inTransitTransfersOf(1) });
+    expect(i).toMatchObject({ unfinishedOnlineOrders: openOnlineOrderCount(1), inTransitTransfers: inTransitTransfersOf(1) });
     expect(i.suspendBlockers).toEqual([]);
     expect(i.closeBlockers.join('|')).toMatch(/tồn kho.*nhân viên/);
     for (const key of Object.keys(i)) {
@@ -112,12 +111,11 @@ describe('xem trước tồn đọng (#1)', () => {
       activeBoardingStays: () => 1,
       openCashierShifts: () => 1,
       unfinishedOnlineOrders: () => 4,
-      pendingRefunds: () => 1,
       inTransitTransfers: () => 2,
       openStockCounts: () => 1,
     });
     const i = await impact(1);
-    expect(i).toMatchObject({ openVisits: 2, activeBoardingStays: 1, openCashierShifts: 1, unfinishedOnlineOrders: 4, pendingRefunds: 1, inTransitTransfers: 2, openStockCounts: 1 });
+    expect(i).toMatchObject({ openVisits: 2, activeBoardingStays: 1, openCashierShifts: 1, unfinishedOnlineOrders: 4, inTransitTransfers: 2, openStockCounts: 1 });
     expect(i.suspendBlockers).toHaveLength(3);
     expect(i.closeBlockers.length).toBeGreaterThan(i.suspendBlockers.length + 4);
     expect((await impact(2)).openVisits).toBe(0);
@@ -325,9 +323,9 @@ describe('đóng cửa (#4)', () => {
   });
 
   it('điều kiện chặn của nguồn đăng ký vào message đóng cửa', async () => {
-    restoreSources = registerClosureSources({ unfinishedOnlineOrders: () => 2, pendingRefunds: () => 1, inTransitTransfers: () => 1, openStockCounts: () => 1 });
+    restoreSources = registerClosureSources({ unfinishedOnlineOrders: () => 2, inTransitTransfers: () => 1, openStockCounts: () => 1 });
     const res = await failure(close(1, body, await chain()));
-    for (const part of ['2 đơn online', '1 khoản hoàn tiền', '1 phiếu chuyển kho', '1 phiên kiểm kê']) expect(res.data.message).toContain(part);
+    for (const part of ['2 đơn online', '1 phiếu chuyển kho', '1 phiên kiểm kê']) expect(res.data.message).toContain(part);
   });
 
   it('chi nhánh sạch (3): đóng từ ACTIVE → CLOSED, giữ lý do, không mở lại được', async () => {

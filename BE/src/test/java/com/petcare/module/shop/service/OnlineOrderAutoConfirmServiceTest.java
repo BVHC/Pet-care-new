@@ -8,7 +8,6 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.Clock;
@@ -26,7 +25,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
-import com.petcare.module.returns.api.ReturnRequestQueryApi;
 import com.petcare.module.shop.api.OnlineOrderStatus;
 import com.petcare.module.shop.entity.OnlineOrder;
 import com.petcare.module.shop.fsm.OnlineOrderTransitionHandler;
@@ -35,7 +33,7 @@ import com.petcare.module.shop.repository.OnlineOrderRepository.DueRow;
 import com.petcare.module.shop.service.OnlineOrderAutoConfirmService.DueOrder;
 import com.petcare.module.shop.service.OnlineOrderAutoConfirmService.Result;
 
-/** ST12 (docs/adr/0146): khóa SKIP LOCKED trước, kiểm lại hạn và yêu cầu trả hàng đang mở dưới khóa, [CFG] đọc lúc chạy. */
+/** ST12 (docs/adr/0146): khóa SKIP LOCKED trước, kiểm lại hạn dưới khóa, [CFG] đọc lúc chạy. */
 class OnlineOrderAutoConfirmServiceTest {
 
     private static final long ONLINE_ID = 600L;
@@ -44,7 +42,6 @@ class OnlineOrderAutoConfirmServiceTest {
     private static final Instant DELIVERED_8_DAYS_AGO = Instant.parse("2026-11-07T03:00:00Z");
 
     private final OnlineOrderRepository onlineOrders = mock(OnlineOrderRepository.class);
-    private final ReturnRequestQueryApi returns = mock(ReturnRequestQueryApi.class);
     private final SystemConfigApi config = mock(SystemConfigApi.class);
     private OnlineOrderAutoConfirmService service;
 
@@ -53,7 +50,7 @@ class OnlineOrderAutoConfirmServiceTest {
         when(onlineOrders.lockDeliveredSkipLocked(ONLINE_ID)).thenReturn(Optional.of(ONLINE_ID));
         when(onlineOrders.saveAndFlush(any(OnlineOrder.class))).thenAnswer(call -> call.getArgument(0));
         when(config.getInt(ConfigKey.SHOP_AUTO_CONFIRM_DAYS)).thenReturn(7);
-        service = new OnlineOrderAutoConfirmService(onlineOrders, returns, config, new OnlineOrderTransitionHandler(),
+        service = new OnlineOrderAutoConfirmService(onlineOrders, config, new OnlineOrderTransitionHandler(),
                 Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
@@ -74,15 +71,14 @@ class OnlineOrderAutoConfirmServiceTest {
     }
 
     @Test
-    void confirmsADueOrderWithNoOpenReturnLockingFirstAndCheckingReturnsOnTheSalesOrderId() {
+    void confirmsADueOrderLockingFirst() {
         OnlineOrder order = order(OnlineOrderStatus.DELIVERED, DELIVERED_8_DAYS_AGO);
 
         assertThat(service.confirm(ONLINE_ID)).isEqualTo(Result.CONFIRMED);
 
-        InOrder inOrder = inOrder(onlineOrders, returns);
+        InOrder inOrder = inOrder(onlineOrders);
         inOrder.verify(onlineOrders).lockDeliveredSkipLocked(ONLINE_ID);
         inOrder.verify(onlineOrders).findById(ONLINE_ID);
-        inOrder.verify(returns).hasOpenRequestForOrder(ORDER_ID);
         inOrder.verify(onlineOrders).saveAndFlush(order);
         assertThat(order.getStatus()).isEqualTo(OnlineOrderStatus.COMPLETED);
         assertThat(order.getCompletedAt()).isEqualTo(Instant.parse("2026-11-15T03:00:00.123456Z"));
@@ -96,23 +92,11 @@ class OnlineOrderAutoConfirmServiceTest {
     }
 
     @Test
-    void anOrderDeliveredLessThanTheConfiguredDaysAgoIsSkippedWithoutAskingReturns() {
+    void anOrderDeliveredLessThanTheConfiguredDaysAgoIsSkipped() {
         order(OnlineOrderStatus.DELIVERED, Instant.parse("2026-11-08T03:00:00.123457Z"));
 
         assertThat(service.confirm(ONLINE_ID)).isEqualTo(Result.SKIPPED);
 
-        verifyNoInteractions(returns);
-        verify(onlineOrders, never()).saveAndFlush(any());
-    }
-
-    @Test
-    void anOpenReturnRequestSkipsTheOrderAndWritesNothing() {
-        OnlineOrder order = order(OnlineOrderStatus.DELIVERED, DELIVERED_8_DAYS_AGO);
-        when(returns.hasOpenRequestForOrder(ORDER_ID)).thenReturn(true);
-
-        assertThat(service.confirm(ONLINE_ID)).isEqualTo(Result.SKIPPED);
-
-        assertThat(order.getStatus()).isEqualTo(OnlineOrderStatus.DELIVERED);
         verify(onlineOrders, never()).saveAndFlush(any());
     }
 
@@ -123,7 +107,6 @@ class OnlineOrderAutoConfirmServiceTest {
         assertThat(service.confirm(ONLINE_ID)).isEqualTo(Result.SKIPPED);
 
         verify(onlineOrders, never()).findById(anyLong());
-        verifyNoInteractions(returns);
     }
 
     @Test
@@ -132,7 +115,6 @@ class OnlineOrderAutoConfirmServiceTest {
 
         assertThat(service.confirm(ONLINE_ID)).isEqualTo(Result.SKIPPED);
 
-        verifyNoInteractions(returns);
         verify(onlineOrders, never()).saveAndFlush(any());
     }
 

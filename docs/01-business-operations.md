@@ -17,7 +17,7 @@
 | A07 | VET | Bác sĩ thú y tại một chi nhánh. **Trong phạm vi đồ án:** khám, chẩn đoán, kê đơn, hẹn tái khám, tiêm chủng, cập nhật và bổ sung bệnh án, ghi nhật ký chăm sóc thú lưu trú; có hồ sơ giới thiệu hiển thị công khai. **Hướng phát triển (tầng 3):** điều trị nội trú (phẫu thuật đã bỏ, ADR-0125), viết bài chuyên môn, truy vết lô. |
 | A08 | CARETAKER | Nhân viên chăm sóc tại một chi nhánh; chỉ được xem bệnh án, không được sửa. **Trong phạm vi đồ án:** thực hiện dịch vụ thẩm mỹ (tắm, cắt tỉa), nhận thú lưu trú, ghi nhật ký chăm sóc thú lưu trú. **Hướng phát triển (tầng 3):** chăm sóc thú nội trú. |
 | S01 | System | Tự động chạy các tác vụ định kỳ và tác vụ kích hoạt theo sự kiện (mục B): nhắc lịch, hủy đơn quá hạn, cảnh báo tồn kho, sinh Care Task… |
-| S02 | Payment Gateway | *(Tầng 3)* Cổng thanh toán bên ngoài. Xử lý thanh toán online, hoàn tiền, trả kết quả giao dịch về hệ thống. |
+| S02 | Payment Gateway | *(Tầng 3)* Cổng thanh toán bên ngoài. Xử lý thanh toán online, trả kết quả giao dịch về hệ thống (hoàn tiền đã bỏ, ADR-0156). |
 | S03 | Email / Push Provider | Dịch vụ gửi email (OTP, thông báo) và push notification bên ngoài. |
 
 ---
@@ -148,8 +148,8 @@
 | UC65 | Xử lý & giao đơn online (xử lý, bàn giao, cập nhật trạng thái, giao thất bại) | A06 |
 | UC66 | Bán hàng & chốt Order tại quầy (tạo, xóa dòng, chốt, hủy; BRANCH_MANAGER hủy Order `PENDING` khách không thanh toán — BR-BH-05) | A06, A05 |
 | UC67 | Thêm dịch vụ / hàng vào Order | A06, A07, A08 |
-| UC68 | Tạo yêu cầu trả hàng | A06 |
-| UC69 | Duyệt yêu cầu trả hàng | A05 |
+| ~~UC68~~ | ~~Tạo yêu cầu trả hàng~~ — bỏ ở ADR-0156. Giữ mã. | — |
+| ~~UC69~~ | ~~Duyệt yêu cầu trả hàng~~ — bỏ ở ADR-0156. Giữ mã. | — |
 
 ## 13. Thu ngân
 
@@ -239,7 +239,7 @@ Các mục dưới đây do hệ thống tự chạy theo thời gian hoặc the
 | ST18 | Sinh Care Task | ST04 (nhắc tái chủng / tái khám với hồ sơ không có email; quá hạn tái chủng), ST15 (quá hạn đón) |
 | ST19 | Tự hủy Care Task khi thú cưng đã mất | UC24 |
 | ST20 | Gửi thông báo & thử lại khi thất bại | Mọi sự kiện cần thông báo |
-| ST21 | Hoàn tiền online qua cổng thanh toán | UC64, UC69 |
+| ~~ST21~~ | ~~Hoàn tiền online qua cổng thanh toán~~ — bỏ ở ADR-0156. Giữ mã. | — |
 | ST22 | Nạp lại chỉ mục tri thức AI (chia đoạn, nhúng vector; đồng bộ phác đồ tiêm) | UC93, định kỳ |
 | ST23 | Xóa nhật ký hỏi đáp AI quá hạn lưu | Hằng ngày |
 | ST24 | Dọn feedback quá hạn lưu (xóa cứng sau 30 ngày, BR-DG-05) | Hằng ngày |

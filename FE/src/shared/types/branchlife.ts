@@ -26,7 +26,6 @@ export interface ClosureImpact {
   openOrders: number;
   unfinishedOnlineOrders: number;
   openCareTasks: number;
-  pendingRefunds: number;
   inTransitTransfers: number;
   openStockCounts: number;
   stockItemCount: number;

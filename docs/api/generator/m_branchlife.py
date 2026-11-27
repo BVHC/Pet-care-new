@@ -31,7 +31,7 @@ m.param("BranchId", "branchId", "path", "int64")
 m.schema("BranchLifecycleStatus", None, enum=["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED"], desc="03 #2 và #20")
 m.schema("ClosureImpact", {
     "bookedAppointments": "int", "activeBoardingStays": "int", "openVisits": "int", "openCashierShifts": "int",
-    "openOrders": "int", "unfinishedOnlineOrders": "int", "openCareTasks": "int", "pendingRefunds": "int",
+    "openOrders": "int", "unfinishedOnlineOrders": "int", "openCareTasks": "int",
     "inTransitTransfers": "int", "openStockCounts": "int", "stockItemCount": "int", "stockTotalQuantity": "int",
     "activeStaff": "int",
     "suspendBlockers": "array:string|Điều kiện còn vướng nếu tạm ngừng ngay (BR-CN-08); rỗng = được",

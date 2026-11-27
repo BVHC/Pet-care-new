@@ -49,7 +49,7 @@
 Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `date`, `datetime`… theo mục 3 của `00-method.md`.
 
 - **`BranchLifecycleStatus`** — enum: `DRAFT`, `ACTIVE`, `SUSPENDED`, `CLOSED`. 03 #2 và #20
-- **`ClosureImpact`** — {`bookedAppointments`: int32, `activeBoardingStays`: int32, `openVisits`: int32, `openCashierShifts`: int32, `openOrders`: int32, `unfinishedOnlineOrders`: int32, `openCareTasks`: int32, `pendingRefunds`: int32, `inTransitTransfers`: int32, `openStockCounts`: int32, `stockItemCount`: int32, `stockTotalQuantity`: int32, `activeStaff`: int32, `suspendBlockers`: [string], `closeBlockers`: [string]}
+- **`ClosureImpact`** — {`bookedAppointments`: int32, `activeBoardingStays`: int32, `openVisits`: int32, `openCashierShifts`: int32, `openOrders`: int32, `unfinishedOnlineOrders`: int32, `openCareTasks`: int32, `inTransitTransfers`: int32, `openStockCounts`: int32, `stockItemCount`: int32, `stockTotalQuantity`: int32, `activeStaff`: int32, `suspendBlockers`: [string], `closeBlockers`: [string]}
 - **`SuspendBranchRequest`** — {`reason`: string, `expectedResumeOn?`: date, `cancelBookings`: boolean, `careTaskTargetBranchId?`: int64}
 - **`CloseBranchRequest`** — {`reason`: string, `cancelBookings`: boolean, `careTaskTargetBranchId?`: int64}
 - **`BranchLifecycle`** — {`branchId`: int64, `status`: BranchLifecycleStatus, `suspendedAt?`: date-time, `expectedResumeOn?`: date, `closedAt?`: date-time, `reason?`: string}

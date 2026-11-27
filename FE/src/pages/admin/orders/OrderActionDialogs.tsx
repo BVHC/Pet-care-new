@@ -55,17 +55,17 @@ export function ShipOrderDialog({ order, redeliver, onClose, onDone }: DialogPro
   );
 }
 
-/** #17 ghi nhận giao thất bại (SHIPPED → DELIVERY_FAILED) và #19 hủy sau giao thất bại (hoàn hàng, sinh hoàn tiền qua cổng): cùng ReasonRequest. */
-export function OrderReasonDialog({ order, cancel, onClose, onDone }: DialogProps & { cancel?: boolean }) {
+/** #17 ghi nhận giao thất bại (SHIPPED → DELIVERY_FAILED). */
+export function OrderReasonDialog({ order, onClose, onDone }: DialogProps) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
-  const send = useShopMutation((body: { reason: string }) => (cancel ? shopApi.cancelFailed : shopApi.failDelivery)(order.onlineOrderId, body));
+  const send = useShopMutation((body: { reason: string }) => shopApi.failDelivery(order.onlineOrderId, body));
 
   const submit = async () => {
-    if (!reason.trim()) return setError(cancel ? 'Nhập lý do hủy đơn.' : 'Nhập lý do giao thất bại.');
+    if (!reason.trim()) return setError('Nhập lý do giao thất bại.');
     try {
       await send.mutateAsync({ reason: reason.trim() });
-      onDone(cancel ? `Đã hủy đơn ${order.code}, hoàn hàng về kho và sinh yêu cầu hoàn tiền.` : `Đã ghi nhận giao thất bại đơn ${order.code}.`);
+      onDone(`Đã ghi nhận giao thất bại đơn ${order.code}.`);
     } catch (e) {
       setError(commerceError(e, 'Đơn'));
     }
@@ -75,14 +75,14 @@ export function OrderReasonDialog({ order, cancel, onClose, onDone }: DialogProp
     <FormModal
       open
       onOpenChange={(open) => !open && onClose()}
-      title={cancel ? 'Hủy đơn sau giao thất bại' : 'Ghi nhận giao thất bại'}
-      description={cancel ? `${order.code} · hoàn hàng về kho, hoàn tiền cho khách qua cổng thanh toán` : order.code}
+      title="Ghi nhận giao thất bại"
+      description={order.code}
       onSubmit={submit}
-      submitText={cancel ? 'Hủy đơn' : 'Ghi nhận'}
+      submitText="Ghi nhận"
       cancelText="Quay lại"
       loading={send.isPending}
     >
-      <Field label={cancel ? 'Lý do hủy' : 'Lý do giao thất bại'} hint={`${reason.length}/${SHOP_LIMITS.reason}`}>
+      <Field label="Lý do giao thất bại" hint={`${reason.length}/${SHOP_LIMITS.reason}`}>
         {(id) => (
           <textarea
             id={id}

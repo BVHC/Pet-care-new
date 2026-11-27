@@ -15,9 +15,6 @@ public interface CashierShiftQueryApi {
      */
     Optional<OpenShift> findOpenShift(Long cashierAccountId);
 
-    /** Khóa chia sẻ ca mở tới hết transaction ghi, để chốt ca đợi khoản hoàn tiền tại quầy. */
-    Optional<OpenShift> lockOpenShiftForShare(Long cashierAccountId);
-
     // ------------------------------------------------------------------------------------------------------------
     // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 13): placeholder dạng default — ném UnsupportedOperationException
     // tới khi CashierShiftLookupService ghi đè; khi đó xóa default (method thành trừu tượng).

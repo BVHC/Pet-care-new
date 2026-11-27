@@ -15,8 +15,6 @@ import org.junit.jupiter.api.Test;
 
 import com.petcare.module.payment.api.PaymentGatewayClient.GatewayStatus;
 import com.petcare.module.payment.api.PaymentGatewayClient.GatewayTransaction;
-import com.petcare.module.payment.api.PaymentGatewayClient.RefundOutcome;
-import com.petcare.module.payment.api.PaymentGatewayClient.RefundRequest;
 import com.petcare.module.payment.api.PaymentGatewayClient.SessionRequest;
 
 /** {@link FakeGatewayClient} (task 127): xác định, không mạng, cùng thuật toán ký với VNPay, trạng thái trong bộ nhớ. */
@@ -112,24 +110,5 @@ class FakeGatewayClientTest {
 
         fake.reset();
         assertThat(fake.queryTransaction("GD-9")).isEmpty();
-    }
-
-    @Test
-    void refundIsIdempotentByRefundCodeAndOutcomeIsConfigurable() {
-        RefundRequest r1 = new RefundRequest("HT-1", "GD-1", "N1", 150_000L, "Khach tra hang", NOW);
-
-        var first = fake.refund(r1);
-        assertThat(first.outcome()).isEqualTo(RefundOutcome.SUCCEEDED);
-        assertThat(first.gatewayRefundId()).isEqualTo("FAKE-REFUND-HT-1");
-
-        fake.setRefundOutcome(RefundOutcome.REJECTED);
-        assertThat(fake.refund(r1)).as("cùng refundCode giữ kết quả cũ").isEqualTo(first);
-        var second = fake.refund(new RefundRequest("HT-2", "GD-1", "N1", 150_000L, "x", NOW));
-        assertThat(second.outcome()).isEqualTo(RefundOutcome.REJECTED);
-        assertThat(second.failureReason()).isNotBlank();
-
-        fake.setRefundOutcome(RefundOutcome.TEMPORARY_ERROR);
-        assertThat(fake.refund(new RefundRequest("HT-3", "GD-1", "N1", 1L, "x", NOW)).outcome())
-                .isEqualTo(RefundOutcome.TEMPORARY_ERROR);
     }
 }

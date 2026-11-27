@@ -7,7 +7,7 @@
 **Legend:** `CONFIRMED` = có trong docs · `ASSUMPTION (A#)` = suy luận ít phát minh nhất · `TBD (Q#)` = cần quyết định (mục E). Method/path/shape là **PROPOSED** theo quy ước chung ở [`00-method.md`](./00-method.md); envelope, mã lỗi, phân trang, kiểu dữ liệu theo mục 3 của file đó.
 
 **Đóng băng phạm vi (không có endpoint):**
-- UC61–UC65 (giỏ hàng, đơn online, thanh toán cổng) và UC68–UC69 (trả hàng) là tầng 3.
+- UC61–UC65 (giỏ hàng, đơn online, thanh toán cổng) là tầng 3; UC68–UC69 (trả hàng) đã bỏ (ADR-0156).
 - Order VISIT được mở / chốt / hủy theo Visit (Order#1, #4, #6) qua `VisitOrderApi`; Order BOARDING sinh khi bắt đầu trả thú / thú mất (Order#3) qua `BoardingOrderApi`. Không có endpoint tạo Order nguồn VISIT hay BOARDING.
 - Dòng DRUG sinh từ kê đơn (`/visits/{visitId}/prescriptions`), dòng VACCINE từ ghi mũi tiêm, dòng BOARDING từ trả thú. Ở đây chỉ thêm dòng SERVICE và GOODS.
 - ST06 trừ kho chạy trong `POST /payments`; ST13 (tự chốt ca, cảnh báo Order PENDING quá hạn) là tác vụ hệ thống.
@@ -120,7 +120,7 @@ Trường có `?` là không bắt buộc / có thể null. Kiểu `email`, `dat
 - **`PaymentPreview`** — {`customerId`: int64, `branchId`: int64, `totalAmount`: int64, `shortages`: [ShortageLine]}
 - **`CreatePaymentRequest`** — {`orderIds`: [integer], `method`: CASH|TRANSFER, `amount`: int64}
 - **`Payment`** — {`paymentId`: int64, `code`: string, `branchId`: int64, `customerId`: int64, `cashierShiftId`: int64, `method`: CASH|TRANSFER, `amount`: int64, `receivedBy`: int64, `paidAt`: date-time, `orders`: [OrderSummary]}
-- **`CashierShift`** — {`shiftId`: int64, `branchId`: int64, `cashierId`: int64, `cashierName`: string, `isAfterHours`: boolean, `businessDate`: date, `status`: OPEN|CLOSED|RECONCILED, `openedAt`: date-time, `closedAt?`: date-time, `autoClosed`: boolean, `expectedCash?`: int64, `expectedTransfer?`: int64, `countedCash?`: int64, `difference?`: int64, `reconcileNote?`: string, `reconciledBy?`: int64, `reconciledAt?`: date-time, `paymentCount`: int32} — `expectedCash` và `expectedTransfer` là tiền thu trừ tiền hoàn theo từng hình thức (VND), có thể âm. `countedCash` là tiền mặt thực đếm, không âm.
+- **`CashierShift`** — {`shiftId`: int64, `branchId`: int64, `cashierId`: int64, `cashierName`: string, `isAfterHours`: boolean, `businessDate`: date, `status`: OPEN|CLOSED|RECONCILED, `openedAt`: date-time, `closedAt?`: date-time, `autoClosed`: boolean, `expectedCash?`: int64, `expectedTransfer?`: int64, `countedCash?`: int64, `difference?`: int64, `reconcileNote?`: string, `reconciledBy?`: int64, `reconciledAt?`: date-time, `paymentCount`: int32}
 - **`OpenShiftRequest`** — {`afterHours`: boolean}
 - **`CurrentShift`** — {`open`: boolean, `shift?`: CashierShift}
 - **`CloseShiftRequest`** — {`countedCash`: int64}

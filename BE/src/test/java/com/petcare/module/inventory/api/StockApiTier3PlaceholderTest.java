@@ -25,21 +25,6 @@ class StockApiTier3PlaceholderTest {
             List.of(new StockApi.TransferredLot(1L, 5L, 2, "L1", LocalDate.of(2027, 1, 1)));
 
     @Test
-    void restockThrowsUntilImplemented() {
-        assertPlaceholder(() -> stock.restock(ref, 1L), "StockApi.restock", "T63");
-    }
-
-    @Test
-    void restockToOriginalLotThrowsUntilImplemented() {
-        assertPlaceholder(() -> stock.restockToOriginalLot(1L, 1, 1L), "StockApi.restockToOriginalLot", "T73");
-    }
-
-    @Test
-    void discardReturnedThrowsUntilImplemented() {
-        assertPlaceholder(() -> stock.discardReturned(1L, 1, 1L), "StockApi.discardReturned", "T73");
-    }
-
-    @Test
     void transferOutThrowsUntilImplemented() {
         assertPlaceholder(() -> stock.transferOut(1L, 2L, lines, 1L), "StockApi.transferOut", "T74");
     }

@@ -236,7 +236,7 @@ components:
       description: "03 #2 và #20"
     ClosureImpact:
       type: object
-      required: [bookedAppointments, activeBoardingStays, openVisits, openCashierShifts, openOrders, unfinishedOnlineOrders, openCareTasks, pendingRefunds, inTransitTransfers, openStockCounts, stockItemCount, stockTotalQuantity, activeStaff, suspendBlockers, closeBlockers]
+      required: [bookedAppointments, activeBoardingStays, openVisits, openCashierShifts, openOrders, unfinishedOnlineOrders, openCareTasks, inTransitTransfers, openStockCounts, stockItemCount, stockTotalQuantity, activeStaff, suspendBlockers, closeBlockers]
       properties:
         bookedAppointments:
           type: integer
@@ -257,9 +257,6 @@ components:
           type: integer
           format: int32
         openCareTasks:
-          type: integer
-          format: int32
-        pendingRefunds:
           type: integer
           format: int32
         inTransitTransfers:

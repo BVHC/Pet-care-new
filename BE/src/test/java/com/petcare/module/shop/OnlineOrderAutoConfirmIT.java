@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,21 +16,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.identity.service.SystemConfigService;
-import com.petcare.module.returns.api.ReturnRequestQueryApi;
 import com.petcare.module.shop.job.OnlineOrderAutoConfirmJob;
 import com.petcare.module.shop.service.OnlineOrderAutoConfirmService;
 import com.petcare.module.shop.service.OnlineOrderAutoConfirmService.DueOrder;
-import com.petcare.module.shop.service.OnlineOrderAutoConfirmService.Result;
 import com.petcare.support.MutableClock;
 
 /**
  * ST12 (docs/adr/0146, Đơn hàng online#12, BR-BH-12) trên Postgres 17 thật: đơn {@code DELIVERED} quá [CFG]
- * {@code shop.auto_confirm_days} ngày và không có yêu cầu trả hàng đang mở sang {@code COMPLETED}; yêu cầu {@code PENDING}
- * / {@code APPROVED} giữ đơn lại, yêu cầu đã kết thúc thì không; số ngày đọc lúc chạy; đơn đang bị khóa bị bỏ qua (SKIP
+ * {@code shop.auto_confirm_days} ngày sang {@code COMPLETED} (trả hàng đã bỏ, docs/adr/0156); số ngày đọc lúc chạy; đơn đang bị khóa bị bỏ qua (SKIP
  * LOCKED); một đơn lỗi không chặn cả lô. Era <b>năm 1980</b> (job quét không có cận dưới).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -56,8 +51,6 @@ class OnlineOrderAutoConfirmIT extends OnlineOrderJobItSupport {
     @Autowired
     private OnlineOrderAutoConfirmService service;
     @Autowired
-    private ReturnRequestQueryApi returns;
-    @Autowired
     private SystemConfigService configService;
 
     @Override
@@ -76,18 +69,6 @@ class OnlineOrderAutoConfirmIT extends OnlineOrderJobItSupport {
         return order;
     }
 
-    private long returnRequest(long orderId, String status) {
-        boolean decided = List.of("APPROVED", "REFUNDED", "REJECTED").contains(status);
-        boolean approved = !status.equals("REJECTED") && decided;
-        return jdbc.queryForObject("""
-                INSERT INTO return_requests (code, order_id, branch_id, status, reason_code, created_by, decided_by,
-                                             decided_at, decision_note, restock, refund_amount)
-                VALUES (?, ?, ?, ?, 'OTHER', ?, ?, ?, ?, ?, ?) RETURNING id""", Long.class,
-                "TH-IT-" + UUID.randomUUID().toString().substring(0, 10), orderId, branch, status, manager,
-                decided ? manager : null, decided ? Timestamp.from(START) : null,
-                status.equals("REJECTED") ? "Từ chối" : null, approved ? Boolean.TRUE : null, approved ? 100_000L : null);
-    }
-
     private String completedAt(long id) {
         Timestamp at = jdbc.queryForObject("SELECT completed_at FROM online_orders WHERE id = ?", Timestamp.class, id);
         return at == null ? null : at.toInstant().toString();
@@ -96,7 +77,7 @@ class OnlineOrderAutoConfirmIT extends OnlineOrderJobItSupport {
     // ================================================================ đường chính
 
     @Test
-    void aDueOrderWithoutAnyReturnRequestBecomesCompletedAtRunTime() {
+    void aDueOrderBecomesCompletedAtRunTime() {
         Placed due = delivered(a, RUN.minus(8, ChronoUnit.DAYS));
         Placed notYet = delivered(b, RUN.minus(3, ChronoUnit.DAYS));
         clock.set(RUN);
@@ -124,44 +105,6 @@ class OnlineOrderAutoConfirmIT extends OnlineOrderJobItSupport {
 
         assertThat(onlineStatus(exact.id())).isEqualTo("COMPLETED");
         assertThat(onlineStatus(oneMicroLater.id())).isEqualTo("DELIVERED");
-    }
-
-    @Test
-    void anOpenReturnRequestKeepsTheOrderAndAFinishedOneDoesNot() {
-        Instant old = RUN.minus(10, ChronoUnit.DAYS);
-        Placed pending = delivered(a, old);
-        Placed approved = delivered(b, old);
-        Placed rejected = delivered(a, old);
-        Placed cancelled = delivered(b, old);
-        Placed refunded = delivered(a, old);
-        returnRequest(pending.orderId(), "PENDING");
-        returnRequest(approved.orderId(), "APPROVED");
-        returnRequest(rejected.orderId(), "REJECTED");
-        returnRequest(cancelled.orderId(), "CANCELLED");
-        returnRequest(refunded.orderId(), "REFUNDED");
-        clock.set(RUN);
-
-        job.run();
-
-        assertThat(onlineStatus(pending.id())).isEqualTo("DELIVERED");
-        assertThat(onlineStatus(approved.id())).isEqualTo("DELIVERED");
-        assertThat(onlineStatus(rejected.id())).isEqualTo("COMPLETED");
-        assertThat(onlineStatus(cancelled.id())).isEqualTo("COMPLETED");
-        assertThat(onlineStatus(refunded.id())).isEqualTo("COMPLETED");
-    }
-
-    @Test
-    void aReturnRequestOfAnotherOrderDoesNotHoldThisOne() {
-        Instant old = RUN.minus(10, ChronoUnit.DAYS);
-        Placed mine = delivered(a, old);
-        Placed other = delivered(b, old);
-        returnRequest(other.orderId(), "PENDING");
-        clock.set(RUN);
-
-        job.run();
-
-        assertThat(onlineStatus(mine.id())).isEqualTo("COMPLETED");
-        assertThat(onlineStatus(other.id())).isEqualTo("DELIVERED");
     }
 
     @Test
@@ -212,27 +155,6 @@ class OnlineOrderAutoConfirmIT extends OnlineOrderJobItSupport {
         assertThat(List.of(first, second, third)).allSatisfy(o -> assertThat(onlineStatus(o.id())).isEqualTo("COMPLETED"));
     }
 
-    // ================================================================ ReturnRequestQueryApi
-
-    @Test
-    void returnRequestQueryApiTellsOpenFromFinishedPerOrderAndNeedsACallerTransaction() {
-        Placed order = delivered(a, START);
-        Placed other = delivered(b, START);
-        assertThat(hasOpen(order.orderId())).isFalse();
-        returnRequest(order.orderId(), "REJECTED");
-        assertThat(hasOpen(order.orderId())).isFalse();
-        returnRequest(order.orderId(), "PENDING");
-        assertThat(hasOpen(order.orderId())).isTrue();
-        assertThat(hasOpen(other.orderId())).isFalse();
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> returns.hasOpenRequestForOrder(order.orderId()))
-                .isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
-    }
-
-    private boolean hasOpen(long orderId) {
-        return Boolean.TRUE.equals(new TransactionTemplate(transactionManager)
-                .execute(s -> returns.hasOpenRequestForOrder(orderId)));
-    }
-
     // ================================================================ cuộc đua và lỗi
 
     @Test
@@ -260,19 +182,6 @@ class OnlineOrderAutoConfirmIT extends OnlineOrderJobItSupport {
         job.run();
 
         assertThat(completedAt(order.id())).isEqualTo(customerConfirmedAt.toString());
-    }
-
-    @Test
-    void anOpenReturnRequestCreatedBetweenTheScanAndTheLockIsReCheckedAndSkipped() {
-        Placed order = delivered(a, RUN.minus(10, ChronoUnit.DAYS));
-        clock.set(RUN);
-        DueOrder scanned = service.findDue(RUN, null, 0, 10).get(0);
-        assertThat(scanned.id()).isEqualTo(order.id());
-        returnRequest(order.orderId(), "PENDING");
-
-        assertThat(service.confirm(scanned.id())).isEqualTo(Result.SKIPPED);
-
-        assertThat(onlineStatus(order.id())).isEqualTo("DELIVERED");
     }
 
     @Test

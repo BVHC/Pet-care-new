@@ -26,7 +26,7 @@ import jakarta.validation.Valid;
 
 /**
  * Xử lý và giao đơn online, shop-v1 (tag Online order fulfillment; UC65, BR-BH-11; docs/adr/0146). Lễ tân của chi nhánh
- * xử lý làm mọi chuyển trạng thái; quản lý chi nhánh chỉ xem. {@code cancelFailedOnlineOrder} (#10) chờ task 138.
+ * xử lý làm mọi chuyển trạng thái; quản lý chi nhánh chỉ xem. #10 (hủy sau giao thất bại) đã bỏ (ADR-0156).
  */
 @RestController
 @RequestMapping("/api/online-orders")
@@ -98,7 +98,7 @@ public class OnlineOrderFulfillmentController {
     }
 
     @Operation(operationId = "markOnlineOrderDelivered", tags = "Online order fulfillment", summary = "Cập nhật đã giao",
-            description = "UC65 · BR-BH-11, 12. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: SHIPPED → DELIVERED (Đơn hàng online#7). Bắt đầu đếm hạn trả hàng và hạn tự xác nhận (BR-BH-12).",
+            description = "UC65 · BR-BH-11, 12. Actor: A06. Quyền: Lễ tân chi nhánh xử lý. Chuyển trạng thái: SHIPPED → DELIVERED (Đơn hàng online#7). Bắt đầu đếm hạn tự xác nhận (BR-BH-12).",
             parameters = {@Parameter(name = ID, in = ParameterIn.PATH, example = "21")})
     @ApiErrorDoc(status = 400)
     @ApiErrorDoc(status = 403)

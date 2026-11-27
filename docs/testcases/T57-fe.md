@@ -401,6 +401,8 @@ Nguồn: mock `FE/src/shared/api/mock/shop.mock.ts` (state ở `commerce.store.t
 
 ## TH. Trả hàng và hoàn tiền (UC68, UC69)
 
+> **Bỏ ở ADR-0156 (27/11/2026):** màn `/admin/refunds` và mock `returns` đã gỡ; các ca dưới đây chỉ còn giá trị lịch sử, không chạy nữa.
+
 Nguồn: mock `FE/src/shared/api/mock/returns.mock.ts` (state và job ST21 ở `commerce.store.ts`); hợp đồng `docs/api/returns-v1.md` #1–9 (+ yaml). ASSUMPTION quan trọng: R1 (lễ tân tạo, rút, xác nhận hoàn tiền; quản lý chi nhánh duyệt, từ chối, thử lại; chỉ người tạo mới rút được), R2 (hạn trả hàng 7 ngày kể từ lúc thanh toán của Order quầy; thứ tự 400 BR-BH-13), R3 (duyệt: nhập lại kho hoặc loại bỏ; hình thức hoàn bằng hình thức đã thu, đơn online là qua cổng; phí vận chuyển không hoàn), R4 (xác nhận hoàn tiền: 400 hoàn tiền qua cổng không xác nhận tay, rồi 400 BR-TG-01 chưa mở ca), R5 (ST21: hoàn tiền qua cổng thành công sau 1 phút, không mô phỏng lỗi tạm thời).
 
 ### Màn hình

@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -33,7 +32,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import com.petcare.TestcontainersConfiguration;
 import com.petcare.module.sales.CashierItSupport;
-import com.petcare.module.shop.api.OnlineOrderQueryApi;
 import com.petcare.support.MutableClock;
 
 /**
@@ -61,8 +59,6 @@ class MyOnlineOrderIT extends CashierItSupport {
 
     @Autowired
     private MutableClock clock;
-    @Autowired
-    private OnlineOrderQueryApi query;
     @Autowired
     private com.petcare.module.payment.api.PaymentTransactionApi payments;
 
@@ -220,7 +216,7 @@ class MyOnlineOrderIT extends CashierItSupport {
                 .containsEntry("onlineOrderId", (int) order.id()).containsEntry("subtotal", 200_000)
                 .containsEntry("total", 230_000);
         assertThat(body.get("cancelledAt")).isEqualTo("2050-06-15T03:10:00Z");
-        assertThat(body.get("refundStatus")).isNull();
+        assertThat(body).doesNotContainKey("refundStatus");
         Map<String, Object> online = jdbc.queryForMap("SELECT * FROM online_orders WHERE id = ?", order.id());
         assertThat(online).containsEntry("status", "CANCELLED").containsEntry("cancelled_by", a.accountId())
                 .containsEntry("cancel_reason", "Khách đổi ý");
@@ -367,7 +363,7 @@ class MyOnlineOrderIT extends CashierItSupport {
 
     @Test
     @SuppressWarnings("unchecked")
-    void detailShowsTheSnapshotLinesTheDisplayUnitAndNoRefund() {
+    void detailShowsTheSnapshotLinesAndTheDisplayUnit() {
         defaultLot(branch, goods, 10, manager);
         defaultLot(branch, cheap, 10, manager);
         placeOrder(a, goods, 1);
@@ -386,7 +382,7 @@ class MyOnlineOrderIT extends CashierItSupport {
                 .containsEntry("receiverName", "Nhận An").containsEntry("shipAddress", "12 Lê Lợi, P. Bến Nghé, TP.HCM")
                 .containsEntry("subtotal", 350_000).containsEntry("shippingFee", 30_000)
                 .containsEntry("total", 380_000).containsEntry("redeliveryCount", 0);
-        assertThat(body.get("refundStatus")).isNull();
+        assertThat(body).doesNotContainKey("refundStatus");
         assertThat((String) body.get("branchName")).startsWith("KhoIT chi nhánh");
         List<Map<String, Object>> lines = (List<Map<String, Object>>) body.get("lines");
         assertThat(lines).hasSize(2).allSatisfy(line -> assertThat((String) line.get("unit")).isNotNull());
@@ -467,24 +463,6 @@ class MyOnlineOrderIT extends CashierItSupport {
                     .getStatusCode()).isEqualTo(expected);
         }
         assertThat(onlineStatus(order.id())).isEqualTo("PENDING_PAYMENT");
-    }
-
-    // ================================================================ OnlineOrderQueryApi
-
-    @Test
-    void findDeliveredAtByOrderIdIsEmptyUntilDeliveredAndForNonOnlineOrders() {
-        Placed order = placeDefault(a);
-
-        assertThat(deliveredAt(order.orderId())).isEmpty();
-        force(order.id(), "DELIVERED");
-        assertThat(deliveredAt(order.orderId())).contains(START);
-        force(order.id(), "COMPLETED");
-        assertThat(deliveredAt(order.orderId())).contains(START);
-        assertThat(deliveredAt(-1L)).isEmpty();
-    }
-
-    private Optional<Instant> deliveredAt(long orderId) {
-        return new TransactionTemplate(transactionManager).execute(s -> query.findDeliveredAtByOrderId(orderId));
     }
 
     // ================================================================ đua với khóa online_orders

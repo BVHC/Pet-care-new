@@ -8,7 +8,6 @@ import { CLINICAL_SEED_SERVICES, registerClinicalServiceSource, registerVisitOrd
 import { shippingFeeConfig } from './fees.mock';
 import { hasActiveAdmission } from './inpatient.mock';
 import { recordMaterialUsage } from './materialuse.mock';
-import { pendingRefundCount } from './returns.mock';
 import { addServiceLine, serviceIdsOfVisit } from './sales.mock';
 import { openOnlineOrderCount, registerShippingFeeSource } from './shop.mock';
 import { inTransitTransfersOf, openStockCountsOf } from './stockops.mock';
@@ -17,7 +16,6 @@ import { registerCompletionListener } from './visit-clinical.mock';
 registerShippingFeeSource(() => shippingFeeConfig());
 registerClosureSources({
   unfinishedOnlineOrders: openOnlineOrderCount,
-  pendingRefunds: pendingRefundCount,
   inTransitTransfers: inTransitTransfersOf,
   openStockCounts: openStockCountsOf,
 });

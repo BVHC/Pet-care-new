@@ -24,14 +24,12 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.petcare.module.payment.api.PaymentGatewayClient.GatewayStatus;
-import com.petcare.module.payment.api.PaymentGatewayClient.RefundOutcome;
-import com.petcare.module.payment.api.PaymentGatewayClient.RefundRequest;
 import com.petcare.module.payment.api.PaymentGatewayClient.SessionRequest;
 import com.petcare.module.payment.api.PaymentGatewayException;
 import com.sun.net.httpserver.HttpServer;
 
 /**
- * {@link VnpayGatewayClient} (task 127) không gọi sandbox: địa chỉ thanh toán được dựng và ký đúng, còn querydr / refund
+ * {@link VnpayGatewayClient} (task 127) không gọi sandbox: địa chỉ thanh toán được dựng và ký đúng, còn querydr
  * chạy trên một máy chủ HTTP giả cục bộ kiểm yêu cầu (trường, chữ ký) và dựng phản hồi có / không chữ ký hợp lệ.
  */
 class VnpayGatewayClientTest {
@@ -89,7 +87,6 @@ class VnpayGatewayClientTest {
     private static final List<String> QUERY_RESPONSE_ORDER = List.of("vnp_ResponseId", "vnp_Command", "vnp_ResponseCode",
             "vnp_Message", "vnp_TmnCode", "vnp_TxnRef", "vnp_Amount", "vnp_BankCode", "vnp_PayDate", "vnp_TransactionNo",
             "vnp_TransactionType", "vnp_TransactionStatus", "vnp_OrderInfo", "vnp_PromotionCode", "vnp_PromotionAmount");
-    private static final List<String> REFUND_RESPONSE_ORDER = QUERY_RESPONSE_ORDER.subList(0, 13);
 
     private Map<String, String> signedReply(String command, List<String> order, String code, String txnStatus,
             String amount) {
@@ -227,64 +224,5 @@ class VnpayGatewayClientTest {
         status.set(500);
         assertThatThrownBy(() -> client.queryTransaction("GD-1", NOW)).isInstanceOf(PaymentGatewayException.class)
                 .hasMessageNotContaining(SECRET);
-    }
-
-    // ---------------------------------------------------------------- refund
-
-    private RefundRequest refundRequest() {
-        return new RefundRequest("HT-2611-00001", "GD-2611-00001", "14123456", 150_000L, "Khách trả hàng",
-                Instant.parse("2026-11-17T02:50:00Z"));
-    }
-
-    @Test
-    void refundSendsASignedFullRefundAndMapsSuccess() {
-        reply.set(signedReply("refund", REFUND_RESPONSE_ORDER, "00", "05", "15000000"));
-
-        var result = client.refund(refundRequest());
-
-        assertThat(result.outcome()).isEqualTo(RefundOutcome.SUCCEEDED);
-        assertThat(result.gatewayRefundId()).isEqualTo("14123456");
-        Map<String, String> sent = requests.get(0);
-        assertThat(sent).containsEntry("vnp_Command", "refund").containsEntry("vnp_TransactionType", "02")
-                .containsEntry("vnp_RequestId", "HT-2611-00001").containsEntry("vnp_Amount", "15000000")
-                .containsEntry("vnp_TransactionNo", "14123456").containsEntry("vnp_OrderInfo", "Khach tra hang")
-                .containsEntry("vnp_TransactionDate", "20261117095000");
-        assertThat(sent.get("vnp_SecureHash")).isEqualTo(pipeSign(sent, List.of("vnp_RequestId", "vnp_Version",
-                "vnp_Command", "vnp_TmnCode", "vnp_TransactionType", "vnp_TxnRef", "vnp_Amount", "vnp_TransactionNo",
-                "vnp_TransactionDate", "vnp_CreateBy", "vnp_CreateDate", "vnp_IpAddr", "vnp_OrderInfo")));
-    }
-
-    @Test
-    void refundMapsRejectionsAndTemporaryErrors() {
-        reply.set(signedReply("refund", REFUND_RESPONSE_ORDER, "02", null, "15000000"));
-        assertThat(client.refund(refundRequest()).outcome()).isEqualTo(RefundOutcome.REJECTED);
-
-        reply.set(signedReply("refund", REFUND_RESPONSE_ORDER, "94", null, "15000000"));
-        assertThat(client.refund(refundRequest()).outcome()).isEqualTo(RefundOutcome.TEMPORARY_ERROR);
-
-        reply.set(signedReply("refund", REFUND_RESPONSE_ORDER, "99", null, "15000000"));
-        assertThat(client.refund(refundRequest()).outcome()).isEqualTo(RefundOutcome.TEMPORARY_ERROR);
-    }
-
-    @Test
-    void refundTreatsNetworkAndSignatureProblemsAsTemporaryNeverAsSuccess() {
-        Map<String, String> forged = signedReply("refund", REFUND_RESPONSE_ORDER, "02", null, "15000000");
-        forged.put("vnp_ResponseCode", "00");
-        reply.set(forged);
-        assertThat(client.refund(refundRequest()).outcome()).as("chữ ký sai không bao giờ là thành công")
-                .isEqualTo(RefundOutcome.TEMPORARY_ERROR);
-
-        server.stop(0);
-        assertThat(client.refund(refundRequest()).outcome()).isEqualTo(RefundOutcome.TEMPORARY_ERROR);
-    }
-
-    @Test
-    void longRefundCodesAreCutToTheThirtyTwoCharRequestIdLimit() {
-        reply.set(signedReply("refund", REFUND_RESPONSE_ORDER, "00", null, "15000000"));
-
-        client.refund(new RefundRequest("R".repeat(40), "GD-1", null, 1_000L, "x", NOW));
-
-        assertThat(requests.get(0).get("vnp_RequestId")).hasSize(32);
-        assertThat(requests.get(0)).containsEntry("vnp_TransactionNo", "0");
     }
 }

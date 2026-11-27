@@ -69,7 +69,6 @@ abstract class OnlineOrderJobItSupport extends CashierItSupport {
         String cs = a.customerId() + ", " + b.customerId();
         jdbc.update("DELETE FROM notification_outbox WHERE recipient_account_id IN (" + as + ") "
                 + "OR recipient_email LIKE 'jobs-it-%'");
-        jdbc.update("DELETE FROM return_requests WHERE branch_id = ?", branch);
         jdbc.update("DELETE FROM payment_transactions WHERE online_order_id IN "
                 + "(SELECT id FROM online_orders WHERE branch_id = " + branch + ")");
         jdbc.update("DELETE FROM stock_reservations WHERE branch_id = ?", branch);

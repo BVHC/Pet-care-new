@@ -25,8 +25,6 @@ import com.petcare.module.payment.api.PaymentGatewayClient;
  *   <li>{@link #verifyCallback}: như VNPay. {@link #signedCallback} dựng callback hợp lệ cho test / trang giả lập.</li>
  *   <li>{@link #queryTransaction} và {@link #fetchSettlementReport}: trả từ bộ nhớ, test đặt bằng {@link #setTransaction}
  *       / {@link #recordSettlement}.</li>
- *   <li>{@link #refund}: idempotent theo {@code refundCode}; kết quả mặc định {@code SUCCEEDED}, đổi bằng
- *       {@link #setRefundOutcome}.</li>
  * </ul>
  * Không phải mã sản xuất: bản cài VNPay nằm ở {@link VnpayGatewayClient}.
  */
@@ -42,8 +40,6 @@ public class FakeGatewayClient implements PaymentGatewayClient {
     private final Clock clock;
     private final Map<String, GatewayTransaction> known = new ConcurrentHashMap<>();
     private final Map<LocalDate, List<GatewayTransaction>> settlements = new ConcurrentHashMap<>();
-    private final Map<String, RefundResult> refunds = new ConcurrentHashMap<>();
-    private volatile RefundOutcome refundOutcome = RefundOutcome.SUCCEEDED;
 
     public FakeGatewayClient(PaymentProperties props, Clock clock) {
         this.props = props;
@@ -87,16 +83,6 @@ public class FakeGatewayClient implements PaymentGatewayClient {
     }
 
     @Override
-    public RefundResult refund(RefundRequest request) {
-        RefundResult terminal = refunds.computeIfAbsent(request.refundCode(), code -> switch (refundOutcome) {
-            case SUCCEEDED -> new RefundResult(RefundOutcome.SUCCEEDED, "FAKE-REFUND-" + code, null);
-            case REJECTED -> new RefundResult(RefundOutcome.REJECTED, null, "Fake: từ chối hoàn tiền");
-            case TEMPORARY_ERROR -> null;
-        });
-        return terminal == null ? new RefundResult(RefundOutcome.TEMPORARY_ERROR, null, "Fake: lỗi tạm") : terminal;
-    }
-
-    @Override
     public List<GatewayTransaction> fetchSettlementReport(LocalDate date) {
         return new ArrayList<>(settlements.getOrDefault(date, List.of()));
     }
@@ -127,16 +113,9 @@ public class FakeGatewayClient implements PaymentGatewayClient {
         settlements.computeIfAbsent(date, d -> new java.util.concurrent.CopyOnWriteArrayList<>()).add(transaction);
     }
 
-    /** Kết quả cho mã hoàn tiền chưa có kết quả cuối. */
-    public void setRefundOutcome(RefundOutcome outcome) {
-        this.refundOutcome = outcome;
-    }
-
     /** Xóa mọi trạng thái trong bộ nhớ. */
     public void reset() {
         known.clear();
         settlements.clear();
-        refunds.clear();
-        refundOutcome = RefundOutcome.SUCCEEDED;
     }
 }

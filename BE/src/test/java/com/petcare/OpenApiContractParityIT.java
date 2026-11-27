@@ -123,7 +123,7 @@ class OpenApiContractParityIT {
         // + 4 shop cart (task 116, docs/adr/0143)
         // + 3 shop checkout (task 117: fulfillment-branches, quote, place; docs/adr/0144)
         // + 4 shop my online orders (task 125: list, get, cancel, confirm-received; docs/adr/0145)
-        // + 7 shop fulfillment (task 126: list, get, start-processing, ship, mark-delivered, fail-delivery, redeliver; cancel-failed chờ task 138; docs/adr/0146)
+        // + 7 shop fulfillment (task 126: list, get, start-processing, ship, mark-delivered, fail-delivery, redeliver; cancel-failed bỏ ở docs/adr/0156; docs/adr/0146)
         // + 3 workforce #1–3 (GET / POST / PATCH /shift-definitions, ca làm việc, T58 bước 2, docs/adr/0149).
         // + 2 workforce #4–5 (GET / POST /shift-assignments, lịch phân ca và phân ca hộ, T58 bước 3, docs/adr/0149).
         // + 2 workforce #6, #8 (POST /shift-assignments/{id}/cancel, GET /me/shift-assignments, T58 bước 4, docs/adr/0149).

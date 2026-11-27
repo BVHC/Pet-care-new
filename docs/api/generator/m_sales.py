@@ -5,7 +5,7 @@ m = Module(
     sources="01 UC66, UC67, UC70–UC72; 02 BR-BH-01…06, BR-TG-01…05, BR-TN-01, 08, BR-KB-03, 04, BR-LT-09, BR-SP-01, BR-QT-15; 03 #5 Order, #8 Ca thu ngân; 04 §8; 05 §8 (orders, order_lines, payments, cashier_shifts)",
     intro="Order tại quầy (VISIT / RETAIL / BOARDING), dòng Order, chốt / hủy, thu tiền (thu gộp), ca thu ngân, đối soát.",
     frozen=[
-        "UC61–UC65 (giỏ hàng, đơn online, thanh toán cổng) và UC68–UC69 (trả hàng) là tầng 3.",
+        "UC61–UC65 (giỏ hàng, đơn online, thanh toán cổng) là tầng 3; UC68–UC69 (trả hàng) đã bỏ (ADR-0156).",
         "Order VISIT được mở / chốt / hủy theo Visit (Order#1, #4, #6) qua `VisitOrderApi`; Order BOARDING sinh khi bắt đầu trả thú / thú mất (Order#3) qua `BoardingOrderApi`. Không có endpoint tạo Order nguồn VISIT hay BOARDING.",
         "Dòng DRUG sinh từ kê đơn (`/visits/{visitId}/prescriptions`), dòng VACCINE từ ghi mũi tiêm, dòng BOARDING từ trả thú. Ở đây chỉ thêm dòng SERVICE và GOODS.",
         "ST06 trừ kho chạy trong `POST /payments`; ST13 (tự chốt ca, cảnh báo Order PENDING quá hạn) là tác vụ hệ thống.",
@@ -102,14 +102,10 @@ m.schema("CashierShift", {
     "shiftId": "int64", "branchId": "int64", "cashierId": "int64", "cashierName": "string",
     "isAfterHours": "bool|Ca ngoài giờ thu tiền cấp cứu (BR-CN-05)", "businessDate": "date",
     "status": "enum:OPEN,CLOSED,RECONCILED", "openedAt": "datetime", "closedAt": "datetime?",
-    "autoClosed": "bool|ST13",
-    "expectedCash": "int64?|Tiền mặt thu trừ tiền mặt hoàn trong ca (VND), có thể âm.",
-    "expectedTransfer": "int64?|Tiền chuyển khoản thu trừ tiền chuyển khoản hoàn trong ca (VND), có thể âm.",
-    "countedCash": "money?",
+    "autoClosed": "bool|ST13", "expectedCash": "money?", "expectedTransfer": "money?", "countedCash": "money?",
     "difference": "int64?|countedCash − expectedCash (VND), có thể âm", "reconcileNote": "string?",
     "reconciledBy": "int64?", "reconciledAt": "datetime?", "paymentCount": "int",
-}, desc="`expectedCash` và `expectedTransfer` là tiền thu trừ tiền hoàn theo từng hình thức (VND), có thể âm. "
-        "`countedCash` là tiền mặt thực đếm, không âm.")
+})
 m.schema("OpenShiftRequest", {"afterHours": "bool|false = ca thường, true = ca ngoài giờ (BR-TG-05)"})
 m.schema("CurrentShift", {"open": "bool", "shift": "ref:CashierShift"}, required=["open"])
 m.schema("CloseShiftRequest", {"countedCash": "money|Tiền mặt thực đếm (A4)"})

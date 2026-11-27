@@ -4,11 +4,10 @@ import java.time.Instant;
 import java.util.List;
 
 import com.petcare.module.shop.api.OnlineOrderStatus;
-import com.petcare.module.shop.api.RefundStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/** shop-v1 {@code OnlineOrder}. {@code refundStatus} chỉ khác null khi có hoàn tiền (task returns): đơn mới đặt luôn null. */
+/** shop-v1 {@code OnlineOrder}. */
 public record OnlineOrderResponse(
         @Schema(example = "21", requiredMode = Schema.RequiredMode.REQUIRED) Long onlineOrderId,
         @Schema(description = "Order bán hàng tương ứng (orders.id)", example = "340",
@@ -37,7 +36,5 @@ public record OnlineOrderResponse(
         @Schema(example = "2026-11-25T09:00:00Z", nullable = true) Instant completedAt,
         @Schema(example = "2026-11-15T12:00:00Z", nullable = true) Instant cancelledAt,
         @Schema(example = "Khách đổi ý", nullable = true) String cancelReason,
-        @Schema(example = "2026-11-15T10:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt,
-        @Schema(description = "Trạng thái hoàn tiền gần nhất; null khi chưa có hoàn tiền", example = "SUCCEEDED",
-                nullable = true) RefundStatus refundStatus) {
+        @Schema(example = "2026-11-15T10:00:00Z", requiredMode = Schema.RequiredMode.REQUIRED) Instant createdAt) {
 }

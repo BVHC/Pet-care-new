@@ -5,16 +5,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.boarding.api.BoardingQueryApi;
 import com.petcare.module.sales.api.OrderQueryApi;
-import com.petcare.module.sales.entity.OrderLineType;
 import com.petcare.module.sales.entity.OrderStatus;
 import com.petcare.module.sales.repository.SalesOrderRepository;
 import com.petcare.module.sales.repository.SalesOrderRepository.PurchaseRow;
@@ -58,22 +55,6 @@ public class OrderQueryService implements OrderQueryApi {
         return orders.findIdAndBranchByCustomer(customerId, List.of(OrderStatus.OPEN, OrderStatus.PENDING)).stream()
                 .map(row -> new UnpaidOrderRef(row.getId(), row.getBranchId()))
                 .toList();
-    }
-
-    @Override
-    public Optional<Long> findBranchForReturn(Long orderId) {
-        return orders.findBranchIdById(orderId);
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<ReturnOrderSnapshot> lockForReturn(Long orderId) {
-        return orders.findByIdForUpdate(orderId).map(order -> new ReturnOrderSnapshot(
-                order.getId(), order.getBranchId(), order.getCode(), order.getSource(),
-                order.getStatus() == OrderStatus.PAID ? order.getPaidAt() : null,
-                order.getLines().stream().map(line -> new ReturnOrderLine(line.getId(), line.getProductId(),
-                        line.getDescription(), line.getQuantity(), line.getUnitPrice(),
-                        line.getLineType() == OrderLineType.GOODS)).toList()));
     }
 
     /** I-8 (UC92): ngày {@code paid_at} theo giờ Việt Nam; sản phẩm chưa mua thì vắng mặt. */

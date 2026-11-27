@@ -121,8 +121,6 @@ class SystemConfigIT {
         expect("shop.auto_confirm_days", "7", "INT", "1", "30");                  // BR-BH-12
         expect("shop.max_redelivery", "2", "INT", "0", "5");                      // BR-BH-11
         expect("payment.txn_ttl_minutes", "15", "INT", "5", "60");                // BR-TG-09
-        expect("payment.refund_max_attempts", "3", "INT", "1", "10");             // BR-TG-14
-        expect("returns.window_days", "7", "INT", "1", "30");                     // BR-BH-13
         expect("content.comment_per_hour", "10", "INT", "1", "100");              // BR-BV-08
     }
 
@@ -147,7 +145,7 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
-        assertThat(EXPECTED).hasSize(86);
+        assertThat(EXPECTED).hasSize(84);
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

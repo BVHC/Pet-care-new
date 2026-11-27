@@ -15,7 +15,7 @@ import { CommonPageHero } from '@/shared/components/layout/CommonPageHero'
 import { useMyOnlineOrder, useShopMutation } from '@/shared/hooks/useShop'
 import type { OnlineOrder } from '@/shared/types/shop'
 
-// BE thật (ADR-0145 C1): khách chỉ hủy được đơn chưa thanh toán; PAID / PROCESSING trả 409 cho tới task 138 (hoàn hàng, hoàn tiền).
+// BE thật (ADR-0145 C1, ADR-0156): khách chỉ hủy được đơn chưa thanh toán; đơn đã thanh toán trả 409 (hoàn tiền đã bỏ).
 const CANCELLABLE = ['PENDING_PAYMENT']
 
 function Lines({ order }: { order: OnlineOrder }) {
@@ -88,9 +88,9 @@ function statusNote(order: OnlineOrder): string | null {
     case 'SHIPPED':
       return 'Đơn đang trên đường giao. Từ lúc bàn giao vận chuyển, bạn không tự hủy được đơn.'
     case 'DELIVERY_FAILED':
-      return `Giao hàng chưa thành công${order.redeliveryCount > 0 ? ` (đã giao lại ${order.redeliveryCount} lần)` : ''}. Chi nhánh xử lý sẽ giao lại hoặc hủy đơn và hoàn tiền cho bạn.`
+      return `Giao hàng chưa thành công${order.redeliveryCount > 0 ? ` (đã giao lại ${order.redeliveryCount} lần)` : ''}. Chi nhánh xử lý sẽ liên hệ để giao lại.`
     case 'DELIVERED':
-      return 'Hãy kiểm tra hàng và xác nhận đã nhận. Nếu hàng có vấn đề, liên hệ chi nhánh để được hỗ trợ trả hàng.'
+      return 'Hãy kiểm tra hàng và xác nhận đã nhận. Nếu hàng có vấn đề, vui lòng liên hệ chi nhánh xử lý.'
     default:
       return null
   }

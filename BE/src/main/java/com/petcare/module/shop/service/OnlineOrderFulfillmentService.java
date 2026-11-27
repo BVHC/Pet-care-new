@@ -42,7 +42,7 @@ import com.petcare.platform.security.BranchScope;
 /**
  * Xử lý và giao đơn online của chi nhánh (UC65, BR-BH-11; docs/adr/0146): danh sách / chi tiết cho lễ tân và quản lý
  * chi nhánh, và Đơn hàng online#5 (bắt đầu xử lý), #6 (bàn giao), #7 (đã giao), #8 (giao thất bại), #9 (giao lại).
- * #10 (hủy sau giao thất bại, hoàn kho + hoàn tiền) chờ task 138. Không xuất kho ở đây: kho đã trừ FEFO lúc {@code PAID}
+ * #10 (hủy sau giao thất bại) đã bỏ cùng hoàn tiền (ADR-0156). Không xuất kho ở đây: kho đã trừ FEFO lúc {@code PAID}
  * (BR-BH-09).
  * <p>
  * <b>Mỗi chuyển trạng thái một transaction</b>, thứ tự khóa của ADR-0145: chi nhánh của đơn đọc không khóa (404, rồi

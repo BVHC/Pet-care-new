@@ -6,7 +6,7 @@ const labels = (role: Role) => menuFor(role).flatMap((s) => s.items.map((i) => i
 
 describe('staff menu', () => {
   it('leaves the pages a workspace already covers out of the receptionist menu', () => {
-    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Lưu trú', 'Việc gọi điện', 'Đơn online', 'Nội trú', 'Lịch làm việc', 'Trả hàng & hoàn tiền', 'Kho hàng']);
+    expect(labels('RECEPTIONIST')).toEqual(['Order tại quầy', 'Lịch hẹn', 'Lưu trú', 'Việc gọi điện', 'Đơn online', 'Nội trú', 'Lịch làm việc', 'Kho hàng']);
   });
 
   // T47: nội dung công khai (UC21, UC81) là việc của A04; feedback (UC84) của A04 và A05; Care Task (UC87) chỉ của A06 (BR-TB-05).

@@ -13,7 +13,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param baseUrl      URL tạo thanh toán; trống thì VNPay dùng sandbox, Fake dùng trang giả lập của FE
  * @param returnUrl    trang FE nhận khách quay về ({@code vnp_ReturnUrl}), biến {@code PAYMENT_RETURN_URL}
  * @param ipnUrl       địa chỉ công khai của callback, chỉ để đăng ký với cổng (không gửi trong yêu cầu), {@code PAYMENT_IPN_URL}
- * @param apiUrl       API merchant (querydr, refund); trống thì VNPay dùng sandbox; chỉ đổi trong test
+ * @param apiUrl       API merchant (querydr); trống thì VNPay dùng sandbox; chỉ đổi trong test
  */
 @ConfigurationProperties("app.payment")
 public record PaymentProperties(String gateway, String merchantCode, String secret, String baseUrl, String returnUrl,
