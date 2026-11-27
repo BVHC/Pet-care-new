@@ -1,6 +1,7 @@
-// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V51 + V52 + V53 + V56 + V57 + V59 + V61 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER, V51 xóa 7 mẫu COMPLAINT_*).
+// UC10 — dữ liệu seed của mock tham số [CFG] và mẫu thông báo, CHÉP từ migration của BE (V2 + V27 + V35 + V40 + V44…V46 + V48 + V51 + V52 + V53 + V56 + V57 + V59 + V61 + V66 + V67 cho tham số, V3…V26 + V40 cho mẫu, V4 sửa OTP_REGISTER, V51 xóa 7 mẫu COMPLAINT_*).
 // T81 (V51, ADR-0122 / 0131): 88 → 83 khóa so với BE trước V51 (xóa 6 `complaint.*`, thêm `feedback.retention_days`); mẫu 70 → 63 (xóa 7 `COMPLAINT_*`).
-// ADR-0157 (V66, 27/11/2026): 86 → 87 khóa (thêm `ai.chat.intent_llm_enabled`, công tắc BOOL câu mơ hồ hỏi mô hình, mặc định bật).
+// ADR-0157 (V67, 27/11/2026): 84 → 85 khóa (thêm `ai.chat.intent_llm_enabled`, công tắc BOOL câu mơ hồ hỏi mô hình, mặc định bật).
+// ADR-0156 (V66, 27/11/2026): 86 → 84 khóa (xóa `payment.refund_max_attempts`, `returns.window_days`; trả hàng và hoàn tiền đã bỏ).
 // T58 (V61, ADR-0123): 85 → 86 khóa (thêm `workforce.weekly_required_shifts`, định mức ca đăng ký mỗi tuần, INT 10 ca/tuần, 1–30, BR-NS-12).
 // T89 (V59, ADR-0147): 84 → 85 khóa (thêm `ai.ingest.max_file_kb`, trần cỡ file nạp tri thức, INT 2048 kB, 256–10240).
 // T92 (phần 2): 83 → 84 khóa (thêm `ai.chat.open_domain_enabled` của V57, công tắc BOOL thứ tư).
@@ -82,14 +83,12 @@ export const SEED_CONFIGS: SystemConfig[] = [
   { key: 'otp.send_window_minutes', value: '60', valueType: 'INT', minValue: '15', maxValue: '1440', unit: 'phút', description: 'Độ dài cửa sổ đếm số OTP gửi tới một email (BR-TK-07)' },
   { key: 'otp.ttl_minutes', value: '5', valueType: 'INT', minValue: '1', maxValue: '15', unit: 'phút', description: 'Thời gian hiệu lực của mã OTP (BR-TK-05)' },
   { key: 'password.min_length', value: '8', valueType: 'INT', minValue: '8', maxValue: '64', unit: 'ký tự', description: 'Độ dài tối thiểu của mật khẩu (BR-TK-03)' },
-  { key: 'payment.refund_max_attempts', value: '3', valueType: 'INT', minValue: '1', maxValue: '10', unit: 'lần', description: 'Số lần ST21 thử hoàn tiền qua cổng khi gặp lỗi tạm thời, cách nhau 15 phút; hết lần thì hoàn tiền sang FAILED (BR-TG-14)' },
   { key: 'payment.txn_ttl_minutes', value: '15', valueType: 'INT', minValue: '5', maxValue: '60', unit: 'phút', description: 'Thời hạn một giao dịch thanh toán online ở trạng thái PENDING; quá hạn thì ST11 hỏi cổng rồi chuyển EXPIRED (BR-TG-09)' },
   { key: 'reminder.follow_up_days_before', value: '3', valueType: 'INT', minValue: '1', maxValue: '14', unit: 'ngày', description: 'Nhắc tái khám trước ngày tái khám (BR-TB-06, ST04)' },
   { key: 'reminder.vaccine_days_before', value: '7', valueType: 'INT', minValue: '1', maxValue: '30', unit: 'ngày', description: 'Nhắc tái chủng trước ngày tái chủng (BR-TB-01, ST04)' },
   { key: 'reminder.vaccine_overdue_days', value: '7', valueType: 'INT', minValue: '1', maxValue: '60', unit: 'ngày', description: 'Quá ngày tái chủng chừng này thì sinh Care Task quá hạn (BR-TB-04)' },
   { key: 'report.max_period_months', value: '12', valueType: 'INT', minValue: '1', maxValue: '24', unit: 'tháng', description: 'Kỳ báo cáo dài tối đa (BR-BC-01)' },
   { key: 'report.revaccination_grace_days', value: '7', valueType: 'INT', minValue: '0', maxValue: '30', unit: 'ngày', description: 'Tiêm lại không muộn quá số ngày này sau ngày tái chủng thì tính là quay lại (BR-BC-04)' },
-  { key: 'returns.window_days', value: '7', valueType: 'INT', minValue: '1', maxValue: '30', unit: 'ngày', description: 'Hạn trả hàng kể từ lúc thanh toán (đơn tại quầy) hoặc từ lúc giao (đơn online) (BR-BH-13)' },
   { key: 'session.access_ttl_minutes', value: '10', valueType: 'INT', minValue: '5', maxValue: '720', unit: 'phút', description: 'Hạn access token; nhân viên có phiên với access token còn hạn được coi là online (BR-TN-06, docs/adr/0091)' },
   { key: 'session.ttl_hours', value: '12', valueType: 'INT', minValue: '1', maxValue: '72', unit: 'giờ', description: 'Hạn phiên đăng nhập tính từ lúc đăng nhập, không gia hạn (docs/adr/0003)' },
   { key: 'shop.auto_confirm_days', value: '7', valueType: 'INT', minValue: '1', maxValue: '30', unit: 'ngày', description: 'Số ngày sau khi giao thì ST12 tự xác nhận đã nhận nếu không có yêu cầu trả hàng đang mở (BR-BH-12)' },
@@ -518,60 +517,6 @@ export const SEED_TEMPLATES: NotificationTemplate[] = [
     body: 'Chi nhánh {chi_nhanh} có {so_order} Order đang chờ thu tiền từ {so_ngay} ngày trở lên, cũ nhất chốt ngày {ngay_cu_nhat}. Vui lòng xem danh sách Order quá hạn để xử lý.',
     allowedVars: ['chi_nhanh', 'so_order', 'so_ngay', 'ngay_cu_nhat'],
     requiredVars: ['chi_nhanh', 'so_order', 'so_ngay', 'ngay_cu_nhat'],
-    isDefault: true,
-  },
-  {
-    code: 'REFUND_FAILED_APP',
-    channel: 'IN_APP',
-    subject: 'Hoàn tiền {ma_hoan_tien} không thành công',
-    body: 'Hoàn tiền {so_tien_hoan} (mã {ma_hoan_tien}) cho đơn {ma_don} tại {chi_nhanh} đã hết số lần thử. Vui lòng thử lại hoặc xử lý ngoài hệ thống.',
-    allowedVars: ['ma_hoan_tien', 'so_tien_hoan', 'ma_don', 'chi_nhanh'],
-    requiredVars: ['ma_hoan_tien', 'so_tien_hoan', 'ma_don', 'chi_nhanh'],
-    isDefault: true,
-  },
-  {
-    code: 'REFUND_REQUESTED',
-    channel: 'EMAIL',
-    subject: 'Pet Care sẽ hoàn {so_tien_hoan} cho đơn hàng {ma_don}',
-    body: 'Xin chào {ten_khach},\n\nPet Care đã ghi nhận hoàn {so_tien_hoan} cho đơn hàng {ma_don} (mã hoàn tiền {ma_hoan_tien}, hình thức {hinh_thuc_hoan}). Quý khách sẽ nhận được tiền sau khi hoàn tất xử lý.\n\nTrân trọng,\nPet Care',
-    allowedVars: ['ma_hoan_tien', 'ma_don', 'so_tien_hoan', 'hinh_thuc_hoan', 'ten_khach'],
-    requiredVars: ['ma_hoan_tien', 'ma_don', 'so_tien_hoan', 'hinh_thuc_hoan'],
-    isDefault: true,
-  },
-  {
-    code: 'REFUND_REQUESTED_APP',
-    channel: 'IN_APP',
-    subject: 'Đã ghi nhận hoàn tiền cho đơn hàng {ma_don}',
-    body: 'Đã ghi nhận hoàn {so_tien_hoan} cho đơn {ma_don} (mã {ma_hoan_tien}, hình thức {hinh_thuc_hoan}).',
-    allowedVars: ['ma_hoan_tien', 'ma_don', 'so_tien_hoan', 'hinh_thuc_hoan'],
-    requiredVars: ['ma_hoan_tien', 'ma_don', 'so_tien_hoan', 'hinh_thuc_hoan'],
-    isDefault: true,
-  },
-  {
-    code: 'RETURN_APPROVED_APP',
-    channel: 'IN_APP',
-    subject: 'Yêu cầu trả hàng {ma_tra_hang} đã được duyệt',
-    body: 'Yêu cầu trả hàng {ma_tra_hang} cho đơn {ma_don} đã được duyệt, số tiền hoàn {so_tien_hoan}.',
-    allowedVars: ['ma_tra_hang', 'ma_don', 'so_tien_hoan'],
-    requiredVars: ['ma_tra_hang', 'ma_don', 'so_tien_hoan'],
-    isDefault: true,
-  },
-  {
-    code: 'RETURN_REJECTED_APP',
-    channel: 'IN_APP',
-    subject: 'Yêu cầu trả hàng {ma_tra_hang} bị từ chối',
-    body: 'Yêu cầu trả hàng {ma_tra_hang} cho đơn {ma_don} không được duyệt. Lý do: {ly_do}.',
-    allowedVars: ['ma_tra_hang', 'ma_don', 'ly_do'],
-    requiredVars: ['ma_tra_hang', 'ma_don', 'ly_do'],
-    isDefault: true,
-  },
-  {
-    code: 'RETURN_REQUESTED_APP',
-    channel: 'IN_APP',
-    subject: 'Yêu cầu trả hàng {ma_tra_hang} chờ duyệt',
-    body: 'Lễ tân đã tạo yêu cầu trả hàng {ma_tra_hang} cho đơn {ma_don} tại {chi_nhanh}. Vui lòng duyệt hoặc từ chối.',
-    allowedVars: ['ma_tra_hang', 'ma_don', 'chi_nhanh'],
-    requiredVars: ['ma_tra_hang', 'ma_don', 'chi_nhanh'],
     isDefault: true,
   },
   {

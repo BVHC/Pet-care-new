@@ -57,7 +57,6 @@ export const ADMIN_MENU: MenuSection[] = [
       // v16 không có hóa đơn: thu tiền (UC70) làm ở bàn Lễ tân; URL cũ /admin/invoices chuyển hướng (App.tsx).
       // UC72 (A05): đối soát ca thu ngân. Thu tiền (UC70) và mở / chốt ca (UC71) của lễ tân làm ngay ở bàn Lễ tân.
       { path: '/admin/payments', label: 'Ca thu ngân', icon: Scale, roles: ['BRANCH_MANAGER'] },
-      { path: '/admin/refunds', label: 'Trả hàng & hoàn tiền', icon: Scale, roles: ['RECEPTIONIST', 'BRANCH_MANAGER'] }, // UC68, UC69 (tầng 3)
     ],
   },
   {

@@ -1,6 +1,6 @@
-// React Query cho cửa hàng online (UC61, 62, 64, 65; shop-v1 #1–19): khóa gốc ['shop']. Một useQuery cho mỗi GET; mọi lệnh ghi đi qua `useShopMutation(fn)`.
+// React Query cho cửa hàng online (UC61, 62, 64, 65; shop-v1 #1–18): khóa gốc ['shop']. Một useQuery cho mỗi GET; mọi lệnh ghi đi qua `useShopMutation(fn)`.
 // Lệnh ghi làm mới cả gốc ['shop'] KỂ CẢ khi BE từ chối (onSettled): 400 BR-BH-08 thiếu hàng / 409 đơn đã đổi trạng thái nghĩa là dữ liệu trên màn đã cũ.
-// Đặt, hủy, bàn giao đơn còn đổi giao dịch thanh toán, hoàn tiền và tồn kho nên làm mới thêm ['payment'], ['returns'], ['inventory'] (COMMERCE_ROOTS).
+// Đặt, hủy, bàn giao đơn còn đổi giao dịch thanh toán và tồn kho nên làm mới thêm ['payment'], ['inventory'] (COMMERCE_ROOTS).
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toApiError } from '../api/api-error';
 import { shopApi } from '../api/shop.api';
@@ -13,8 +13,8 @@ export const commerceQueryOptions = {
   retryDelay,
 } as const;
 
-/** Mọi khóa gốc có thể đổi sau một lệnh ghi thương mại: thanh toán, hoàn tiền / trả hàng, tồn kho. */
-export const COMMERCE_ROOTS = [['shop'], ['payment'], ['returns'], ['inventory']] as const;
+/** Mọi khóa gốc có thể đổi sau một lệnh ghi thương mại: thanh toán, tồn kho. */
+export const COMMERCE_ROOTS = [['shop'], ['payment'], ['inventory']] as const;
 
 export const useCart = () => useQuery({ queryKey: ['shop', 'cart'], queryFn: shopApi.getCart, ...commerceQueryOptions });
 
@@ -38,7 +38,7 @@ export const useOnlineOrders = (query: OnlineOrderQuery = {}) =>
 export const useOnlineOrder = (onlineOrderId: number | null) =>
   useQuery({ queryKey: ['shop', 'order', onlineOrderId], queryFn: () => shopApi.getOrder(onlineOrderId!), enabled: onlineOrderId != null, ...commerceQueryOptions });
 
-/** Hook ghi dùng chung của ba module thương mại: làm mới `COMMERCE_ROOTS` khi xong, kể cả khi BE từ chối. */
+/** Hook ghi dùng chung của các module thương mại: làm mới `COMMERCE_ROOTS` khi xong, kể cả khi BE từ chối. */
 export function useCommerceMutation<A, R>(fn: (args: A) => Promise<R>) {
   const queryClient = useQueryClient();
   return useMutation({

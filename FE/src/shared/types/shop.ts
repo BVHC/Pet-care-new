@@ -1,6 +1,5 @@
 // Cửa hàng online (tầng 3, UC61, 62, 64, 65) theo docs/api/shop-v1.md + openapi/shop-v1.yaml (mục Schema). Trường `?` có thể vắng hoặc null.
-// Thanh toán ở payment.ts, trả hàng và hoàn tiền ở returns.ts. Tiền: số nguyên đồng; thời điểm: ISO 8601 có offset.
-import type { RefundStatus } from './returns';
+// Thanh toán ở payment.ts; trả hàng, hoàn tiền đã bỏ (ADR-0156). Tiền: số nguyên đồng; thời điểm: ISO 8601 có offset.
 
 /** 03 #14 (08 §B). */
 export type OnlineOrderStatus =
@@ -89,11 +88,6 @@ export interface PlaceOnlineOrderRequest {
 }
 
 export interface OnlineOrderLine {
-  /**
-   * KHÔNG có trong yaml (đề nghị thêm vào OnlineOrderLine): returns-v1 `ReturnLineInput.orderLineId` là `order_lines.id` của Order bán hàng,
-   * nhưng shop-v1 không trả mã dòng nên FE không có cách biết. Mock trả để màn tạo yêu cầu trả hàng dùng được.
-   */
-  orderLineId?: number;
   productId: number;
   name: string;
   unit: string;
@@ -140,8 +134,6 @@ export interface OnlineOrder {
   cancelledAt?: string | null;
   cancelReason?: string | null;
   createdAt: string;
-  /** Hoàn tiền gần nhất của đơn; null khi chưa có (08 §D Q4, ADR-0138). Đơn mới luôn null: khách chưa tự hủy đơn đã thanh toán được (ADR-0145 C1). */
-  refundStatus?: RefundStatus | null;
 }
 
 export interface ReasonRequest {

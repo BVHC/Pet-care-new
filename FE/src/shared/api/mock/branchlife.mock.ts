@@ -49,8 +49,6 @@ export interface ClosureSources {
   openCareTasks: Count;
   /** Đơn online chưa COMPLETED / CANCELLED (shop). */
   unfinishedOnlineOrders: Count;
-  /** Hoàn tiền chưa SUCCEEDED (returns). */
-  pendingRefunds: Count;
   /** Phiếu chuyển kho IN_TRANSIT (stockops). */
   inTransitTransfers: Count;
   /** Phiên kiểm kê OPEN (stockops). */
@@ -69,7 +67,6 @@ const DEFAULT_SOURCES: ClosureSources = {
   openCashierShifts: NONE,
   openCareTasks: NONE,
   unfinishedOnlineOrders: NONE,
-  pendingRefunds: NONE,
   inTransitTransfers: NONE,
   openStockCounts: NONE,
   reassignCareTasks: () => undefined,
@@ -103,7 +100,6 @@ function impactOf(branchId: number): ClosureImpact {
     openOrders: allOrderRows().filter((o) => o.branchId === branchId && (o.status === 'OPEN' || o.status === 'PENDING')).length,
     unfinishedOnlineOrders: sources.unfinishedOnlineOrders(branchId),
     openCareTasks: sources.openCareTasks(branchId),
-    pendingRefunds: sources.pendingRefunds(branchId),
     inTransitTransfers: sources.inTransitTransfers(branchId),
     openStockCounts: sources.openStockCounts(branchId),
     stockItemCount: items.length,
@@ -124,13 +120,12 @@ function suspendBlockers(c: Counts): string[] {
   ].filter((x): x is string => !!x);
 }
 
-/** BR-CN-08, mức đóng cửa: thêm Order, đơn online, hoàn tiền, kho, kiểm kê, tồn kho và nhân viên. */
+/** BR-CN-08, mức đóng cửa: thêm Order, đơn online, kho, kiểm kê, tồn kho và nhân viên. */
 function closeBlockers(c: Counts): string[] {
   return [
     ...suspendBlockers(c),
     c.openOrders > 0 && `còn ${c.openOrders} Order chưa thanh toán (OPEN / PENDING)`,
     c.unfinishedOnlineOrders > 0 && `còn ${c.unfinishedOnlineOrders} đơn online chưa hoàn tất hoặc hủy`,
-    c.pendingRefunds > 0 && `còn ${c.pendingRefunds} khoản hoàn tiền chưa thành công`,
     c.inTransitTransfers > 0 && `còn ${c.inTransitTransfers} phiếu chuyển kho đang vận chuyển`,
     c.openStockCounts > 0 && `còn ${c.openStockCounts} phiên kiểm kê đang mở`,
     c.stockTotalQuantity > 0 && `còn tồn kho ${c.stockTotalQuantity} đơn vị của ${c.stockItemCount} mặt hàng (chuyển kho hoặc điều chỉnh giảm trước)`,

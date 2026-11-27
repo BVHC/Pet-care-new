@@ -93,30 +93,6 @@ public interface StockApi {
     void consumeReservation(OrderRef orderRef, Long actorId);
 
     /**
-     * Đơn hàng online#10, #13 (BR-BH-09): hủy sau thanh toán mà chưa bàn giao, hoàn hàng về <b>đúng lô đã xuất</b>. Loại
-     * movement của việc hoàn chưa có trong đặc tả (ADR-0117, TBD-1). Bản thật trước 17/11 (T63).
-     */
-    default void restock(OrderRef orderRef, Long actorId) {
-        throw placeholder("restock", "T63");
-    }
-
-    /**
-     * BR-BH-14 (08 §D) {@code restock = true}: nhập lại {@code quantity} vào lô gốc của dòng Order. Loại movement: TBD
-     * như {@link #restock}. Bản thật trước 30/11 (T73).
-     */
-    default void restockToOriginalLot(Long orderLineId, int quantity, Long actorId) {
-        throw placeholder("restockToOriginalLot", "T73");
-    }
-
-    /**
-     * BR-BH-14 {@code restock = false}: loại bỏ hàng trả bằng điều chỉnh giảm lý do {@code RETURN_DISCARD}
-     * ({@code stock_adjustments}). Bản thật trước 30/11 (T73).
-     */
-    default void discardReturned(Long orderLineId, int quantity, Long actorId) {
-        throw placeholder("discardReturned", "T73");
-    }
-
-    /**
      * BR-KO-08, FSM #18 dòng 1: trừ ngay khỏi lô nguồn theo FEFO, movement {@code TRANSFER_OUT} nguồn
      * {@code stock_transfers/<transferId>}; trả lô cụ thể đã lấy. Thiếu tồn khả dụng thì lỗi nghiệp vụ 400
      * {@code BR-KO-08}. Bản thật trước 3/12 (T74).

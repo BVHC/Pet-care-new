@@ -61,7 +61,6 @@ import { AdminDashboardPage } from '../pages/admin/AdminDashboardPage';
 import { AdminPOSPage } from '../pages/admin/AdminPOSPage';
 import { AdminAppointmentsPage } from '../pages/admin/AdminAppointmentsPage';
 import { AdminPaymentsPage } from '../pages/admin/AdminPaymentsPage';
-import { AdminRefundsPage } from '../pages/admin/AdminRefundsPage';
 import { AdminWarehousePage } from '../pages/admin/AdminWarehousePage';
 import { AdminWorkforcePage } from '../pages/admin/AdminWorkforcePage';
 import { MySchedulePage } from '../pages/admin/MySchedulePage';
@@ -233,7 +232,6 @@ export function App() {
             <Route path="/admin/orders" element={<AdminOrdersPage />} />
             <Route path="/admin/invoices" element={<RedirectByRole targets={TO_CASHIER} />} />
             <Route path="/admin/payments" element={<AdminPaymentsPage />} />
-            <Route path="/admin/refunds" element={<AdminRefundsPage />} />
             <Route path="/admin/warehouse/:tab?" element={<AdminWarehousePage />} />
             {/* Trang mua hàng / vaccine cũ (mô hình đơn mua trước v16): chuyển sang tab kho tương ứng, gỡ ở T57. */}
             <Route path="/admin/purchasing" element={<Navigate to="/admin/warehouse/receipts" replace />} />

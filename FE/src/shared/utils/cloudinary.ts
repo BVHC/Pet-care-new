@@ -1,4 +1,4 @@
-// Tải ảnh thẳng từ trình duyệt lên Cloudinary bằng unsigned preset (ADR-0156). Không đi qua BE và không dùng `apiClient`
+// Tải ảnh thẳng từ trình duyệt lên Cloudinary bằng unsigned preset (ADR-0158). Không đi qua BE và không dùng `apiClient`
 // (interceptor sẽ gắn JWT và Content-Type JSON vào request tới bên thứ ba). FE chỉ giữ cloud name và tên preset, không có secret.
 export const CLOUDINARY_MAX_BYTES = 5 * 1024 * 1024;
 

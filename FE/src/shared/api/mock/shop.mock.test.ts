@@ -5,12 +5,11 @@ import type { Cart, OnlineOrder, OnlineOrderSummary } from '../../types/shop';
 import { ruleIdOf } from '../api-error';
 import { authFor, failure, type Auth, type Who } from './commerce.test-client';
 import { onlineRevenueRows, openOnlineOrderCount, registerShippingFeeSource } from './shop.mock';
-import { pendingRefundCount } from './returns.mock';
 import { installMockApi } from './mock-api';
 
 // Dữ liệu mẫu (commerce.store.ts, tương đối với lúc chạy): khach@ (khách #1) có 8 đơn online #1,2,3,5,6,8,9,10; khachmoi@ (khách #2) có #4, #7.
 //  #1 COMPLETED 21 ngày trước · #2 DELIVERED hôm qua · #3 SHIPPED · #4 PROCESSING · #5 PAID · #6 DELIVERY_FAILED đã giao lại 2 lần · #7 DELIVERY_FAILED 0 lần ·
-//  #8 PENDING_PAYMENT còn hạn (giữ 1 túi hạt) · #9 CANCELLED chưa trả tiền · #10 CANCELLED sau PAID. Giỏ khach@ = 1 túi hạt (450.000) + 2 gói pate (18.000) = 486.000.
+//  #8 PENDING_PAYMENT còn hạn (giữ 1 túi hạt) · #9 CANCELLED chưa trả tiền · #10 CANCELLED quá hạn thanh toán. Giỏ khach@ = 1 túi hạt (450.000) + 2 gói pate (18.000) = 486.000.
 //  Kho chi nhánh 1: hạt Royal Canin 12 túi (đơn #8 đang giữ 1), Pate Whiskas 3 gói. Chi nhánh 1 là ACTIVE duy nhất.
 // Ba bảng route thương mại chưa nằm trong ROUTES của mock-api.ts (luồng chính đăng ký sau), nên test cài qua installCommerceMockApi.
 
@@ -91,13 +90,12 @@ const ENDPOINTS: Endpoint[] = [
   ['#16 đã giao', 'post', '/api/online-orders/3/mark-delivered', undefined, WRITE],
   ['#17 giao thất bại', 'post', '/api/online-orders/3/fail-delivery', { reason: 'Vắng nhà' }, WRITE],
   ['#18 giao lại', 'post', '/api/online-orders/7/redeliver', SHIP, WRITE],
-  ['#19 hủy sau thất bại', 'post', '/api/online-orders/7/cancel-failed', { reason: 'Khách không nhận' }, WRITE],
 ];
 const ROLES: Who[] = ['admin', 'chain', 'manager', 'desk', 'vet', 'caretaker', 'owner'];
 
 describe('quyền theo 7 vai trò + không token', () => {
-  it('đủ 19 endpoint của shop-v1', () => {
-    expect(ENDPOINTS).toHaveLength(19);
+  it('đủ 18 endpoint của shop-v1 (#19 cancel-failed bỏ, ADR-0156)', () => {
+    expect(ENDPOINTS).toHaveLength(18);
   });
 
   describe.each(ENDPOINTS)('%s', (_label, verb, url, body, allowed) => {
@@ -377,8 +375,7 @@ describe('đơn của tôi (UC64)', () => {
     expect(order).toMatchObject({ status: 'SHIPPED', carrier: 'Viettel Post', trackingCode: 'VTP2611055', branchName: expect.any(String), total: 138_000 });
     expect(order).not.toHaveProperty('failReason');
     expect(order).not.toHaveProperty('customerId');
-    expect(order).toHaveProperty('refundStatus', null); // BE thật có trường, null khi chưa có hoàn tiền (shop-v1 OnlineOrder.refundStatus)
-    expect((await orderOf('owner', 10)).refundStatus).toBe('SUCCEEDED'); // hủy sau PAID, hoàn tiền xong (dữ liệu mẫu)
+    expect(order).not.toHaveProperty('refundStatus'); // hoàn tiền đã bỏ (ADR-0156)
     const foreign = await fails('other', 'get', '/api/me/online-orders/3');
     expectError(foreign, 404, 'RESOURCE_NOT_FOUND');
     expect(foreign.data.message).toBe((await fails('other', 'get', '/api/me/online-orders/999')).data.message.replace('999', '3'));
@@ -394,13 +391,11 @@ describe('đơn của tôi (UC64)', () => {
       expect(await data<unknown[]>('owner', 'get', '/api/me/online-orders/fulfillment-branches')).toHaveLength(1);
     });
 
-    it('PAID và PROCESSING: 409 INVALID_STATE_TRANSITION, đơn giữ nguyên, không sinh hoàn tiền (khách chỉ hủy ở PENDING_PAYMENT tới task 138, ADR-0145 C1)', async () => {
+    it('PAID và PROCESSING: 409 INVALID_STATE_TRANSITION, đơn giữ nguyên (đơn đã thanh toán không hủy được, ADR-0145 C1, ADR-0156)', async () => {
       expectError(await fails('owner', 'post', '/api/me/online-orders/5/cancel', { reason: 'Không cần nữa' }), 409, 'INVALID_STATE_TRANSITION');
       expectError(await fails('other', 'post', '/api/me/online-orders/4/cancel', { reason: 'Hủy' }), 409, 'INVALID_STATE_TRANSITION');
       expect((await orderOf('owner', 5)).status).toBe('PAID');
       expect((await orderOf('other', 4)).status).toBe('PROCESSING');
-      const refunds = await data<PageResponse<{ onlineOrderId: number | null }>>('desk', 'get', '/api/refunds', undefined, { method: 'GATEWAY' });
-      expect(refunds.content.some((r) => r.onlineOrderId === 5 || r.onlineOrderId === 4)).toBe(false);
     });
 
     it('SHIPPED, DELIVERY_FAILED, DELIVERED, COMPLETED, CANCELLED → 409', async () => {
@@ -475,7 +470,6 @@ describe('xử lý và giao đơn (UC65, BR-BH-11)', () => {
     expectError(await fails('desk', 'post', '/api/online-orders/5/mark-delivered'), 409, 'INVALID_STATE_TRANSITION');
     expectError(await fails('desk', 'post', '/api/online-orders/4/fail-delivery', { reason: 'x' }), 409, 'INVALID_STATE_TRANSITION');
     expectError(await fails('desk', 'post', '/api/online-orders/3/redeliver', SHIP), 409, 'INVALID_STATE_TRANSITION'); // SHIPPED, chưa thất bại
-    expectError(await fails('desk', 'post', '/api/online-orders/3/cancel-failed', { reason: 'x' }), 409, 'INVALID_STATE_TRANSITION');
     expectError(await fails('desk', 'post', '/api/online-orders/8/start-processing'), 409, 'INVALID_STATE_TRANSITION'); // PENDING_PAYMENT
     expectError(await fails('desk', 'post', '/api/online-orders/9/mark-delivered'), 409, 'INVALID_STATE_TRANSITION'); // CANCELLED
   });
@@ -543,17 +537,6 @@ describe('xử lý và giao đơn (UC65, BR-BH-11)', () => {
       expectError(await fails('desk', 'post', '/api/online-orders/7/redeliver', SHIP), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-11');
     });
   });
-
-  describe('hủy sau giao thất bại (#19, Đơn hàng online#10)', () => {
-    it('thiếu lý do → 400 BR-BH-11; thành công: CANCELLED + hoàn tiền GATEWAY toàn bộ (gồm phí vận chuyển)', async () => {
-      expectError(await fails('desk', 'post', '/api/online-orders/7/cancel-failed', {}), 400, 'BUSINESS_RULE_VIOLATION', 'BR-BH-11');
-      const done = await data<OnlineOrder>('desk', 'post', '/api/online-orders/7/cancel-failed', { reason: 'Khách từ chối nhận' });
-      expect(done).toMatchObject({ status: 'CANCELLED', cancelReason: 'Khách từ chối nhận' });
-      const refund = (await data<PageResponse<{ onlineOrderId: number | null; amount: number; method: string }>>('desk', 'get', '/api/refunds')).content.find((r) => r.onlineOrderId === 7);
-      expect(refund).toMatchObject({ method: 'GATEWAY', amount: 480_000 });
-      expect((await orderOf('other', 7)).status).toBe('CANCELLED');
-    });
-  });
 });
 
 // ─── Job hệ thống chạy lười (ST10, ST12) ───
@@ -575,7 +558,7 @@ describe('job hệ thống', () => {
     expect(await data<unknown[]>('owner', 'get', '/api/me/online-orders/fulfillment-branches')).toHaveLength(1);
   });
 
-  it('ST12: đơn DELIVERED quá 7 ngày không có yêu cầu trả hàng đang mở → COMPLETED; có yêu cầu mở thì giữ nguyên', async () => {
+  it('ST12: đơn DELIVERED quá 7 ngày → COMPLETED', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     const delivered = await data<OnlineOrder>('desk', 'post', '/api/online-orders/3/mark-delivered');
     at(7 * 86_400_000 - 60_000);
@@ -584,33 +567,27 @@ describe('job hệ thống', () => {
     const done = await orderOf('owner', 3);
     expect(done.status).toBe('COMPLETED');
     expect(Date.parse(done.completedAt!)).toBe(Date.parse(delivered.deliveredAt!) + 7 * 86_400_000);
-    // Đơn #2 (DELIVERED hôm qua) có hai yêu cầu trả hàng đang mở (PENDING, APPROVED) → không tự xác nhận.
-    expect((await orderOf('owner', 2)).status).toBe('DELIVERED');
+    // Đơn #2 giao hôm qua: tới lúc này đã quá 7 ngày nên cũng tự xác nhận (không còn yêu cầu trả hàng nào giữ đơn lại, ADR-0156).
+    expect((await orderOf('owner', 2)).status).toBe('COMPLETED');
   });
 });
 
 // ─── Đọc chéo cho luồng chính (branchlife, báo cáo) ───
 
 describe('đọc chéo cho luồng chính', () => {
-  it('đếm đơn online chưa xong và hoàn tiền chờ xử lý theo chi nhánh (registerClosureSources của branchlife)', async () => {
+  it('đếm đơn online chưa xong theo chi nhánh (registerClosureSources của branchlife)', async () => {
     expect(openOnlineOrderCount(1)).toBe(7); // #2 DELIVERED, #3, #4, #5, #6, #7, #8; #1 COMPLETED, #9, #10 CANCELLED không tính
     expect(openOnlineOrderCount(2)).toBe(0);
-    expect(pendingRefundCount(1)).toBe(2); // hoàn tiền #2 CASH REQUESTED, #3 GATEWAY FAILED
-    expect(pendingRefundCount(2)).toBe(0);
     await call('owner', 'post', '/api/me/online-orders/8/cancel', { reason: 'Đổi ý' });
     expect(openOnlineOrderCount(1)).toBe(6);
-    // Khách không tự hủy được đơn đã thanh toán (ADR-0145 C1): hoàn tiền mới sinh ở nhánh lễ tân hủy sau giao thất bại (#19, đơn #7).
-    await call('desk', 'post', '/api/online-orders/7/cancel-failed', { reason: 'Khách không nhận' });
-    expect(openOnlineOrderCount(1)).toBe(5);
-    expect(pendingRefundCount(1)).toBe(3);
   });
 
-  it('doanh thu đơn online đã thanh toán: tiền hàng tách phí vận chuyển, trừ hoàn tiền đã xong (hủy đơn và trả hàng)', () => {
+  it('doanh thu đơn online đã thanh toán: tiền hàng tách phí vận chuyển', () => {
     const rows = onlineRevenueRows();
-    expect(rows.map((r) => r.orderId)).toEqual([7001, 7002, 7003, 7004, 7005, 7006, 7007, 7010]);
-    expect(rows.find((r) => r.orderId === 7001)).toMatchObject({ goodsAmount: 486_000, shippingFee: 30_000, refunded: 18_000, branchId: 1 }); // trả hàng #7 REFUNDED
-    expect(rows.find((r) => r.orderId === 7010)).toMatchObject({ goodsAmount: 450_000, shippingFee: 30_000, refunded: 480_000 }); // hủy sau PAID, hoàn toàn bộ
-    expect(rows.find((r) => r.orderId === 7002)).toMatchObject({ goodsAmount: 522_000, shippingFee: 0, refunded: 0 }); // hoàn tiền #3 FAILED chưa tính
+    expect(rows.map((r) => r.orderId)).toEqual([7001, 7002, 7003, 7004, 7005, 7006, 7007]); // #10 hủy khi chưa thanh toán
+    expect(rows.find((r) => r.orderId === 7001)).toMatchObject({ goodsAmount: 486_000, shippingFee: 30_000, branchId: 1 });
+    expect(rows.find((r) => r.orderId === 7002)).toMatchObject({ goodsAmount: 522_000, shippingFee: 0 });
+    expect(rows.every((r) => !('refunded' in r))).toBe(true);
     expect(rows.every((r) => typeof r.paidAt === 'string')).toBe(true);
   });
 });
@@ -624,7 +601,6 @@ describe('state lưu trong localStorage', () => {
     localStorage.setItem('petcare-mock-commerce', JSON.stringify({ orders: [], carts: { '1': [{ productId: 2, quantity: 1 }] } }));
     expect(await data('owner', 'get', '/api/me/online-orders')).toMatchObject({ totalElements: 0 });
     expect((await data<Cart>('owner', 'get', '/api/me/cart')).items).toHaveLength(1);
-    expect(await data('desk', 'get', '/api/refunds')).toMatchObject({ totalElements: 2 });
     localStorage.setItem('petcare-mock-commerce', 'không phải JSON');
     expect(ids(await data('owner', 'get', '/api/me/online-orders'))).toHaveLength(8);
   });

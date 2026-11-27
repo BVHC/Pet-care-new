@@ -65,13 +65,13 @@ public class MyOnlineOrderController {
     }
 
     @Operation(operationId = "cancelMyOnlineOrder", tags = "My online orders", summary = "Hủy đơn online",
-            description = "UC64 · BR-BH-09, 10, BR-TG-12. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: PENDING_PAYMENT → CANCELLED (Đơn hàng online#3). Chỉ hủy được khi chưa thanh toán: nhả giữ hàng, hủy giao dịch `PENDING`, Order → `CANCELLED`. Đơn đã thanh toán (#13: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền, returns-v1, ST21) chưa làm: trả 409 tới task 138.",
+            description = "UC64 · BR-BH-09, 10. Actor: A02. Quyền: CUSTOMER, chỉ dữ liệu của mình. Chuyển trạng thái: PENDING_PAYMENT → CANCELLED (Đơn hàng online#3). Chỉ hủy được khi chưa thanh toán: nhả giữ hàng, hủy giao dịch `PENDING`, Order → `CANCELLED`. Đơn đã thanh toán không hủy được trong hệ thống: trả 409 (hoàn tiền đã bỏ, ADR-0156).",
             parameters = {@Parameter(name = "onlineOrderId", in = ParameterIn.PATH, example = "21")})
     @ApiErrorDoc(status = 400, description = "Thiếu lý do hoặc quá 300 ký tự")
     @ApiErrorDoc(status = 403)
     @ApiErrorDoc(status = 404)
     @ApiErrorDoc(status = 409, description = TRANSITION
-            + " · đơn đã thanh toán (`PAID` / `PROCESSING`, Đơn hàng online#13) chưa hủy được, chờ task hoàn tiền")
+            + " · đơn đã thanh toán (`PAID` / `PROCESSING`) không hủy được trong hệ thống (ADR-0156)")
     @PostMapping("/{onlineOrderId}/cancel")
     @PreAuthorize(CUSTOMER)
     public ApiResponse<OnlineOrderResponse> cancelMyOnlineOrder(@PathVariable Long onlineOrderId,

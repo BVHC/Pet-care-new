@@ -1,4 +1,4 @@
-// Khách hủy đơn (shop-v1 #10, BR-BH-10): CHỈ khi PENDING_PAYMENT (BE thật, ADR-0145 C1; PAID / PROCESSING chờ task 138); lý do bắt buộc, tối đa 300 ký tự. 409 khi đơn vừa đổi trạng thái.
+// Khách hủy đơn (shop-v1 #10, BR-BH-10): CHỈ khi PENDING_PAYMENT (BE thật, ADR-0145 C1; đơn đã thanh toán không hủy được, ADR-0156); lý do bắt buộc, tối đa 300 ký tự. 409 khi đơn vừa đổi trạng thái.
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Field } from '@/components/admin/form-ui';

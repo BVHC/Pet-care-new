@@ -96,7 +96,7 @@ describe('OrderConfirmationPage (UC64): chi tiết đơn', () => {
     expect(cancel).not.toHaveBeenCalled();
   });
 
-  // BE thật (ADR-0145 C1): khách chỉ hủy ở PENDING_PAYMENT; PAID / PROCESSING trả 409 cho tới task 138 (hoàn hàng, hoàn tiền).
+  // BE thật (ADR-0145 C1): khách chỉ hủy ở PENDING_PAYMENT; PAID / PROCESSING trả 409 (hoàn tiền đã bỏ, ADR-0156).
   it('đơn đã thanh toán (#5): KHÔNG có nút Hủy đơn, có lời hướng dẫn liên hệ chi nhánh', async () => {
     renderOrder('5');
     expect(within(await statusLine()).getByText('Đã thanh toán')).toBeInTheDocument();

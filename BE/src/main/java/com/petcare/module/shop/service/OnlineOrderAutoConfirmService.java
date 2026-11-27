@@ -13,7 +13,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
-import com.petcare.module.returns.api.ReturnRequestQueryApi;
 import com.petcare.module.shop.api.OnlineOrderStatus;
 import com.petcare.module.shop.entity.OnlineOrder;
 import com.petcare.module.shop.fsm.OnlineOrderTransitionHandler;
@@ -22,10 +21,9 @@ import com.petcare.module.shop.repository.OnlineOrderRepository.DueRow;
 
 /**
  * ST12 — tự xác nhận đã nhận (Đơn hàng online#12, BR-BH-12; docs/adr/0146, cơ chế job: docs/adr/0007): đơn {@code DELIVERED}
- * quá [CFG] {@code shop.auto_confirm_days} ngày kể từ {@code delivered_at} mà không có yêu cầu trả hàng đang mở thì sang
- * {@code COMPLETED}. Số ngày đọc lúc chạy (áp từ lần kiểm sau, ADR-0057). Mỗi đơn một {@code @Transactional}: khóa
- * {@code online_orders FOR NO KEY UPDATE SKIP LOCKED} → đọc dưới khóa, kiểm lại hạn → hỏi yêu cầu trả hàng đang mở
- * ({@link ReturnRequestQueryApi}) → ghi. Không thông báo (08 §B không đòi). Không {@code try/catch}.
+ * quá [CFG] {@code shop.auto_confirm_days} ngày kể từ {@code delivered_at} thì sang {@code COMPLETED}
+ * (trả hàng đã bỏ, ADR-0156). Số ngày đọc lúc chạy (áp từ lần kiểm sau, ADR-0057). Mỗi đơn một {@code @Transactional}: khóa
+ * {@code online_orders FOR NO KEY UPDATE SKIP LOCKED} → đọc dưới khóa, kiểm lại hạn → ghi. Không thông báo (08 §B không đòi). Không {@code try/catch}.
  */
 @Service
 public class OnlineOrderAutoConfirmService {
@@ -34,7 +32,7 @@ public class OnlineOrderAutoConfirmService {
     public enum Result {
         /** Đã chuyển {@code COMPLETED}. */
         CONFIRMED,
-        /** Không làm gì: đã rời {@code DELIVERED}, chưa quá hạn, có yêu cầu trả hàng đang mở, hoặc đang bị khóa. */
+        /** Không làm gì: đã rời {@code DELIVERED}, chưa quá hạn, hoặc đang bị khóa. */
         SKIPPED
     }
 
@@ -43,15 +41,13 @@ public class OnlineOrderAutoConfirmService {
     }
 
     private final OnlineOrderRepository onlineOrders;
-    private final ReturnRequestQueryApi returns;
     private final SystemConfigApi config;
     private final OnlineOrderTransitionHandler fsm;
     private final Clock clock;
 
-    public OnlineOrderAutoConfirmService(OnlineOrderRepository onlineOrders, ReturnRequestQueryApi returns,
-            SystemConfigApi config, OnlineOrderTransitionHandler fsm, Clock clock) {
+    public OnlineOrderAutoConfirmService(OnlineOrderRepository onlineOrders, SystemConfigApi config,
+            OnlineOrderTransitionHandler fsm, Clock clock) {
         this.onlineOrders = onlineOrders;
-        this.returns = returns;
         this.config = config;
         this.fsm = fsm;
         this.clock = clock;
@@ -59,8 +55,7 @@ public class OnlineOrderAutoConfirmService {
 
     /**
      * Tối đa {@code limit} đơn {@code DELIVERED} có {@code delivered_at ≤ now − auto_confirm_days}, theo
-     * {@code (delivered_at, id)}; {@code afterAt} null = lô đầu. Không khóa; đơn có yêu cầu trả hàng đang mở vẫn được
-     * liệt kê và bị bỏ qua ở {@link #confirm} (bảng của module khác, không join).
+     * {@code (delivered_at, id)}; {@code afterAt} null = lô đầu. Không khóa.
      */
     @Transactional(readOnly = true)
     public List<DueOrder> findDue(Instant now, Instant afterAt, long afterId, int limit) {
@@ -85,9 +80,6 @@ public class OnlineOrderAutoConfirmService {
         Instant now = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
         if (order.getStatus() != OnlineOrderStatus.DELIVERED || order.getDeliveredAt() == null
                 || order.getDeliveredAt().isAfter(cutoff(now))) {
-            return Result.SKIPPED;
-        }
-        if (returns.hasOpenRequestForOrder(order.getOrderId())) {
             return Result.SKIPPED;
         }
         fsm.validateTransition(order.getStatus(), OnlineOrderStatus.COMPLETED);

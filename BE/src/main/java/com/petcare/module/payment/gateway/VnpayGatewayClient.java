@@ -28,8 +28,8 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * {@link PaymentGatewayClient} nói chuyện với VNPay (task 127, BR-TG-11), chọn bằng {@code PAYMENT_GATEWAY=VNPAY}.
- * Tạo địa chỉ thanh toán ký HMAC-SHA512 ({@link VnpayProtocol}), xác thực callback, truy vấn ({@code querydr}) và hoàn
- * tiền ({@code refund}) qua API merchant bằng {@link RestClient} (5 s nối, 10 s đọc; mẫu {@code GeminiClient}). Khóa chỉ
+ * Tạo địa chỉ thanh toán ký HMAC-SHA512 ({@link VnpayProtocol}), xác thực callback, truy vấn ({@code querydr}) qua API
+ * merchant bằng {@link RestClient} (5 s nối, 10 s đọc; mẫu {@code GeminiClient}). Khóa chỉ
  * dùng để ký, không vào log hay thông báo lỗi.
  * <p>
  * Giả định VNPay (task 127) về API merchant, chưa kiểm với tài khoản sandbox (tài liệu: sandbox.vnpayment.vn/apis):
@@ -37,20 +37,16 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>Địa chỉ thanh toán: {@code vnp_Version=2.1.0}, {@code vnp_Command=pay}, {@code vnp_CurrCode=VND},
  *       {@code vnp_OrderType=other}, {@code vnp_Locale=vn}, {@code vnp_OrderInfo} chỉ ASCII; {@code vnp_IpnUrl} không gửi
  *       (IPN đăng ký ở trang quản trị merchant).</li>
- *   <li>{@code querydr} / {@code refund}: POST JSON tới {@code merchant_webapi/api/transaction}; trường chữ ký
+ *   <li>{@code querydr}: POST JSON tới {@code merchant_webapi/api/transaction}; trường chữ ký
  *       {@code vnp_SecureHash} = HMAC-SHA512 của các trường nối bằng {@code |} theo đúng thứ tự dưới đây (trường vắng là
  *       chuỗi rỗng). Yêu cầu {@code querydr}: RequestId, Version, Command, TmnCode, TxnRef, TransactionDate, CreateDate,
- *       IpAddr, OrderInfo. Yêu cầu {@code refund}: RequestId, Version, Command, TmnCode, TransactionType, TxnRef, Amount,
- *       TransactionNo, TransactionDate, CreateBy, CreateDate, IpAddr, OrderInfo. Phản hồi {@code querydr}: ResponseId,
+ *       IpAddr, OrderInfo. Phản hồi {@code querydr}: ResponseId,
  *       Command, ResponseCode, Message, TmnCode, TxnRef, Amount, BankCode, PayDate, TransactionNo, TransactionType,
- *       TransactionStatus, OrderInfo, PromotionCode, PromotionAmount; phản hồi {@code refund} như vậy đến OrderInfo.</li>
- *   <li>{@code vnp_TransactionDate} = {@code vnp_CreateDate} của lệnh thanh toán gốc, nên truy vấn / hoàn tiền cần
- *       {@code txnCreatedAt}. {@code vnp_RequestId} của {@code querydr} là UUID; của {@code refund} là {@code refundCode}
- *       (cắt còn 32 ký tự) để gửi lại cùng mã không tạo lệnh thứ hai.</li>
+ *       TransactionStatus, OrderInfo, PromotionCode, PromotionAmount.</li>
+ *   <li>{@code vnp_TransactionDate} = {@code vnp_CreateDate} của lệnh thanh toán gốc, nên truy vấn cần
+ *       {@code txnCreatedAt}. {@code vnp_RequestId} của {@code querydr} là UUID.</li>
  *   <li>{@code querydr}: {@code vnp_ResponseCode=00} thì đọc {@code vnp_TransactionStatus} (00 thành công, 01 chưa có kết
  *       quả, còn lại thất bại); {@code 91} là không thấy giao dịch; mã khác là lỗi cổng.</li>
- *   <li>{@code refund}: hoàn toàn phần ({@code vnp_TransactionType=02}, ST21 luôn hoàn đủ, BR-TG-12); {@code 00} thành
- *       công; {@code 94} (đã gửi yêu cầu trước đó) và {@code 99} / lỗi mạng là lỗi tạm; mã khác là bị từ chối.</li>
  *   <li>Không có API báo cáo đối soát: {@link #fetchSettlementReport} không hỗ trợ (task 135 quyết định cách đối soát).</li>
  * </ul>
  */
@@ -151,49 +147,6 @@ public class VnpayGatewayClient implements PaymentGatewayClient {
         return Optional.of(new GatewayTransaction(txnCode, emptyToNull(response.get("vnp_TransactionNo")),
                 Long.parseLong(amount) / 100,
                 VnpayProtocol.status(code, response.get("vnp_TransactionStatus"))));
-    }
-
-    @Override
-    public RefundResult refund(RefundRequest request) {
-        Instant now = Instant.now(clock);
-        Map<String, String> body = new LinkedHashMap<>();
-        body.put("vnp_RequestId", request.refundCode().length() > 32 ? request.refundCode().substring(0, 32)
-                : request.refundCode());
-        body.put("vnp_Version", VERSION);
-        body.put("vnp_Command", "refund");
-        body.put("vnp_TmnCode", props.merchantCode());
-        body.put("vnp_TransactionType", "02");
-        body.put("vnp_TxnRef", request.txnCode());
-        body.put("vnp_Amount", String.valueOf(Math.multiplyExact(request.amount(), 100L)));
-        body.put("vnp_OrderInfo", ascii(request.reason()));
-        body.put("vnp_TransactionNo", orDefault(request.gatewayTxnId(), "0"));
-        body.put("vnp_TransactionDate", VnpayProtocol.formatDate(request.txnCreatedAt() == null ? now
-                : request.txnCreatedAt()));
-        body.put("vnp_CreateBy", "system");
-        body.put("vnp_CreateDate", VnpayProtocol.formatDate(now));
-        body.put("vnp_IpAddr", DEFAULT_IP);
-        body.put("vnp_SecureHash", pipeHash(body, List.of("vnp_RequestId", "vnp_Version", "vnp_Command", "vnp_TmnCode",
-                "vnp_TransactionType", "vnp_TxnRef", "vnp_Amount", "vnp_TransactionNo", "vnp_TransactionDate",
-                "vnp_CreateBy", "vnp_CreateDate", "vnp_IpAddr", "vnp_OrderInfo")));
-
-        Map<String, String> response;
-        try {
-            response = post(body);
-            verifyResponse(response, List.of("vnp_ResponseId", "vnp_Command", "vnp_ResponseCode", "vnp_Message",
-                    "vnp_TmnCode", "vnp_TxnRef", "vnp_Amount", "vnp_BankCode", "vnp_PayDate", "vnp_TransactionNo",
-                    "vnp_TransactionType", "vnp_TransactionStatus", "vnp_OrderInfo"));
-        } catch (PaymentGatewayException e) {
-            log.warn("VNPay refund {} lỗi tạm: {}", request.refundCode(), e.getMessage());
-            return new RefundResult(RefundOutcome.TEMPORARY_ERROR, null, e.getMessage());
-        }
-        String code = response.get("vnp_ResponseCode");
-        String message = response.get("vnp_Message");
-        if (VnpayProtocol.SUCCESS_CODE.equals(code)) {
-            return new RefundResult(RefundOutcome.SUCCEEDED, emptyToNull(response.get("vnp_TransactionNo")), null);
-        }
-        boolean temporary = "94".equals(code) || "99".equals(code);
-        return new RefundResult(temporary ? RefundOutcome.TEMPORARY_ERROR : RefundOutcome.REJECTED, null,
-                "VNPay " + code + (message == null ? "" : ": " + message));
     }
 
     @Override

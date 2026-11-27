@@ -34,7 +34,7 @@ class JobMetricsCoverageTest {
     @Test
     void everyScheduledJobRecordsItsOutcome() throws Exception {
         List<Class<?>> jobs = scheduledComponents();
-        assertThat(jobs).as("tìm thấy các job @Scheduled").hasSizeGreaterThanOrEqualTo(26);
+        assertThat(jobs).as("tìm thấy các job @Scheduled").hasSizeGreaterThanOrEqualTo(25); // ST21 GatewayRefundJob bỏ ở ADR-0156
 
         List<String> problems = new ArrayList<>();
         for (Class<?> job : jobs) {

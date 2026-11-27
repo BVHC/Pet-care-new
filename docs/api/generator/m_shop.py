@@ -3,11 +3,11 @@ from lib import Module
 m = Module(
     key="shop", title="Online Shop API v1 (tầng 3)", codes="BH (thương mại điện tử)", owner="BE-2",
     sources="01 UC61, UC62, UC64, UC65, ST09, ST10, ST12; 08-tang3-be2-spec.md §B (BR-BH-07…12; 03 #14 Đơn hàng online, Order#11–13); 05 bổ sung carts, cart_items, online_orders, stock_reservations",
-    intro="Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài (task 116, ADR-0143): giỏ hàng `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`; chưa cài: đặt hàng, theo dõi, xử lý và giao đơn.** Thanh toán ở payment-v1, trả hàng và hoàn tiền ở returns-v1.",
+    intro="Giỏ hàng, đặt hàng online, theo dõi / hủy / xác nhận đã nhận của khách và xử lý, giao đơn của lễ tân. **Đặc tả bổ sung GĐ2, đã duyệt ở T54 (Hiến, 5/11/2026). Đã cài (task 116, ADR-0143): giỏ hàng `getMyCart`, `setCartItem`, `removeCartItem`, `clearMyCart`; chưa cài: đặt hàng, theo dõi, xử lý và giao đơn.** Thanh toán ở payment-v1; trả hàng và hoàn tiền đã bỏ (ADR-0156).",
     frozen=[
         "Path `/orders`, `/payments` của sales-v1 là nghiệp vụ tại quầy; đơn online dùng path riêng `/me/online-orders`, `/online-orders` (08 đầu file).",
         "Chuyển trạng thái do hệ thống (Đơn hàng online#2, #4, #12) không có endpoint: thanh toán thành công do callback cổng (payment-v1), hủy quá hạn do ST10, tự xác nhận do ST12.",
-        "Khách không có endpoint trả hàng: trả hàng do lễ tân tạo (UC68, returns-v1).",
+        "Không có trả hàng, hoàn tiền: đã bỏ (ADR-0156); đơn đã thanh toán không hủy được trong hệ thống.",
     ],
     tags={
         "Cart": "Giỏ hàng của tôi (UC61)",
@@ -26,13 +26,12 @@ m = Module(
         ("A2", "Không bán thuốc, vaccine online; giỏ chỉ nhận `GOODS`", "UC61 'không có thuốc kê đơn'; phương án an toàn"),
         ("A3", "Mỗi đơn xử lý ở đúng một chi nhánh, chọn lúc đặt; không tách đơn", "Tồn kho theo chi nhánh; tách đơn là phát minh thêm"),
         ("A4", "Chỉ thanh toán online, không COD", "UC62 «include» UC63"),
-        ("A5", "Hoàn tiền sau khi đơn `PAID` không đổi Order, báo cáo trừ hoàn tiền", "03 #5: `PAID` là trạng thái cuối"),
     ],
     questions=[
         ("Q1", "Có cho khách chọn nhận tại chi nhánh thay vì giao tận nơi không", "TBD (PO)", "UC62"),
         ("Q2", "Đơn vị vận chuyển là nhập tay (chuỗi) hay danh mục", "Đã chốt: nhập tay (chuỗi, cột VARCHAR; 08 §G)", "BR-BH-11"),
         ("Q3", "Chi nhánh xử lý do khách chọn (đề xuất) hay hệ thống tự chọn", "Đã chốt: khách chọn chi nhánh ACTIVE đủ hàng mọi dòng (08 §G, ADR-0137)", "BR-BH-08"),
-        ("Q4", "Báo cáo doanh thu có tính phí vận chuyển và trừ hoàn tiền thế nào", "Đã chốt: trừ hoàn tiền, phí vận chuyển báo riêng (08 §G, T54)", "08 §B ASSUMPTION A5"),
+        ("Q4", "Báo cáo doanh thu có tính phí vận chuyển thế nào", "Đã chốt: phí vận chuyển báo riêng (08 §G, T54); không có hoàn tiền (ADR-0156)", "08 §B"),
     ],
 )
 
@@ -42,7 +41,6 @@ m.param("OnlineOrderId", "onlineOrderId", "path", "int64")
 m.schema("OnlineOrderStatus", None,
          enum=["PENDING_PAYMENT", "PAID", "PROCESSING", "SHIPPED", "DELIVERY_FAILED", "DELIVERED", "COMPLETED", "CANCELLED"],
          desc="03 #14 (08 §B)")
-m.schema("RefundStatus", None, enum=["REQUESTED", "SUCCEEDED", "FAILED"], desc="03 #17 (returns-v1)")
 m.schema("CartItem", {
     "productId": "int64", "name": "string", "unit": "string", "unitPrice": "money|Giá hiện tại, chỉ để xem (BR-BH-07)",
     "quantity": "int", "imageUrl": "url?", "available": "bool|false nếu hết hàng toàn chuỗi",
@@ -58,17 +56,16 @@ m.schema("PlaceOnlineOrderRequest", {"branchId": "int64", "addressId": "int64"})
 m.schema("OnlineOrderLine", {"productId": "int64", "name": "string", "unit": "string", "unitPrice": "money|Snapshot (BR-BH-03)",
                              "quantity": "int", "lineTotal": "money"})
 m.schema("OnlineOrderSummary", {
-    "onlineOrderId": "int64", "salesOrderId": "int64|Order bán hàng tương ứng (`orders.id`), dùng khi tạo yêu cầu trả hàng (returns-v1)", "code": "string", "status": "ref:OnlineOrderStatus", "branchName": "string",
+    "onlineOrderId": "int64", "salesOrderId": "int64|Order bán hàng tương ứng (`orders.id`)", "code": "string", "status": "ref:OnlineOrderStatus", "branchName": "string",
     "itemCount": "int", "total": "money", "createdAt": "datetime",
 })
 m.schema("OnlineOrder", {
-    "onlineOrderId": "int64", "salesOrderId": "int64|Order bán hàng tương ứng (`orders.id`), dùng khi tạo yêu cầu trả hàng (returns-v1)", "code": "string", "status": "ref:OnlineOrderStatus", "branchId": "int64", "branchName": "string",
+    "onlineOrderId": "int64", "salesOrderId": "int64|Order bán hàng tương ứng (`orders.id`)", "code": "string", "status": "ref:OnlineOrderStatus", "branchId": "int64", "branchName": "string",
     "receiverName": "string", "receiverPhone": "string", "shipAddress": "string",
     "lines": "array:ref:OnlineOrderLine", "subtotal": "money", "shippingFee": "money", "total": "money",
     "carrier": "string?", "trackingCode": "string?", "redeliveryCount": "int",
     "paymentDueAt": "datetime", "paidAt": "datetime?", "shippedAt": "datetime?", "deliveredAt": "datetime?",
     "completedAt": "datetime?", "cancelledAt": "datetime?", "cancelReason": "string?", "createdAt": "datetime",
-    "refundStatus": "ref:RefundStatus?|Trạng thái hoàn tiền gần nhất của đơn; null khi chưa có hoàn tiền (08 §D Q4, ADR-0138)",
 })
 m.schema("ReasonRequest", {"reason": "string:300"})
 m.schema("ShipRequest", {"carrier": "string:100", "trackingCode": "string:100"})
@@ -118,12 +115,12 @@ m.op("get", "/me/online-orders/{onlineOrderId}", "getMyOnlineOrder", "Chi tiết
      "BR-BH-10", "A02", CUS, resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404),
      err_desc={404: "Không tìm thấy đơn — cả khi đơn thuộc người khác (ADR-0006)"})
 m.op("post", "/me/online-orders/{onlineOrderId}/cancel", "cancelMyOnlineOrder", "Hủy đơn online", "My online orders", "UC64",
-     "BR-BH-09, 10, BR-TG-12", "A02", CUS,
+     "BR-BH-09, 10", "A02", CUS,
      "PENDING_PAYMENT → CANCELLED (Đơn hàng online#3)", body="ReasonRequest",
      resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "Thiếu lý do hoặc quá 300 ký tự",
-               409: TRANS + " · đơn đã thanh toán (`PAID` / `PROCESSING`, Đơn hàng online#13) chưa hủy được, chờ task hoàn tiền"},
-     notes="Chỉ hủy được khi chưa thanh toán: nhả giữ hàng, hủy giao dịch `PENDING`, Order → `CANCELLED`. Đơn đã thanh toán (#13: hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền, returns-v1, ST21) chưa làm: trả 409 tới task 138.")
+               409: TRANS + " · đơn đã thanh toán (`PAID` / `PROCESSING`) không hủy được trong hệ thống (ADR-0156)"},
+     notes="Chỉ hủy được khi chưa thanh toán: nhả giữ hàng, hủy giao dịch `PENDING`, Order → `CANCELLED`. Đơn đã thanh toán không hủy được trong hệ thống: trả 409 (hoàn tiền đã bỏ, ADR-0156).")
 m.op("post", "/me/online-orders/{onlineOrderId}/confirm-received", "confirmOnlineOrderReceived", "Xác nhận đã nhận hàng",
      "My online orders", "UC64", "BR-BH-10", "A02", CUS, "DELIVERED → COMPLETED (Đơn hàng online#11)",
      resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS})
@@ -146,7 +143,7 @@ m.op("post", "/online-orders/{onlineOrderId}/ship", "shipOnlineOrder", "Bàn gia
 m.op("post", "/online-orders/{onlineOrderId}/mark-delivered", "markOnlineOrderDelivered", "Cập nhật đã giao",
      "Online order fulfillment", "UC65", "BR-BH-11, 12", "A06", LT, "SHIPPED → DELIVERED (Đơn hàng online#7)",
      resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409), err_desc={409: TRANS},
-     notes="Bắt đầu đếm hạn trả hàng và hạn tự xác nhận (BR-BH-12).")
+     notes="Bắt đầu đếm hạn tự xác nhận (BR-BH-12).")
 m.op("post", "/online-orders/{onlineOrderId}/fail-delivery", "failOnlineOrderDelivery", "Ghi nhận giao thất bại",
      "Online order fulfillment", "UC65", "BR-BH-11", "A06", LT, "SHIPPED → DELIVERY_FAILED (Đơn hàng online#8)",
      body="ReasonRequest", resp="OnlineOrder", path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
@@ -155,9 +152,3 @@ m.op("post", "/online-orders/{onlineOrderId}/redeliver", "redeliverOnlineOrder",
      "BR-BH-11", "A06", LT, "DELIVERY_FAILED → SHIPPED (Đơn hàng online#9)", body="ShipRequest", resp="OnlineOrder",
      path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
      err_desc={400: "`BR-BH-11` quá số lần giao lại tối đa [CFG] · thiếu đơn vị vận chuyển hoặc mã vận đơn · `VALIDATION_FAILED` quá 100 ký tự", 409: TRANS})
-m.op("post", "/online-orders/{onlineOrderId}/cancel-failed", "cancelFailedOnlineOrder", "Hủy đơn sau giao thất bại",
-     "Online order fulfillment", "UC65", "BR-BH-11, 09, BR-TG-12", "A06", LT,
-     "DELIVERY_FAILED → CANCELLED (Đơn hàng online#10)", body="ReasonRequest", resp="OnlineOrder",
-     path_params=["OnlineOrderId"], errors=(400, 401, 403, 404, 409),
-     err_desc={400: "`BR-BH-11` thiếu lý do", 409: TRANS},
-     notes="Hoàn hàng về lô gốc và sinh yêu cầu hoàn tiền (returns-v1, ST21).")

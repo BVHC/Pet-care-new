@@ -38,7 +38,6 @@ public interface OnlineOrderMapper {
     @Mapping(target = "cancelledAt", source = "order.cancelledAt")
     @Mapping(target = "cancelReason", source = "order.cancelReason")
     @Mapping(target = "createdAt", source = "order.createdAt")
-    @Mapping(target = "refundStatus", ignore = true)
     OnlineOrderResponse toResponse(OnlineOrder order, String branchName, List<OnlineOrderLineResponse> lines,
             long subtotal);
 

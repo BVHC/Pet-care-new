@@ -1,11 +1,9 @@
 package com.petcare.module.sales.api;
 
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 /** Owner: sales (BH) · BE-2. */
 public interface OrderQueryApi {
@@ -33,40 +31,9 @@ public interface OrderQueryApi {
     Map<Long, Long> findOrderIdsByVisitIds(Collection<Long> visitIds);
 
     // ------------------------------------------------------------------------------------------------------------
-    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 8, 13, 16): placeholder dạng default — ném UnsupportedOperationException
+    // Tầng 3 (T55c, docs/adr/0117, docs/06 §6b hàng 13, 16): placeholder dạng default — ném UnsupportedOperationException
     // tới khi OrderQueryService ghi đè; khi đó xóa default (method thành trừu tượng).
     // ------------------------------------------------------------------------------------------------------------
-
-    /**
-     * Một dòng Order trả được (BR-BH-13): chỉ dòng {@code GOODS}. {@code returnedQuantity} = đã trả (yêu cầu
-     * {@code APPROVED} / {@code REFUNDED}), {@code pendingReturnQuantity} = đang chờ duyệt ({@code PENDING}).
-     */
-    record ReturnableLine(Long orderLineId, Long productId, String description, int quantity, long unitPrice,
-                          int returnedQuantity, int pendingReturnQuantity) {}
-
-    /**
-     * Order cho trả hàng. {@code paidAt} và {@code collectMethod} null khi Order chưa {@code PAID}. {@code collectMethod}
-     * là hình thức thu (BR-TG-12): quầy {@code CASH} / {@code TRANSFER} theo {@code payments.method}, đơn online
-     * {@code GATEWAY}. Hạn trả của đơn online tính từ {@code delivered_at} (shop), không có ở đây.
-     */
-    record ReturnableOrder(Long orderId, Long branchId, Long customerId, OrderSource source, Instant paidAt,
-                           CollectMethod collectMethod, List<ReturnableLine> lines) {}
-
-    /** BR-BH-13, UC68: dòng trả được và số đã / đang trả của Order {@code orders.id}; không có Order thì rỗng. Đọc không khóa. Bản thật trước 30/11 (T73). */
-    default Optional<ReturnableOrder> findLinesForReturn(Long orderId) {
-        throw placeholder("findLinesForReturn", "T73");
-    }
-
-    record ReturnOrderLine(Long id, Long productId, String description, int quantity, long unitPrice, boolean goods) {}
-
-    record ReturnOrderSnapshot(Long id, Long branchId, String code, OrderSource source, Instant paidAt,
-                               List<ReturnOrderLine> lines) {}
-
-    /** Chi nhánh bất biến của Order, để kiểm phạm vi trước khi lấy khóa. */
-    Optional<Long> findBranchForReturn(Long orderId);
-
-    /** Khóa Order tới hết transaction của bên gọi, trước khi kiểm số lượng trả. `paidAt` chỉ có khi Order PAID. */
-    Optional<ReturnOrderSnapshot> lockForReturn(Long orderId);
 
     /**
      * I-8 (07 §11, UC92): ngày mua gần nhất (ngày {@code paid_at} theo giờ Việt Nam) của từng sản phẩm trong các Order
@@ -76,7 +43,7 @@ public interface OrderQueryApi {
 
     /**
      * I-8 (07 §11, UC92): {@code productId → tổng số lượng bán} từ {@code since} (ngày {@code paid_at}, tính cả ngày đó)
-     * trong các Order {@code PAID}, toàn chuỗi. Không trừ phần đã trả hàng (đặc tả im lặng, ghi ở ADR của AI-0).
+     * trong các Order {@code PAID}, toàn chuỗi. Không có trả hàng để trừ (ADR-0156).
      */
     Map<Long, Long> sumSoldUnitsByProduct(LocalDate since);
 

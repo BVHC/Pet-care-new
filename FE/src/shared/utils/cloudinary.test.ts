@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLOUDINARY_MAX_BYTES, isUploadConfigured, uploadImage } from './cloudinary';
 
-// Tải ảnh thẳng lên Cloudinary bằng unsigned preset (ADR-0156): không đi qua BE, không có secret ở FE.
+// Tải ảnh thẳng lên Cloudinary bằng unsigned preset (ADR-0158): không đi qua BE, không có secret ở FE.
 const URL_OK = 'https://res.cloudinary.com/demo/image/upload/v1/petcare/anh.jpg';
 const png = (name = 'anh.png') => new File(['x'], name, { type: 'image/png' });
 

@@ -211,7 +211,7 @@ interface ProductDraft {
   unit: string;
   price: string;
   description: string;
-  /** Ảnh bìa: dán URL hoặc tải lên Cloudinary (ADR-0156). */
+  /** Ảnh bìa: dán URL hoặc tải lên Cloudinary (ADR-0158). */
   imageUrl: string;
   /** Mỗi phần tử là một ô nhập; ô trống bị bỏ khi lưu. */
   gallery: string[];

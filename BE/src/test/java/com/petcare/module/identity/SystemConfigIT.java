@@ -108,7 +108,7 @@ class SystemConfigIT {
         expect("ai.chat.business_intent_enabled", "false", "BOOL", "false", "true"); // BR-AI-31, V53
         expect("ai.chat.pet_context_enabled", "false", "BOOL", "false", "true"); // BR-AI-32, V56
         expect("ai.chat.open_domain_enabled", "false", "BOOL", "false", "true"); // BR-AI-33 (chế độ mở), V57
-        expect("ai.chat.intent_llm_enabled", "true", "BOOL", "false", "true");   // BR-AI-26 câu mơ hồ, V66 (docs/adr/0157)
+        expect("ai.chat.intent_llm_enabled", "true", "BOOL", "false", "true");   // BR-AI-26 câu mơ hồ, V67 (docs/adr/0157)
         expect("ai.ingest.max_file_kb", "2048", "INT", "256", "10240");           // BR-AI-29, V59
         // V51 (docs/adr/0122, 0131): 6 khóa complaint.* của V40 đã gỡ; thêm feedback.retention_days (BR-DG-05)
         expect("feedback.retention_days", "30", "INT", "7", "365");               // BR-DG-05
@@ -122,8 +122,6 @@ class SystemConfigIT {
         expect("shop.auto_confirm_days", "7", "INT", "1", "30");                  // BR-BH-12
         expect("shop.max_redelivery", "2", "INT", "0", "5");                      // BR-BH-11
         expect("payment.txn_ttl_minutes", "15", "INT", "5", "60");                // BR-TG-09
-        expect("payment.refund_max_attempts", "3", "INT", "1", "10");             // BR-TG-14
-        expect("returns.window_days", "7", "INT", "1", "30");                     // BR-BH-13
         expect("content.comment_per_hour", "10", "INT", "1", "100");              // BR-BV-08
     }
 
@@ -148,7 +146,7 @@ class SystemConfigIT {
                     assertThat(rs.getString("description")).isNotBlank();
                 });
 
-        assertThat(EXPECTED).hasSize(87);
+        assertThat(EXPECTED).hasSize(85);
         assertThat(actual).isEqualTo(EXPECTED);
     }
 

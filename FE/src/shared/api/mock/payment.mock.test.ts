@@ -9,7 +9,7 @@ import { authFor, failure, type Auth, type Who } from './commerce.test-client';
 import { GATEWAY_CANCEL_CODE, GATEWAY_SUCCESS_CODE, gatewaySignature } from './payment.mock';
 import { installMockApi } from './mock-api';
 
-// Dữ liệu mẫu (commerce.store.ts): giao dịch #1–#7 SUCCEEDED của đơn #1–#7, #8 FAILED của đơn #8 (PENDING_PAYMENT, còn hạn, 480.000 đ gồm phí 30.000), #9 SUCCEEDED của đơn #10.
+// Dữ liệu mẫu (commerce.store.ts): giao dịch #1–#7 SUCCEEDED của đơn #1–#7, #8 FAILED của đơn #8 (PENDING_PAYMENT, còn hạn, 480.000 đ gồm phí 30.000); đơn #10 hủy khi chưa thanh toán nên không có giao dịch.
 // Đối soát: #1 hôm qua MATCHED · #2 hai ngày trước MISMATCHED (mục #1 AMOUNT_DIFF, #2 MISSING_LOCAL đã xử lý, #3 STATUS_DIFF) · #3 ba ngày trước FAILED · #4 năm ngày trước MISMATCHED (mục #4).
 // Kho chi nhánh 1: hạt Royal Canin 12 túi (đơn #8 đang giữ 1). Callback là cổng GIẢ LẬP: chữ ký tính bằng gatewaySignature().
 
@@ -279,24 +279,12 @@ describe('callback của cổng (BR-TG-07, 08, 09)', () => {
     expect((await data<OnlineOrder>('other', 'post', `/api/me/online-orders/${placed.onlineOrderId}/confirm-received`)).status).toBe('COMPLETED');
   });
 
-  it('lễ tân hủy đơn đã thanh toán sau giao thất bại (#19) hoàn hàng về lô gốc và sinh hoàn tiền; ST21 hoàn xong sau 1 phút', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
+  it('đơn đã thanh toán không hủy được (ADR-0145 C1, ADR-0156): kho giữ nguyên số đã xuất', async () => {
     const session = await pay(8);
     await callback(signed(session.code, { amount: 480_000 }));
     expect(await stock(1)).toBe(11);
-    // Khách không tự hủy được đơn đã thanh toán (BE thật, ADR-0145 C1): hoàn hàng + hoàn tiền chỉ còn ở nhánh lễ tân hủy sau giao thất bại.
     await expect(call('owner', 'post', '/api/me/online-orders/8/cancel', { reason: 'Đổi ý sau khi trả tiền' })).rejects.toMatchObject({ response: { status: 409 } });
     expect(await stock(1)).toBe(11);
-    await call('desk', 'post', '/api/online-orders/8/start-processing');
-    await call('desk', 'post', '/api/online-orders/8/ship', { carrier: 'GHN', trackingCode: 'G8' });
-    await call('desk', 'post', '/api/online-orders/8/fail-delivery', { reason: 'Khách vắng nhà' });
-    await call('desk', 'post', '/api/online-orders/8/cancel-failed', { reason: 'Khách không nhận hàng' });
-    expect(await stock(1)).toBe(12); // về đúng lô đã xuất
-    const refund = (await data<PageResponse<{ onlineOrderId: number | null; status: string; amount: number }>>('desk', 'get', '/api/refunds')).content.find((r) => r.onlineOrderId === 8);
-    expect(refund).toMatchObject({ status: 'REQUESTED', amount: 480_000 });
-    vi.setSystemTime(Date.now() + 61_000);
-    const done = (await data<PageResponse<{ onlineOrderId: number | null; status: string; attempts: number; completedAt: string | null }>>('desk', 'get', '/api/refunds', undefined, { status: 'SUCCEEDED' })).content.find((r) => r.onlineOrderId === 8);
-    expect(done).toMatchObject({ status: 'SUCCEEDED', attempts: 1, completedAt: expect.any(String) });
   });
 });
 

@@ -94,7 +94,7 @@ describe('useShopMutation làm mới ["shop"]', () => {
     await waitFor(() => expect(quantityOf(result, 2)).toBe(1));
   });
 
-  it('làm mới cả gốc thanh toán, trả hàng / hoàn tiền và kho (hủy đơn đã trả đổi cả bốn)', async () => {
+  it('làm mới cả gốc thanh toán và kho', async () => {
     const { client, result } = setup();
     const spy = vi.spyOn(client, 'invalidateQueries');
     await waitFor(() => expect(result.current.cart.data).toBeDefined());
@@ -104,7 +104,7 @@ describe('useShopMutation làm mới ["shop"]', () => {
     for (const queryKey of COMMERCE_ROOTS) expect(spy).toHaveBeenCalledWith({ queryKey });
   });
 
-  // Khách chỉ hủy được đơn PENDING_PAYMENT (#8 trong dữ liệu mẫu); đơn PAID (#5) trả 409 cho tới task 138 (ADR-0145 C1).
+  // Khách chỉ hủy được đơn PENDING_PAYMENT (#8 trong dữ liệu mẫu); đơn PAID (#5) trả 409 (ADR-0145 C1, ADR-0156).
   it('hủy đơn chưa thanh toán: danh sách đơn của tôi thấy CANCELLED', async () => {
     const { wrapper } = wrap();
     const { result } = renderHook(() => ({ orders: useMyOnlineOrders(), cancel: useShopMutation((id: number) => shopApi.cancelMyOrder(id, { reason: 'Đổi ý' })) }), { wrapper });

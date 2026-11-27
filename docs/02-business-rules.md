@@ -290,8 +290,8 @@
 | BR-NS-01…12 | Nhân sự | UC34–38 | §7 của file này |
 | BR-AI-01…28 | Trí tuệ nhân tạo | UC90–94, ST22, ST23 | `07` §4 |
 | BR-SP-08, 10, 11 | Phí vận chuyển, định mức vật tư | UC32 | `08` §A |
-| BR-BH-07…15 | Giỏ hàng, đơn online, trả hàng | UC61–65, UC68, UC69 | `08` §B, §D |
-| BR-TG-06…14 | Thanh toán online, hoàn tiền | UC63, UC68, UC69, ST11, ST14, ST21 | `08` §C, §D |
+| BR-BH-07…12 | Giỏ hàng, đơn online | UC61–65 | `08` §B (BR-BH-13…15 trả hàng bỏ ở ADR-0156) |
+| BR-TG-06…11 | Thanh toán online | UC63, ST11, ST14 | `08` §C (BR-TG-12…14 hoàn tiền bỏ ở ADR-0156) |
 | BR-KO-08…13 | Chuyển kho, kiểm kê, truy vết lô | UC77–79 | `08` §E |
 | BR-CN-06…10 | Tạm ngừng / đóng cửa chi nhánh | UC13 | `08` §F.1 |
 | BR-KH-11…14 | Gộp hồ sơ khách trùng | UC27 | `08` §F.2 |

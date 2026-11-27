@@ -20,7 +20,6 @@ const COUNTS: { key: keyof ClosureImpact; label: string }[] = [
   { key: 'openOrders', label: 'Order chưa thanh toán' },
   { key: 'unfinishedOnlineOrders', label: 'Đơn online chưa hoàn tất' },
   { key: 'openCareTasks', label: 'Việc gọi điện đang chờ' },
-  { key: 'pendingRefunds', label: 'Hoàn tiền chưa thành công' },
   { key: 'inTransitTransfers', label: 'Phiếu chuyển kho đang vận chuyển' },
   { key: 'openStockCounts', label: 'Phiên kiểm kê đang mở' },
   { key: 'stockItemCount', label: 'Mặt hàng còn tồn kho' },

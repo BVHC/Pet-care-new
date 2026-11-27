@@ -119,7 +119,6 @@ class MyOnlineOrderServiceTest {
         assertThat(order.getCancelledBy()).isEqualTo(ACCOUNT);
         assertThat(order.getCancelledAt()).isEqualTo(Instant.parse("2026-11-15T03:00:00.123456Z"));
         assertThat(response.status()).isEqualTo(OnlineOrderStatus.CANCELLED);
-        assertThat(response.refundStatus()).isNull();
         assertThat(response.total()).isEqualTo(230_000);
     }
 

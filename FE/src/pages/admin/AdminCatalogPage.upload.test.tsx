@@ -11,7 +11,7 @@ import { useSession } from '../../shared/stores/session.store';
 import { isUploadConfigured, uploadImage } from '../../shared/utils/cloudinary';
 import { AdminCatalogPage } from './AdminCatalogPage';
 
-// Tải ảnh bìa / ảnh phụ của sản phẩm lên Cloudinary từ form UC29 (ADR-0156). Chỉ thay lớp mạng của Cloudinary; form, mock BE
+// Tải ảnh bìa / ảnh phụ của sản phẩm lên Cloudinary từ form UC29 (ADR-0158). Chỉ thay lớp mạng của Cloudinary; form, mock BE
 // và luật PATCH (imageUrl vắng / null = giữ nguyên, "" = xóa) chạy thật. Mock: sản phẩm 1 "Hạt Royal Canin" có ảnh bìa
 // /imgs/prod1.jpg và 2 ảnh phụ (/imgs/prod2.jpg, /imgs/prod3.jpg).
 vi.mock('../../shared/utils/cloudinary', () => ({ isUploadConfigured: vi.fn(), uploadImage: vi.fn() }));

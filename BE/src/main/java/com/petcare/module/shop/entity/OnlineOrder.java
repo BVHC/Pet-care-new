@@ -111,7 +111,7 @@ public class OnlineOrder extends TimestampedEntity {
         this.shippedAt = now;
     }
 
-    /** Đơn hàng online#7 (SHIPPED → DELIVERED): bắt đầu đếm hạn trả hàng và hạn tự xác nhận (BR-BH-12). */
+    /** Đơn hàng online#7 (SHIPPED → DELIVERED): bắt đầu đếm hạn tự xác nhận (BR-BH-12). */
     public void markDelivered(Instant now) {
         this.status = OnlineOrderStatus.DELIVERED;
         this.deliveredAt = now;

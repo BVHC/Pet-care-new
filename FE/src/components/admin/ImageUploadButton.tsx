@@ -4,7 +4,7 @@ import { isUploadConfigured, uploadImage } from '../../shared/utils/cloudinary';
 import { Button } from '../ui/button';
 
 /**
- * Nút chọn tệp ảnh rồi tải lên Cloudinary (ADR-0156); trả các URL qua `onUploaded`, theo thứ tự chọn. Nhận tối đa `limit` tệp,
+ * Nút chọn tệp ảnh rồi tải lên Cloudinary (ADR-0158); trả các URL qua `onUploaded`, theo thứ tự chọn. Nhận tối đa `limit` tệp,
  * tệp thừa bị bỏ và báo. Tệp lỗi thì dừng, giữ các ảnh đã tải xong trước đó. Form cha dùng `onBusyChange` để chặn lưu khi còn tải dở.
  * Chưa cấu hình thì nút tắt kèm chữ giải thích hiện sẵn (không dùng `title`: nút tắt có pointer-events-none nên tooltip không hiện);
  * vẫn dán URL tay được. Là fragment: thông báo `basis-full` xuống dòng trong hàng `flex-wrap` của cha.

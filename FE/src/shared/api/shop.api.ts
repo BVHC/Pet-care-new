@@ -1,5 +1,5 @@
 // Cửa hàng online (tầng 3) — docs/api/shop-v1.md #1–19 (UC61, 62, 64, 65). Giỏ và đơn của tôi: chỉ CUSTOMER (đơn của người khác = 404);
-// xử lý đơn: lễ tân chi nhánh xử lý (A06), quản lý chi nhánh (A05) chỉ xem. Thanh toán ở payment.api.ts, trả hàng / hoàn tiền ở returns.api.ts.
+// xử lý đơn: lễ tân chi nhánh xử lý (A06), quản lý chi nhánh (A05) chỉ xem. Thanh toán ở payment.api.ts; trả hàng, hoàn tiền đã bỏ (ADR-0156).
 import { apiClient } from './axios';
 import type { PageResponse } from '../types';
 import type {
@@ -42,7 +42,7 @@ export const shopApi = {
   listMyOrders: (query: OnlineOrderQuery = {}) => get<PageResponse<OnlineOrderSummary>>('/api/me/online-orders', query),
   /** #9: đơn của người khác = 404. */
   getMyOrder: (onlineOrderId: number) => get<OnlineOrder>(`/api/me/online-orders/${onlineOrderId}`),
-  /** #10: CHỈ PENDING_PAYMENT → CANCELLED; PAID / PROCESSING và mọi trạng thái khác → 409 INVALID_STATE_TRANSITION cho tới task 138 (BE thật, ADR-0145 C1). */
+  /** #10: CHỈ PENDING_PAYMENT → CANCELLED; PAID / PROCESSING và mọi trạng thái khác → 409 INVALID_STATE_TRANSITION (BE thật, ADR-0156, ADR-0145 C1). */
   cancelMyOrder: (onlineOrderId: number, body: ReasonRequest) => post<OnlineOrder>(`/api/me/online-orders/${onlineOrderId}/cancel`, body),
   /** #11: DELIVERED → COMPLETED; 409 trạng thái khác. */
   confirmReceived: (onlineOrderId: number) => post<OnlineOrder>(`/api/me/online-orders/${onlineOrderId}/confirm-received`),
@@ -61,6 +61,4 @@ export const shopApi = {
   failDelivery: (onlineOrderId: number, body: ReasonRequest) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/fail-delivery`, body),
   /** #18: DELIVERY_FAILED → SHIPPED. 400 BR-BH-11 thiếu đơn vị vận chuyển / mã vận đơn, rồi quá số lần giao lại tối đa [CFG] `shop.max_redelivery` (mặc định 2). */
   redeliver: (onlineOrderId: number, body: ShipRequest) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/redeliver`, body),
-  /** #19: DELIVERY_FAILED → CANCELLED, hoàn kho và sinh hoàn tiền qua cổng. BE CHƯA CÓ (404 đường dẫn tới task 138): xem `cancelFailedClosed` ở axios.ts. 400 BR-BH-11 thiếu lý do (theo hợp đồng). */
-  cancelFailed: (onlineOrderId: number, body: ReasonRequest) => post<OnlineOrder>(`/api/online-orders/${onlineOrderId}/cancel-failed`, body),
 };

@@ -28,7 +28,7 @@
 | BE-2 | UC32 | `08` §A | — | `fees` (6) |
 | | UC61, 62, 64, 65 · ST09, 10, 12 | `08` §B | #14 | `shop` (19) |
 | | UC63 · ST11, 14 | `08` §C | #15 | `payment` (6) |
-| | UC68, 69 · ST21 | `08` §D | #16, #17 | `returns` (9) |
+| | ~~UC68, 69 · ST21~~ | `08` §D | ~~#16, #17~~ | bỏ ở ADR-0156 |
 | | UC77–79 | `08` §E | #18, #19 | `stockops` (13) |
 | | UC13 · UC27 · UC80, UC82 | `08` §F | #20, #21 | `branchlife` (4), `custmerge` (2), `articlex` (14) |
 | | ~~UC50~~ (bỏ, ADR-0125) | `09` §B | ~~#23~~ | ~~`surgery` (8)~~ |
@@ -116,7 +116,7 @@ Bảng chi tiết ở cuối [`07`](./07-ai-subsystem.md) §17.1, [`08`](./08-ta
 | UC63 | Trang kết quả thanh toán (quay về từ cổng) | CUSTOMER | `payment` | `/payment`, `/order/:id` |
 | UC64 | `/orders`, chi tiết đơn | CUSTOMER | `shop` | `/orders`, `/order/:id` |
 | UC65 | `/admin/orders` (xử lý, bàn giao, giao thất bại) | RECEPTIONIST | `shop` | `/admin/orders` (mock cũ) |
-| UC68, 69 | `/admin/refunds` đổi thành "Trả hàng & hoàn tiền" | RECEPTIONIST (tạo, xác nhận), BRANCH_MANAGER (duyệt) | `returns` | `/admin/refunds` (mock cũ) |
+| ~~UC68, 69~~ | ~~`/admin/refunds`~~ | — | — | bỏ ở ADR-0156: màn đã gỡ (27/11/2026) |
 | UC77–79 | Thêm tab "Chuyển kho", "Kiểm kê", "Truy vết lô" ở `/admin/warehouse/:tab` | BRANCH_MANAGER; VET (truy vết) | `stockops` | `/admin/warehouse` |
 | UC80 | `/admin/my-articles` (soạn, gửi duyệt) | VET | `articlex` | — mới |
 | UC81 (mở rộng) | Hàng chờ duyệt ở `/admin/articles/:tab`; ẩn bình luận | SUPER_MANAGER | `articlex` | `/admin/articles` |

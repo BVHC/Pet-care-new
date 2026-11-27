@@ -1,4 +1,4 @@
-# ADR-0156: Tải ảnh sản phẩm lên Cloudinary từ FE (unsigned preset), BE không đổi
+# ADR-0158: Tải ảnh sản phẩm lên Cloudinary từ FE (unsigned preset), BE không đổi
 
 - **Trạng thái:** Proposed (làm theo yêu cầu của Hiến ngày 2026-11-27; module catalog là của BE-2 nhưng BE, DB và contract không đổi)
 - **Ngày:** 2026-11-27
@@ -23,7 +23,7 @@ Form tạo / sửa sản phẩm (UC29) chỉ nhận URL dán tay. Đo trên code
 - **Ảnh mồ côi.** Hủy form, thay ảnh bìa hoặc xóa ảnh phụ không xóa tệp trên Cloudinary (xóa cần chữ ký, tức signed API). Tệp chỉ chiếm dung lượng gói.
 - **BE vẫn nhận URL bất kỳ** (ADR-0151 mục 6 giữ nguyên): không có chuyện BE kiểm URL thuộc Cloudinary.
 - **Mock.** Với `VITE_API_MOCK=true` nút vẫn tải ảnh thật lên Cloudinary (cần mạng và đã cấu hình) rồi lưu URL vào dữ liệu mock. Test thay lớp mạng: `cloudinary.test.ts` stub `fetch`, `AdminCatalogPage.upload.test.tsx` thay module bằng `vi.mock`; form, mock BE và luật PATCH chạy thật.
-- **Contract:** catalog-v1 Q1 vẫn ghi TBD. Cập nhật thành "đã trả lời bằng ADR-0156" ở lần sinh lại contract kế tiếp (`docs/api/generator/m_catalog.py` → `generate.py`; máy soạn ADR này không có Python để chạy generator nên không sửa tay file sinh ra).
+- **Contract:** catalog-v1 Q1 vẫn ghi TBD. Cập nhật thành "đã trả lời bằng ADR-0158" ở lần sinh lại contract kế tiếp (`docs/api/generator/m_catalog.py` → `generate.py`; máy soạn ADR này không có Python để chạy generator nên không sửa tay file sinh ra).
 - **Test mới:** `cloudinary.test.ts` (12 ca), `AdminCatalogPage.upload.test.tsx` (13 ca). Hai đột biến (làm cùng lúc trên file thật rồi khôi phục, không phải bản sao), mỗi đột biến làm đúng một ca đỏ: bỏ chốt "`imageUrl` chưa đổi thì không gửi"; bỏ chốt chặn Lưu khi còn tải dở. **Chưa chạy thử với Cloudinary thật**: mọi test chỉ thay lớp mạng bằng stub. 25 ca `AdminCatalogPage.test.tsx` và 14 ca `AdminCatalogPage.gallery.test.tsx` có sẵn vẫn xanh.
 
 ## Không làm

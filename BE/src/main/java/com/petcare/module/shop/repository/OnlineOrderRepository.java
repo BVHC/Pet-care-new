@@ -32,10 +32,6 @@ public interface OnlineOrderRepository extends JpaRepository<OnlineOrder, Long> 
     @Query(value = "SELECT id FROM online_orders WHERE id = :id FOR NO KEY UPDATE", nativeQuery = true)
     Optional<Long> lockById(@Param("id") Long id);
 
-    /** {@code delivered_at} của đơn ứng với Order {@code orders.id}; rỗng khi không có đơn hoặc chưa giao. */
-    @Query("SELECT o.deliveredAt FROM OnlineOrder o WHERE o.orderId = :orderId AND o.deliveredAt IS NOT NULL")
-    Optional<Instant> findDeliveredAtByOrderId(@Param("orderId") Long orderId);
-
     /** Chi nhánh xử lý, đọc không khóa và không nạp entity ({@code branch_id} bất biến): kiểm phạm vi (403) trước khi khóa. */
     @Query("SELECT o.branchId FROM OnlineOrder o WHERE o.id = :id")
     Optional<Long> findBranchIdById(@Param("id") Long id);

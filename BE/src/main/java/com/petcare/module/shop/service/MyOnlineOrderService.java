@@ -118,7 +118,7 @@ public class MyOnlineOrderService {
 
     /**
      * shop-v1 {@code cancelMyOnlineOrder} (Đơn hàng online#3): {@code PENDING_PAYMENT} → {@code CANCELLED}. Đơn ở trạng
-     * thái khác, kể cả {@code PAID} / {@code PROCESSING} (#13, hoàn tiền: task 138), là 409. Giao dịch {@code SUCCEEDED}
+     * thái khác, kể cả {@code PAID} / {@code PROCESSING} (#13 đã bỏ, ADR-0156), là 409. Giao dịch {@code SUCCEEDED}
      * đã có thì 409 (callback thanh toán đang chuyển đơn sang {@code PAID}).
      */
     @Transactional

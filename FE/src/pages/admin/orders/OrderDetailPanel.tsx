@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { X } from 'lucide-react';
 import { formatVnDateTime } from '@/components/appointments/format';
 import type { Notice } from '@/components/admin/form-ui';
@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from '@/components/ui/modal-templates';
 import { formatCurrency } from '@/lib/utils';
-import { cancelFailedClosed } from '@/shared/api/axios';
 import { shopApi } from '@/shared/api/shop.api';
 import { useOnlineOrder, useShopMutation } from '@/shared/hooks/useShop';
 import { ONLINE_ORDER_STATUS_LABELS, type OnlineOrder } from '@/shared/types/shop';
@@ -15,7 +14,7 @@ import { commerceError } from './commerce-error';
 import { OrderReasonDialog, ShipOrderDialog } from './OrderActionDialogs';
 import { ORDER_TONE } from './tones';
 
-type Dialog = 'ship' | 'redeliver' | 'fail' | 'cancel';
+type Dialog = 'ship' | 'redeliver' | 'fail';
 
 const when = (label: string, iso?: string | null) =>
   iso ? (
@@ -32,15 +31,12 @@ interface PanelProps {
   onNotice: (notice: Notice) => void;
 }
 
-/** Chi tiết đơn (#13) kèm nút thao tác theo trạng thái: PAID → bắt đầu xử lý · PROCESSING → bàn giao · SHIPPED → đã giao / giao thất bại · DELIVERY_FAILED → giao lại / hủy. */
+/** Chi tiết đơn (#13) kèm nút thao tác theo trạng thái: PAID → bắt đầu xử lý · PROCESSING → bàn giao · SHIPPED → đã giao / giao thất bại · DELIVERY_FAILED → giao lại (hủy sau giao thất bại đã bỏ cùng hoàn tiền, ADR-0156). */
 export function OrderDetailPanel({ onlineOrderId, canAct, onClose, onNotice }: PanelProps) {
   const detail = useOnlineOrder(onlineOrderId);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const run = useShopMutation((fn: (id: number) => Promise<OnlineOrder>) => fn(onlineOrderId));
   const order = detail.data;
-  // BE chưa có `cancel-failed` (task 138): xem `cancelFailedClosedForRealOrders` ở mock-scope.ts.
-  const cancelClosed = cancelFailedClosed();
-  const cancelHintId = useId();
 
   const direct = async (fn: (id: number) => Promise<OnlineOrder>, text: string) => {
     try {
@@ -128,7 +124,7 @@ export function OrderDetailPanel({ onlineOrderId, canAct, onClose, onNotice }: P
             )}
             {order.status === 'SHIPPED' && (
               <>
-                <Button size="sm" disabled={busy} onClick={() => direct(shopApi.markDelivered, `Đã cập nhật đã giao đơn ${order.code}, bắt đầu đếm hạn trả hàng.`)}>
+                <Button size="sm" disabled={busy} onClick={() => direct(shopApi.markDelivered, `Đã cập nhật đã giao đơn ${order.code}.`)}>
                   Cập nhật đã giao
                 </Button>
                 <Button size="sm" variant="outline" className="border-red-200 text-red-600" onClick={() => setDialog('fail')}>
@@ -137,33 +133,16 @@ export function OrderDetailPanel({ onlineOrderId, canAct, onClose, onNotice }: P
               </>
             )}
             {order.status === 'DELIVERY_FAILED' && (
-              <>
-                <Button size="sm" onClick={() => setDialog('redeliver')}>
-                  Giao lại
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="border-red-200 text-red-600"
-                  disabled={cancelClosed}
-                  aria-describedby={cancelClosed ? cancelHintId : undefined}
-                  onClick={() => setDialog('cancel')}
-                >
-                  Hủy đơn
-                </Button>
-                {cancelClosed && (
-                  <p id={cancelHintId} className="basis-full text-xs text-(--text-tertiary)">
-                    Hủy đơn sau giao thất bại chưa mở (BE chưa có, task 138). Nếu đơn đã hết lượt giao lại thì tạm thời chưa xử lý được trên giao diện.
-                  </p>
-                )}
-              </>
+              <Button size="sm" onClick={() => setDialog('redeliver')}>
+                Giao lại
+              </Button>
             )}
           </div>
         )}
         {dialog === 'ship' || dialog === 'redeliver' ? (
           <ShipOrderDialog order={order} redeliver={dialog === 'redeliver'} onClose={() => setDialog(null)} onDone={done} />
         ) : dialog ? (
-          <OrderReasonDialog order={order} cancel={dialog === 'cancel'} onClose={() => setDialog(null)} onDone={done} />
+          <OrderReasonDialog order={order} onClose={() => setDialog(null)} onDone={done} />
         ) : null}
       </div>
     );

@@ -9,7 +9,7 @@
 **Đóng băng phạm vi (không có endpoint):**
 - Chọn cổng, đăng ký sandbox và ánh xạ tham số riêng của cổng vào `GatewayCallbackRequest` là việc của lớp `PaymentGatewayClient` (08 §C), không nằm trong hợp đồng này.
 - ST11 (hết hạn giao dịch) và ST14 (đối soát) là tác vụ hệ thống, không có endpoint ngoài các endpoint xem và ghi chú đối soát.
-- Hoàn tiền (ST21) ở returns-v1.
+- Không có hoàn tiền (ADR-0156): chênh lệch do giao dịch thành công về muộn chỉ hiện ở đối soát.
 
 ---
 

@@ -9,7 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /** shop-v1 {@code OnlineOrderSummary}: một dòng của danh sách đơn online (UC64, UC65). */
 public record OnlineOrderSummaryResponse(
         @Schema(example = "21", requiredMode = Schema.RequiredMode.REQUIRED) Long onlineOrderId,
-        @Schema(description = "Order bán hàng tương ứng (orders.id), dùng khi tạo yêu cầu trả hàng (returns-v1)",
+        @Schema(description = "Order bán hàng tương ứng (orders.id)",
                 example = "340", requiredMode = Schema.RequiredMode.REQUIRED) Long salesOrderId,
         @Schema(example = "DO-2611-00001", requiredMode = Schema.RequiredMode.REQUIRED) String code,
         @Schema(requiredMode = Schema.RequiredMode.REQUIRED) OnlineOrderStatus status,

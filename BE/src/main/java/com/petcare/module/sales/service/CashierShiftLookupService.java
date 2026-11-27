@@ -4,7 +4,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.petcare.module.sales.api.CashierShiftQueryApi;
@@ -29,12 +28,5 @@ public class CashierShiftLookupService implements CashierShiftQueryApi {
     public Optional<OpenShift> findOpenShift(Long cashierAccountId) {
         Objects.requireNonNull(cashierAccountId, "cashierAccountId");
         return shifts.findOpenShiftRow(cashierAccountId).map(row -> new OpenShift(row.getId(), row.getBranchId()));
-    }
-
-    @Override
-    @Transactional(propagation = Propagation.MANDATORY)
-    public Optional<OpenShift> lockOpenShiftForShare(Long cashierAccountId) {
-        return shifts.lockOpenShiftForShare(cashierAccountId)
-                .map(row -> new OpenShift(row.getId(), row.getBranchId()));
     }
 }

@@ -28,8 +28,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Hành vi ràng buộc của schema tầng 3 phần BE-2 (V43–V48, T55c, docs/adr/0117; đặc tả docs/08-tang3-be2-spec.md §A–§F,
- * 05 §13 mục 26) trên Postgres thật. Mọi kỳ vọng là bản sao độc lập chép từ 08, không đọc lại từ file migration.
+ * Hành vi ràng buộc của schema tầng 3 phần BE-2 (V43–V48, T55c, docs/adr/0117; V46 trả hàng / hoàn tiền đã gỡ ở V66,
+ * docs/adr/0156; đặc tả docs/08-tang3-be2-spec.md §A–§F, 05 §13 mục 26) trên Postgres thật. Mọi kỳ vọng là bản sao độc lập chép từ 08, không đọc lại từ file migration.
  * <p>
  * Mỗi ca vi phạm kiểm hai thứ: SQLSTATE (23514 CHECK, 23505 UNIQUE) <b>và tên ràng buộc</b> trong thông điệp, nên một
  * CHECK khác chặn nhầm (hoặc CHECK mong đợi bị gỡ) làm test đỏ. Các giá trị mới của cột có sẵn ({@code orders.source}
@@ -45,9 +45,9 @@ class Tier3Be2SchemaIT {
     private static final Timestamp NOW = Timestamp.from(Instant.parse("2026-11-06T03:00:00Z"));
     private static final AtomicInteger SEQ = new AtomicInteger();
 
-    /** Bảng mà {@link #assertRowViolates} dựng dòng từ {@code onlineRow}, {@code returnRow}, {@code refundRow}... */
+    /** Bảng mà {@link #assertRowViolates} dựng dòng từ {@code onlineRow}, {@code transferRow}, {@code countRow}... */
     private static final List<String> ROW_TABLES =
-            List.of("online_orders", "return_requests", "refunds", "stock_transfers", "stock_counts");
+            List.of("online_orders", "stock_transfers", "stock_counts");
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -265,81 +265,6 @@ class Tier3Be2SchemaIT {
                 "INSERT INTO reconciliation_items (reconciliation_id, kind) VALUES (?, 'FOO')", recon));
     }
 
-    // ================================================================ D. Trả hàng và hoàn tiền (V46)
-
-    @Test
-    void returnRequestDecisionColumnsFollowTheStatus() {
-        long order = order("RETAIL", "OPEN", null);
-        for (Map<String, Object> row : new Map[] {
-                returnRow(order, "PENDING"),
-                returnRow(order, "CANCELLED"),
-                returnRow(order, "APPROVED", "decided_by", staff, "decided_at", NOW, "restock", true, "refund_amount", 90000L),
-                returnRow(order, "REFUNDED", "decided_by", staff, "decided_at", NOW, "restock", false, "refund_amount", 90000L),
-                returnRow(order, "REJECTED", "decided_by", staff, "decided_at", NOW, "decision_note", "Hết hạn đổi trả")}) {
-            assertThatCode(() -> insertRow("return_requests", row)).as(row.toString()).doesNotThrowAnyException();
-        }
-
-        String decision = "ck_return_requests_decision";
-        assertRowViolates(decision, returnRow(order, "PENDING", "decided_by", staff));
-        assertRowViolates(decision, returnRow(order, "PENDING", "restock", true));
-        assertRowViolates(decision, returnRow(order, "APPROVED", "decided_by", staff, "decided_at", NOW, "restock", true));
-        assertRowViolates(decision, returnRow(order, "APPROVED", "decided_by", staff, "decided_at", NOW, "refund_amount", 1L));
-        // BR-BH-14: từ chối bắt buộc có lý do và không có tiền hoàn
-        assertRowViolates(decision, returnRow(order, "REJECTED", "decided_by", staff, "decided_at", NOW));
-        assertRowViolates(decision, returnRow(order, "REJECTED", "decided_by", staff, "decided_at", NOW, "decision_note", "x",
-                "refund_amount", 1L));
-        assertRowViolates("ck_return_requests_reason_code", returnRow(order, "PENDING", "reason_code", "FOO"));
-        assertRowViolates("ck_return_requests_refund_amount", returnRow(order, "APPROVED", "decided_by", staff, "decided_at", NOW,
-                "restock", true, "refund_amount", -1L));
-    }
-
-    @Test
-    void returnRequestLinesAreUniquePerRequestAndLine() {
-        long order = order("RETAIL", "OPEN", null);
-        long product = product("GOODS");
-        long orderLine = line(order, "GOODS", null, product);
-        long request = insertRow("return_requests", returnRow(order, "PENDING"));
-        insert("return_request_lines", "INSERT INTO return_request_lines (request_id, order_line_id, quantity) VALUES (?, ?, 1)",
-                request, orderLine);
-
-        assertViolates("23505", "uq_return_request_lines_request_line", () -> jdbc.update(
-                "INSERT INTO return_request_lines (request_id, order_line_id, quantity) VALUES (?, ?, 1)", request, orderLine));
-        assertViolates("23514", "ck_return_request_lines_quantity", () -> jdbc.update(
-                "INSERT INTO return_request_lines (request_id, order_line_id, quantity) VALUES (?, ?, 0)", request,
-                line(order, "GOODS", null, product)));
-    }
-
-    @Test
-    void refundHasExactlyOneSourceAndCounterRefundNeedsAShift() {
-        long order = order("RETAIL", "OPEN", null);
-        long request = insertRow("return_requests", returnRow(order, "PENDING"));
-        long onlineOrder = insertRow("online_orders", onlineRow("PENDING_PAYMENT"));
-        long shift = shift();
-
-        assertThatCode(() -> insertRow("refunds", refundRow("CASH", "REQUESTED", "return_request_id", request)))
-                .doesNotThrowAnyException();
-        assertThatCode(() -> insertRow("refunds", refundRow("GATEWAY", "REQUESTED", "online_order_id", onlineOrder)))
-                .doesNotThrowAnyException();
-        // hoàn qua cổng xong không cần ca (BR-TG-13 chỉ áp dụng tại quầy)
-        assertThatCode(() -> insertRow("refunds", refundRow("GATEWAY", "SUCCEEDED", "online_order_id", onlineOrder,
-                "completed_at", NOW))).doesNotThrowAnyException();
-        assertThatCode(() -> insertRow("refunds", refundRow("TRANSFER", "SUCCEEDED", "return_request_id", request,
-                "completed_at", NOW, "cashier_shift_id", shift, "confirmed_by", staff))).doesNotThrowAnyException();
-
-        assertRowViolates("ck_refunds_single_source", refundRow("CASH", "REQUESTED"));
-        assertRowViolates("ck_refunds_single_source",
-                refundRow("CASH", "REQUESTED", "return_request_id", request, "online_order_id", onlineOrder));
-        assertRowViolates("ck_refunds_counter_shift",
-                refundRow("CASH", "SUCCEEDED", "return_request_id", request, "completed_at", NOW));
-        assertRowViolates("ck_refunds_completed_at", refundRow("GATEWAY", "SUCCEEDED", "online_order_id", onlineOrder));
-        assertRowViolates("ck_refunds_completed_at",
-                refundRow("GATEWAY", "REQUESTED", "online_order_id", onlineOrder, "completed_at", NOW));
-        assertRowViolates("ck_refunds_amount", refundRow("CASH", "REQUESTED", "return_request_id", request, "amount", 0L));
-        assertRowViolates("ck_refunds_method", refundRow("FOO", "REQUESTED", "return_request_id", request));
-        assertRowViolates("ck_refunds_attempts",
-                refundRow("GATEWAY", "REQUESTED", "online_order_id", onlineOrder, "attempts", -1));
-    }
-
     // ================================================================ E. Kho mở rộng (V47)
 
     @Test
@@ -419,10 +344,12 @@ class Tier3Be2SchemaIT {
         assertViolates("23514", "ck_stock_movements_source_type", () -> movement(lot, "SALE", "foo", 1L));
 
         // COUNT_MISMATCH của V1 giữ nguyên bên cạnh COUNT_DIFF (ADR-0117)
-        for (String reason : new String[] {"DAMAGED", "EXPIRED", "COUNT_MISMATCH", "COUNT_DIFF", "RETURN_DISCARD"}) {
+        for (String reason : new String[] {"DAMAGED", "EXPIRED", "COUNT_MISMATCH", "COUNT_DIFF"}) {
             assertThatCode(() -> adjustment(reason)).as(reason).doesNotThrowAnyException();
         }
         assertViolates("23514", "ck_stock_adjustments_reason", () -> adjustment("FOO"));
+        // V66 bỏ lý do loại hàng trả (docs/adr/0156)
+        assertViolates("23514", "ck_stock_adjustments_reason", () -> adjustment("RETURN_DISCARD"));
         // luật cũ: OTHER phải có ghi chú
         assertViolates("23514", "ck_stock_adjustments_other_note", () -> adjustment("OTHER"));
     }
@@ -505,14 +432,13 @@ class Tier3Be2SchemaIT {
         assertViolates("23514", "ck_article_comments_status", () -> comment(article, "FOO", "x"));
     }
 
-    // ================================================================ chỉ mục của các job (ST10, ST11, ST12, ST21)
+    // ================================================================ chỉ mục của các job (ST10, ST11, ST12)
 
     @Test
     void partialIndexesKeepTheStatusLiteralTheJobsFilterOn() {
         assertIndex("ix_online_orders_pending_payment_due", "(status, payment_due_at)", "'PENDING_PAYMENT'");
         assertIndex("ix_online_orders_delivered_at", "(delivered_at)", "'DELIVERED'");
         assertIndex("ix_payment_transactions_pending_expires", "(status, expires_at)", "'PENDING'");
-        assertIndex("ix_refunds_gateway_requested", "(status, next_attempt_at)", "'GATEWAY'", "'REQUESTED'");
         assertIndex("ix_stock_reservations_held", "(branch_id, product_id)", "'HELD'");
         assertIndex("uq_stock_counts_branch_open", "(branch_id)", "'OPEN'");
         assertIndex("uq_payment_transactions_order_pending", "(online_order_id)", "'PENDING'");
@@ -549,27 +475,6 @@ class Tier3Be2SchemaIT {
         row.put("amount", 120000L);
         row.put("status", status);
         row.put("expires_at", NOW);
-        return with(row, overrides);
-    }
-
-    private Map<String, Object> returnRow(long order, String status, Object... overrides) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("code", "TH-IT-" + SEQ.incrementAndGet());
-        row.put("order_id", order);
-        row.put("branch_id", branch);
-        row.put("status", status);
-        row.put("reason_code", "DEFECTIVE");
-        row.put("created_by", staff);
-        return with(row, overrides);
-    }
-
-    private Map<String, Object> refundRow(String method, String status, Object... overrides) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        row.put("code", "HT-IT-" + SEQ.incrementAndGet());
-        row.put("branch_id", branch);
-        row.put("method", method);
-        row.put("amount", 90000L);
-        row.put("status", status);
         return with(row, overrides);
     }
 

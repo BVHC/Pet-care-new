@@ -58,7 +58,7 @@ describe('AdminSystemConfigsPage (T22 - UC10)', () => {
       expect(await screen.findByText('vet.bio_max_length')).toBeInTheDocument();
       expect(await screen.findByText('address.max_per_customer')).toBeInTheDocument(); // khóa thật của BE (V2); khóa cũ customer.address_book_max không tồn tại
       expect(screen.queryByText('customer.address_book_max')).not.toBeInTheDocument();
-      expect(screen.getAllByRole('button', { name: /^Sửa / })).toHaveLength(87); // 87 tham số [CFG] của BE (V2 + V27 + V35 + V40 + V44…V48 + V51 + V52 + V53 + V56 + V57 + V59 + V61 + V66; V51 xóa 6 complaint.*, thêm feedback.retention_days); xem identity-admin.mock.test.ts
+      expect(screen.getAllByRole('button', { name: /^Sửa / })).toHaveLength(85); // 85 tham số [CFG] của BE sau V66 (ADR-0156 gỡ 2 khóa trả hàng / hoàn tiền) và V67 (ADR-0157 thêm 1 công tắc) (V2 + V27 + V35 + V40 + V44…V48 + V51 + V52 + V53 + V56 + V57 + V59 + V61 + V67; V51 xóa 6 complaint.*, thêm feedback.retention_days); xem identity-admin.mock.test.ts
 
       const bioRow = await rowOf('vet.bio_max_length');
       expect(within(bioRow).getByText('500 ký tự')).toBeInTheDocument(); // ô giá trị; mô tả cũng có "VARCHAR(500)" nên không dò /500/

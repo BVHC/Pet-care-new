@@ -103,16 +103,14 @@ public enum ConfigKey {
     AI_CHAT_BUSINESS_INTENT_ENABLED("ai.chat.business_intent_enabled", BOOL),            // BR-AI-31 (V53, docs/adr/0134)
     AI_CHAT_PET_CONTEXT_ENABLED("ai.chat.pet_context_enabled", BOOL),                    // BR-AI-32 (V56, docs/adr/0135)
     AI_CHAT_OPEN_DOMAIN_ENABLED("ai.chat.open_domain_enabled", BOOL),                    // BR-AI-33 chế độ mở (V57, docs/adr/0136)
-    AI_CHAT_INTENT_LLM_ENABLED("ai.chat.intent_llm_enabled", BOOL),                      // BR-AI-26 câu mơ hồ hỏi mô hình (V66, docs/adr/0157)
+    AI_CHAT_INTENT_LLM_ENABLED("ai.chat.intent_llm_enabled", BOOL),                      // BR-AI-26 câu mơ hồ hỏi mô hình (V67, docs/adr/0157)
     AI_INGEST_MAX_FILE_KB("ai.ingest.max_file_kb", INT),                                 // BR-AI-29 (V59, docs/adr/0147)
 
-    // BH online, TG online, trả hàng, bình luận (docs/08 §G, docs/adr/0117; V44, V45, V46, V48)
+    // BH online, TG online, bình luận (docs/08 §G, docs/adr/0117; V44, V45, V48; trả hàng bỏ ở V66, ADR-0156)
     SHOP_PAYMENT_WINDOW_HOURS("shop.payment_window_hours", INT),         // BR-BH-12
     SHOP_AUTO_CONFIRM_DAYS("shop.auto_confirm_days", INT),               // BR-BH-12
     SHOP_MAX_REDELIVERY("shop.max_redelivery", INT),                     // BR-BH-11
     PAYMENT_TXN_TTL_MINUTES("payment.txn_ttl_minutes", INT),             // BR-TG-09
-    PAYMENT_REFUND_MAX_ATTEMPTS("payment.refund_max_attempts", INT),     // BR-TG-14
-    RETURNS_WINDOW_DAYS("returns.window_days", INT),                     // BR-BH-13
     CONTENT_COMMENT_PER_HOUR("content.comment_per_hour", INT),           // BR-BV-08
 
     // TB

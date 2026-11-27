@@ -21,16 +21,15 @@
 | workforce | NS (tầng 3, T51, duyệt T54; ADR-0123) | BE-1 | 17 | [workforce-v1.md](./workforce-v1.md) | [openapi/workforce-v1.yaml](./openapi/workforce-v1.yaml) |
 | ai | AI (tầng 3, T53, duyệt T54; đặc tả đầy đủ [07-ai-subsystem.md](../07-ai-subsystem.md)) | FE-1 (dẫn) · cả nhóm | 14 | [ai-v1.md](./ai-v1.md) | [openapi/ai-v1.yaml](./openapi/ai-v1.yaml) |
 | fees | SP mở rộng (UC32; T52, [08](../08-tang3-be2-spec.md) §A) | BE-2 | 4 | [fees-v1.md](./fees-v1.md) | [openapi/fees-v1.yaml](./openapi/fees-v1.yaml) |
-| shop | BH thương mại điện tử (UC61, 62, 64, 65; [08](../08-tang3-be2-spec.md) §B) | BE-2 | 19 | [shop-v1.md](./shop-v1.md) | [openapi/shop-v1.yaml](./openapi/shop-v1.yaml) |
+| shop | BH thương mại điện tử (UC61, 62, 64, 65; [08](../08-tang3-be2-spec.md) §B) | BE-2 | 18 | [shop-v1.md](./shop-v1.md) | [openapi/shop-v1.yaml](./openapi/shop-v1.yaml) |
 | payment | TG thanh toán online (UC63; [08](../08-tang3-be2-spec.md) §C) | BE-2 | 6 | [payment-v1.md](./payment-v1.md) | [openapi/payment-v1.yaml](./openapi/payment-v1.yaml) |
-| returns | BH, TG trả hàng – hoàn tiền (UC68, 69; [08](../08-tang3-be2-spec.md) §D) | BE-2 | 9 | [returns-v1.md](./returns-v1.md) | [openapi/returns-v1.yaml](./openapi/returns-v1.yaml) |
 | stockops | KO chuyển kho, kiểm kê, truy vết lô (UC77–79; [08](../08-tang3-be2-spec.md) §E) | BE-2 | 13 | [stockops-v1.md](./stockops-v1.md) | [openapi/stockops-v1.yaml](./openapi/stockops-v1.yaml) |
 | branchlife | CN tạm ngừng / đóng cửa (UC13; [08](../08-tang3-be2-spec.md) §F.1) | BE-2 | 4 | [branchlife-v1.md](./branchlife-v1.md) | [openapi/branchlife-v1.yaml](./openapi/branchlife-v1.yaml) |
 | custmerge | KH gộp hồ sơ khách (UC27; [08](../08-tang3-be2-spec.md) §F.2) | BE-2 | 2 | [custmerge-v1.md](./custmerge-v1.md) | [openapi/custmerge-v1.yaml](./openapi/custmerge-v1.yaml) |
 | articlex | BV bài viết của bác sĩ, bình luận (UC80, 82; [08](../08-tang3-be2-spec.md) §F.3) | BE-2 | 14 | [articlex-v1.md](./articlex-v1.md) | [openapi/articlex-v1.yaml](./openapi/articlex-v1.yaml) |
 | inpatient | LT nội trú (UC55, 56; [09](../09-tang3-be1-spec.md) §C) | BE-1 | 10 | [inpatient-v1.md](./inpatient-v1.md) | [openapi/inpatient-v1.yaml](./openapi/inpatient-v1.yaml) |
 | materialuse | KB trừ vật tư tiêu hao (ST07; [09](../09-tang3-be1-spec.md) §E) | BE-1 | 3 | [materialuse-v1.md](./materialuse-v1.md) | [openapi/materialuse-v1.yaml](./openapi/materialuse-v1.yaml) |
-| **Tổng** | | | **347** (232 GĐ1 + 115 tầng 3). Tầng 3 sau khi bỏ khám tại nhà, bỏ khiếu nại ở ADR-0122, thêm 2 endpoint workforce ở ADR-0123, bỏ phẫu thuật `surgery-v1` (8 endpoint) ở ADR-0125 là 113; mốc 14/11/2026 đếm lại theo yaml: identity 38 → 39 (refresh #39, ADR-0091), ai 13 → 14 (import #14, ADR-0134), workforce 16 → 17 (`GET /me/shift-registrations/{weekStart}`, ADR-0148); 24/11/2026: identity 39 → 40 (Google #40, ADR-0152). Duyệt T54 5/11/2026; tầng 3 chưa cài đặt trừ `ai` và `workforce` #1–3 (ca làm việc, T58 bước 2, 17/11) | | |
+| **Tổng** | | | **337** (232 GĐ1 + 105 tầng 3; 27/11/2026: bỏ `returns-v1` 9 endpoint và shop #19 `cancel-failed`, ADR-0156). Trước đó **347** (232 GĐ1 + 115 tầng 3). Tầng 3 sau khi bỏ khám tại nhà, bỏ khiếu nại ở ADR-0122, thêm 2 endpoint workforce ở ADR-0123, bỏ phẫu thuật `surgery-v1` (8 endpoint) ở ADR-0125 là 113; mốc 14/11/2026 đếm lại theo yaml: identity 38 → 39 (refresh #39, ADR-0091), ai 13 → 14 (import #14, ADR-0134), workforce 16 → 17 (`GET /me/shift-registrations/{weekStart}`, ADR-0148); 24/11/2026: identity 39 → 40 (Google #40, ADR-0152). Duyệt T54 5/11/2026; tầng 3 chưa cài đặt trừ `ai` và `workforce` #1–3 (ca làm việc, T58 bước 2, 17/11) | | |
 
 ## Tra nhanh theo use case
 
@@ -49,4 +48,4 @@
 | UC87, UC88 | care |
 | UC89 | report |
 
-Use case tầng 3 (INDEX Bảng 2) chưa có endpoint, trừ phần đã có đặc tả bổ sung GĐ2 (duyệt T54, 5/11/2026): UC34–UC38 → workforce; UC90–UC94 → ai; UC32 → fees; UC61, UC62, UC64, UC65 → shop; UC63 → payment; UC68, UC69 → returns; UC77–UC79 → stockops; UC13 → branchlife; UC27 → custmerge; UC80, UC82 (và duyệt bài, ẩn bình luận của UC81) → articlex; UC55, UC56 → inpatient; ST07 → materialuse (UC85, UC86 và ST16, ST17 đã bỏ, ADR-0122; UC50 đã bỏ, ADR-0125). ST09–ST12, ST14, ST21 là tác vụ hệ thống, không có endpoint riêng.
+Use case tầng 3 (INDEX Bảng 2) chưa có endpoint, trừ phần đã có đặc tả bổ sung GĐ2 (duyệt T54, 5/11/2026): UC34–UC38 → workforce; UC90–UC94 → ai; UC32 → fees; UC61, UC62, UC64, UC65 → shop; UC63 → payment; UC68, UC69 → bỏ (ADR-0156); UC77–UC79 → stockops; UC13 → branchlife; UC27 → custmerge; UC80, UC82 (và duyệt bài, ẩn bình luận của UC81) → articlex; UC55, UC56 → inpatient; ST07 → materialuse (UC85, UC86 và ST16, ST17 đã bỏ, ADR-0122; UC50 đã bỏ, ADR-0125). ST09–ST12, ST14, ST21 là tác vụ hệ thống, không có endpoint riêng.

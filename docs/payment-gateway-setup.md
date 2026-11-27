@@ -49,7 +49,7 @@ Cổng gọi IPN từ internet về BE, nên `localhost` không nhận được.
 - IPN: cổng thử lại tối đa 10 lần, cách nhau 5 phút nếu BE không trả đúng phản hồi. BE xử lý **idempotent** theo mã giao dịch (BR-TG-07, `08` §C) và trả đúng định dạng phản hồi IPN mà tài liệu VNPay quy định (lớp tích hợp VNPay ánh xạ từ `CallbackAck`).
 - **Cần kiểm ở T65:** theo mã mẫu công khai, VNPay gọi IPN bằng `GET` kèm tham số trên query, còn `payment-v1` khai báo `POST /public/payment-gateway/callback`. Chưa kiểm chứng với tài liệu chính thức. Nếu đúng là GET, BE-2 thêm bộ nhận GET trong lớp tích hợp VNPay (ánh xạ về `GatewayCallbackRequest`), ghi ADR, không đổi BR-TG-07.
 - Thẻ test: ngân hàng NCB trong sandbox; số thẻ và OTP lấy từ trang tài liệu sandbox, không chép vào repo.
-- Hoàn tiền qua cổng (T73): API hoàn tiền của VNPay có tài liệu riêng; chưa đọc. BE-2 đọc ở T73, nếu sandbox không hỗ trợ hoàn tiền thì ghi ADR và để hoàn tiền thủ công cho đơn online.
+- ~~Hoàn tiền qua cổng (T73)~~: bỏ ở ADR-0156, không cần đọc API hoàn tiền của VNPay.
 
 ## 6. Nếu chưa có sandbox đến 20/11
 

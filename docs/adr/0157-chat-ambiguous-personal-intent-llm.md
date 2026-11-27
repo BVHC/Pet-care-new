@@ -1,4 +1,4 @@
-# ADR-0157: Câu hỏi cá nhân mơ hồ ở `/me/ai/chat` hỏi Gemini một nhãn; công tắc `ai.chat.intent_llm_enabled` (V66)
+# ADR-0157: Câu hỏi cá nhân mơ hồ ở `/me/ai/chat` hỏi Gemini một nhãn; công tắc `ai.chat.intent_llm_enabled` (V67)
 
 - **Trạng thái:** Proposed (Hiến chọn phương án "B nhẹ" và công tắc trong trang admin ngày 2026-11-27)
 - **Ngày:** 2026-11-27
@@ -18,7 +18,7 @@ BR-AI-26 nhận câu hỏi lịch hẹn / lịch tiêm cá nhân chỉ khi có *
 4. **Nhãn cá nhân** thì trả lời như BR-AI-26 nhận ý định: `PersonalService` dùng dữ liệu DB, câu mẫu, không nhúng, không LLM viết câu trả lời, không ghi nội dung vào nhật ký (BR-AI-24). **`NONE`** thì đi tiếp đường cũ.
 5. **Lỗi không làm hỏng lượt hỏi:** hết khóa, quá giờ, lỗi nhà cung cấp, JSON lạ hoặc nhãn ngoài enum đều coi là `NONE` (hành vi trước ADR này). Không thử lại (BR-AI-10).
 6. **Dữ liệu gửi đi:** câu đã che email / SĐT / số giấy tờ (BR-AI-12a) **và** tên thú (BR-AI-12b); không gửi các câu hỏi trước, không gửi khối thông tin thú. Đây là thay đổi so với ADR-0142: câu cá nhân **mơ hồ** nay rời máy chủ (đã che); câu cá nhân rõ ràng vẫn không.
-7. **Công tắc [CFG] `ai.chat.intent_llm_enabled`** (BOOL, mặc định **`'true'`**, đọc mỗi lượt hỏi, V66): tắt (`'false'`) thì bước này không chạy, chatbot quay về đúng BR-AI-26 cũ. Bật / tắt qua trang cấu hình admin (`PUT /api/system-configs/ai.chat.intent_llm_enabled`).
+7. **Công tắc [CFG] `ai.chat.intent_llm_enabled`** (BOOL, mặc định **`'true'`**, đọc mỗi lượt hỏi, V67): tắt (`'false'`) thì bước này không chạy, chatbot quay về đúng BR-AI-26 cũ. Bật / tắt qua trang cấu hình admin (`PUT /api/system-configs/ai.chat.intent_llm_enabled`).
 8. **Từ khóa:** thêm `có hẹn` vào `[APPOINTMENT]` của `ai-personal-intent.txt` (dùng chung hai endpoint: khách vãng lai gõ "có hẹn sắp tới không" nay nhận lời mời đăng nhập).
 9. **Quan sát:** bộ đếm Micrometer `ai.chat.intent_llm` tag `outcome` = `APPOINTMENT_UPCOMING` | `VACCINATION_SCHEDULE` | `NONE` | `ERROR`, và log INFO `PERSONAL_INTENT_LLM outcome=… durationMs=…` **không có nội dung câu**. Không thêm giá trị mới cho `ai_chat_logs.intent` (CHECK `ck_ai_chat_logs_intent` của V57 không đổi): lượt cá nhân vẫn ghi `APPOINTMENT_UPCOMING` / `VACCINATION_SCHEDULE`.
 10. `LlmClient` có thêm `String classify(String systemPrompt, String userBlock, List<String> labels)` (chung, không biết gì về ý định); hợp đồng ai-v1 và FE không đổi.
@@ -27,7 +27,7 @@ BR-AI-26 nhận câu hỏi lịch hẹn / lịch tiêm cá nhân chỉ khi có *
 
 - **Chi phí:** chỉ câu mơ hồ của khách đã đăng nhập tốn thêm một lượt gọi Gemini (khoảng 1–2 giây). Câu kiến thức về tiêm ("Chó con tiêm phòng dại lúc mấy tuần?" — gợi ý có sẵn trong khung chat) thuộc nhóm này khi người hỏi đã đăng nhập.
 - **Phân loại sai** vẫn có thể xảy ra: câu chung bị coi là cá nhân thì khách nhận danh sách lịch của mình (dữ liệu thật, không bịa); ngược lại thì nhận câu trả lời từ tài liệu như trước ADR này.
-- **Flyway V66 và V65:** V65 (trigger khóa bệnh án, ADR-0153) đang ở overlay `D:/Do-an/.c2-tmp/trg/overlay/`, chưa vào repo, chưa áp 5433. Flyway để `outOfOrder = false`, nên DB nào đã áp V66 sẽ từ chối một V65 đến sau. **Khi đưa trigger vào repo phải đổi số thành V67** (Hiến chấp nhận 27/11/2026). Lần build BE kế tiếp trỏ DB 5433 sẽ ghi V66 lên DB dùng chung.
+- **Flyway V67 và V65:** viết là V66, đổi thành V67 ngày 27/11/2026 vì V66 của BE-2 (ADR-0156, bỏ trả hàng / hoàn tiền) vào `origin/dev` trước. V65 (trigger khóa bệnh án, ADR-0153) đang ở overlay `D:/Do-an/.c2-tmp/trg/overlay/`, chưa vào repo, chưa áp 5433. Flyway để `outOfOrder = false`, nên DB nào đã áp V66 hoặc V67 sẽ từ chối một V65 đến sau. **Khi đưa trigger vào repo phải đổi số thành V68** (Hiến chấp nhận 27/11/2026). Lần build BE kế tiếp trỏ DB 5433 sẽ ghi V66 và V67 lên DB dùng chung.
 - **Số đếm:** 86 → 87 khóa [CFG] (`ConfigKey`, `ConfigKeyTest`, `SystemConfigIT`, seed FE `identity-admin.seed.ts`); khóa `ai.*` 23 → 24.
 - **Test:** `PersonalIntentRouterTest` (câu mơ hồ, `có hẹn`), `ChatIntentLlmTest` (mới: từng nhãn, lỗi, `null`, công tắc tắt, câu rõ ràng, câu không từ khóa, endpoint công khai), `ChatPromptFreezeTest` (ghim lời nhắc phân loại), `GeminiClientTest` (lược đồ và parse nhãn), các test đếm khóa và `SchemaMigrationIT` (thêm 66). Số chạy thật và số đo Gemini ghi ở mục "Kết quả" khi xong.
 

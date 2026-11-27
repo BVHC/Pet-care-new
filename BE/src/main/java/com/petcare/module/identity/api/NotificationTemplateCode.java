@@ -89,14 +89,6 @@ public final class NotificationTemplateCode {
     public static final String PAYMENT_EXPIRED = "PAYMENT_EXPIRED";
     public static final String PAYMENT_EXPIRED_APP = "PAYMENT_EXPIRED_APP";
 
-    // BH, TG — trả hàng và hoàn tiền (docs/08 §D, V40)
-    public static final String RETURN_REQUESTED_APP = "RETURN_REQUESTED_APP";
-    public static final String RETURN_APPROVED_APP = "RETURN_APPROVED_APP";
-    public static final String RETURN_REJECTED_APP = "RETURN_REJECTED_APP";
-    public static final String REFUND_REQUESTED = "REFUND_REQUESTED";
-    public static final String REFUND_REQUESTED_APP = "REFUND_REQUESTED_APP";
-    public static final String REFUND_FAILED_APP = "REFUND_FAILED_APP";
-
     // BV — duyệt bài viết của bác sĩ (docs/08 §F.3, V40)
     public static final String ARTICLE_REVIEW_SUBMITTED_APP = "ARTICLE_REVIEW_SUBMITTED_APP";
     public static final String ARTICLE_REVIEW_APPROVED_APP = "ARTICLE_REVIEW_APPROVED_APP";

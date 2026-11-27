@@ -30,7 +30,6 @@ import { feesRoutes } from './fees.mock';
 import { inpatientRoutes } from './inpatient.mock';
 import { materialUseRoutes } from './materialuse.mock';
 import { paymentRoutes } from './payment.mock';
-import { returnsRoutes } from './returns.mock';
 import { shopRoutes } from './shop.mock';
 import { stockopsRoutes } from './stockops.mock';
 import { workforceRoutes } from './workforce.mock';
@@ -67,7 +66,6 @@ const ROUTES: Record<string, MockHandler> = {
   ...feesRoutes,
   ...shopRoutes,
   ...paymentRoutes,
-  ...returnsRoutes,
   ...branchlifeRoutes,
   ...custmergeRoutes,
   ...articlexRoutes,
