@@ -119,6 +119,7 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
     <button role="tab" data-tab="seq">Tuần tự</button>
     <button role="tab" data-tab="class">Lớp thực thể</button>
     <button role="tab" data-tab="db">Database</button>
+    <button role="tab" data-tab="erd">ERD báo cáo</button>
   </div>
   <div class="tools">
     <span class="lbl">Chế độ</span>
@@ -156,7 +157,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const store={get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem(k)}catch(e){}}};
 
 /* ---------- trạng thái ---------- */
-const S={tab:'uc',mode:'view',keysOnly:false,sel:{class:new Set([DATA.groups[0].id]),db:new Set([DATA.groups[0].id]),ucd:'UC01',seq:'TT.1'},k:1,tx:0,ty:0,pick:null,hover:null};
+const S={tab:'uc',mode:'view',keysOnly:false,keysErd:true,sel:{class:new Set([DATA.groups[0].id]),db:new Set([DATA.groups[0].id]),ucd:'UC01',seq:'TT.1',erd:'A'},k:1,tx:0,ty:0,pick:null,hover:null};
 let nodes=new Map(),edges=[],zones=[],stage=$('#stage'),vp=null,gEdges=null,gNodes=null,gZones=null,info=null;
 const grpTitle=Object.fromEntries(DATA.groups.map(g=>[g.id,g.title]));
 
@@ -210,7 +211,7 @@ function dbNode(t,ghostCols,needCols){
   const ghost=!!ghostCols;
   let cols=t.cols;
   if(ghost)cols=t.cols.filter(c=>ghostCols.has(c.n));
-  else if(S.keysOnly)cols=t.cols.filter(c=>c.pk||c.fk||c.uq||needCols.has(c.n));
+  else if(keysOn())cols=t.cols.filter(c=>c.pk||c.fk||c.uq||needCols.has(c.n));
   const hidden=ghost?0:t.cols.length-cols.length;
   const nn=cols.map(c=>c.n+(c.nn?'':'?'));
   const maxName=Math.max(60,...nn.map(s=>tw(s,F.nm))), maxTyp=Math.max(30,...cols.map(c=>tw(c.t,F.typ)));
@@ -294,6 +295,18 @@ function layered(ids,links,opt){
   W=Math.max(0,x-opt.gapX);return{pos,w:W,h:H};
 }
 
+/* lưới cho ERD báo cáo: tối đa `cols` cột, bảng cha (ít phụ thuộc) xếp trước nên nằm ở hàng trên; vừa khổ A4 dọc */
+function gridLayout(ids,links,opt){
+  const par=new Map(ids.map(i=>[i,[]]));for(const [p,c] of links)if(p!==c&&par.has(p)&&par.has(c))par.get(c).push(p);
+  const depth=new Map(),dep=(n,s=new Set())=>{if(depth.has(n))return depth.get(n);if(s.has(n))return 0;s.add(n);let d=0;for(const p of par.get(n))d=Math.max(d,dep(p,s)+1);s.delete(n);depth.set(n,d);return d};
+  const order=[...ids].sort((a,b)=>dep(a)-dep(b)||a.localeCompare(b)),cols=Math.min(opt.cols,order.length);
+  const rows=Math.ceil(order.length/cols),cw=Array(cols).fill(0),rh=Array(rows).fill(0);
+  order.forEach((id,i)=>{const s=opt.size(id),c=i%cols,r=Math.floor(i/cols);cw[c]=Math.max(cw[c],s.w);rh[r]=Math.max(rh[r],s.h)});
+  const cx=[],ry=[];let x=0,y=0;cw.forEach((w,i)=>{cx[i]=x;x+=w+opt.gapX});rh.forEach((h,i)=>{ry[i]=y;y+=h+opt.gapY});
+  const pos=new Map();order.forEach((id,i)=>pos.set(id,[cx[i%cols],ry[Math.floor(i/cols)]]));
+  return{pos,w:Math.max(0,x-opt.gapX),h:Math.max(0,y-opt.gapY)};
+}
+
 /* ---------- dựng cảnh ---------- */
 function clearScene(){
   stage.innerHTML='';nodes=new Map();edges=[];zones=[];
@@ -302,17 +315,25 @@ function clearScene(){
 }
 const sizeOf=id=>{const n=nodes.get(id);return{w:n.w,h:n.h}};
 
+/* ---------- ERD rút gọn cho báo cáo: chỉ bảng của hình đang xem; bỏ khóa ngoại tới bảng không chọn, và tới accounts (trừ hình B) ---------- */
+const curFig=()=>DATA.erd.figs.find(f=>f.id===S.sel.erd)||DATA.erd.figs[1];
+const keysOn=()=>S.tab==='erd'?S.keysErd:S.keysOnly;
+function erdTables(fig){
+  const keep=new Set(DATA.erd.keep),figSet=new Set(fig.tables),accOk=fig.id==='B';
+  return DATA.db.filter(t=>figSet.has(t.name)).map(t=>({...t,cols:t.cols.map(c=>c.fk&&!(keep.has(c.fk.t)&&(c.fk.t!=='accounts'||accOk))?{...c,fk:undefined}:c)}));
+}
 function buildRelational(tab){
-  const selSet=S.sel[tab];
-  const all=selSet.size===DATA.groups.length;
-  const src=tab==='db'?DATA.db:DATA.classes;
+  const erd=tab==='erd',isDb=tab!=='class',fig=erd?curFig():null;
+  const selSet=erd?new Set(DATA.groups.map(g=>g.id)):S.sel[tab];
+  const all=!erd&&selSet.size===DATA.groups.length;
+  const src=erd?erdTables(fig):tab==='db'?DATA.db:DATA.classes;
   const inSel=t=>selSet.has(t.group);
   const own=src.filter(inSel);
   const ownIds=new Set(own.map(t=>t.id||t.name));
   const need=new Set();           // cột được tham chiếu (giữ lại ở chế độ chỉ khóa)
   // cạnh
   let E=[];
-  if(tab==='db'){
+  if(isDb){
     for(const t of own)for(const c of t.cols)if(c.fk)E.push({from:t.name,to:c.fk.t,col:c.n,tcol:c.fk.c});
     E.forEach(e=>need.add(e.tcol));
   }else{
@@ -322,31 +343,31 @@ function buildRelational(tab){
   for(const e of E)if(!ownIds.has(e.to))ghostIds.add(e.to);
   if(all)ghostIds.clear();
   // nút
-  const byId=tab==='db'?Object.fromEntries(DATA.db.map(t=>[t.name,t])):Object.fromEntries(DATA.classes.map(c=>[c.id,c]));
-  const gcol={};E.forEach(e=>{if(tab==='db'&&!ownIds.has(e.to))(gcol[e.to]??=new Set()).add(e.tcol)});
-  const mk=(id,ghost)=>tab==='db'?dbNode(byId[id],ghost?gcol[id]:null,need):classNode(byId[id],ghost);
+  const byId=isDb?Object.fromEntries((erd?[...DATA.db,...src]:DATA.db).map(t=>[t.name,t])):Object.fromEntries(DATA.classes.map(c=>[c.id,c]));
+  const gcol={};E.forEach(e=>{if(isDb&&!ownIds.has(e.to))(gcol[e.to]??=new Set()).add(e.tcol)});
+  const mk=(id,ghost)=>isDb?dbNode(byId[id],ghost?gcol[id]:null,need):classNode(byId[id],ghost);
   for(const t of own)mk(t.id||t.name,false);
   for(const gid of ghostIds)mk(gid,true); // bảng/lớp ngoài phân hệ: nét đứt, bảng chỉ hiện cột được tham chiếu
   // bố cục theo cụm
   const clusters=[];
-  const groupsShown=DATA.groups.filter(g=>selSet.has(g.id));
+  const groupsShown=erd?[{id:'~fig',title:fig.title}]:DATA.groups.filter(g=>selSet.has(g.id));
   const linksOf=ids=>{const s=new Set(ids);return E.filter(e=>s.has(e.from)&&s.has(e.to)).map(e=>[e.to,e.from])};
   for(const g of groupsShown){
-    const ids=own.filter(t=>t.group===g.id).map(t=>t.id||t.name);
-    const L=layered(ids,linksOf(ids),{size:sizeOf,gapX:tab==='db'?130:120,gapY:28,maxH:tab==='db'?1300:1100});
+    const ids=(erd?own:own.filter(t=>t.group===g.id)).map(t=>t.id||t.name);
+    const L=erd?gridLayout(ids,linksOf(ids),{size:sizeOf,cols:fig.cols,gapX:90,gapY:34}):layered(ids,linksOf(ids),{size:sizeOf,gapX:isDb?130:120,gapY:28,maxH:isDb?1300:1100});
     clusters.push({key:g.id,title:g.title,ids,L});
   }
   const ghostList=[...nodes.values()].filter(n=>n.ghost).map(n=>n.id);
   const PAD=24,HEAD=30;
   let cx=0,cy=0,rowH=0;const GAP=60;
   if(ghostList.length){
-    const L=layered(ghostList,[],{size:sizeOf,gapX:40,gapY:20,maxH:1400});
-    clusters.unshift({key:'~ghost',title:'Ngoài phân hệ (tham chiếu)',ids:ghostList,L,ghost:true});
+    const L=erd?gridLayout(ghostList,[],{size:sizeOf,cols:fig.cols,gapX:90,gapY:20}):layered(ghostList,[],{size:sizeOf,gapX:40,gapY:20,maxH:1400});
+    clusters.unshift({key:'~ghost',title:erd?'Ngoài hình (tham chiếu)':'Ngoài phân hệ (tham chiếu)',ids:ghostList,L,ghost:true});
   }
   for(const c of clusters){c.w=c.L.w+2*PAD;c.h=c.L.h+2*PAD+HEAD}
   // khổ ngang ~1.7:1; luôn đủ chỗ cho cụm lớn nhất kèm cụm tham chiếu bên trái
   const area=clusters.reduce((a,c)=>a+(c.w+GAP)*(c.h+GAP),0),widest=Math.max(...clusters.filter(c=>!c.ghost).map(c=>c.w),0),gw=ghostList.length?clusters[0].w+GAP:0;
-  const MAXW=Math.max(Math.sqrt(area*1.7),widest+gw);
+  const MAXW=erd?1:Math.max(Math.sqrt(area*1.7),widest+gw); // erd: mỗi cụm một hàng, khối ngoài hình ở trên cùng
   for(const c of clusters){
     const w=c.w,h=c.h;
     if(cx>0&&cx+w>MAXW){cx=0;cy+=rowH+GAP;rowH=0}
@@ -371,8 +392,8 @@ function buildEdges(tab,E,ownIds,all){
     const g=el('g',{class:'edge'+(e.comp?' comp':'')},gEdges);
     const ln=el('path',{class:'ln'},g);
     const ed={i:i++,a,b,g,ln,e,col:e.col,tcol:e.tcol,jit:((i*37)%9-4)*5};
-    const gid=tab==='db'?a.t.group:a.c.group;
-    if(tab==='db'){ln.setAttribute('style',`stroke:${lineCol(gid)}`);ln.setAttribute('marker-start',cmark('dot',gid));ln.setAttribute('marker-end',cmark('open',gid))}
+    const gid=tab!=='class'?a.t.group:a.c.group;
+    if(tab!=='class'){ln.setAttribute('style',`stroke:${lineCol(gid)}`);ln.setAttribute('marker-start',cmark('dot',gid));ln.setAttribute('marker-end',cmark('open',gid))}
     else{if(!e.comp)ln.setAttribute('style',`stroke:${lineCol(gid)}`);ln.setAttribute('marker-end',e.comp?'url(#m-dia)':cmark('open',gid));
       ed.l0=mlabel(g,e.mFrom);ed.l1=mlabel(g,e.mTo)}
     edges.push(ed);
@@ -511,7 +532,7 @@ function focus(){
 }
 
 /* lưu vị trí kéo */
-const viewKey=()=>S.tab==='uc'?'uc':S.tab==='ucd'?'ucd:'+S.sel.ucd:S.tab==='seq'?'seq:'+S.sel.seq:`${S.tab}:${[...S.sel[S.tab]].sort().join(',')}:${S.keysOnly?'k':'f'}`;
+const viewKey=()=>S.tab==='uc'?'uc':S.tab==='ucd'?'ucd:'+S.sel.ucd:S.tab==='seq'?'seq:'+S.sel.seq:S.tab==='erd'?'erd:'+S.sel.erd+':'+(S.keysErd?'k':'f'):`${S.tab}:${[...S.sel[S.tab]].sort().join(',')}:${S.keysOnly?'k':'f'}`;
 function savePos(){const o={};nodes.forEach(n=>o[n.id]=[Math.round(n.x),Math.round(n.y)]);store.set('pcd:'+viewKey(),o)}
 function loadPos(){const o=store.get('pcd:'+viewKey());if(!o)return;nodes.forEach(n=>{if(o[n.id]){n.x=o[n.id][0];n.y=o[n.id][1]}})}
 
@@ -792,9 +813,9 @@ function onPick(n){
 }
 
 /* ---------- chú giải (dùng cho màn hình và ảnh xuất) ---------- */
-function legend(tab){
+function legend(tab,maxW=1240){
   const svg=el('svg',{class:'dg'});defs(svg);const g=el('g',null,svg);
-  let x=0,row=0,maxX=0;const Y=22,MAXW=1240,RH=32;
+  let x=0,row=0,maxX=0;const Y=22,MAXW=maxW,RH=32;
   const item=(w,draw,label)=>{
     const gg=el('g',null,g);const dw=draw(gg);if(typeof dw==='number')w=dw;
     const total=w+8+tw(label,`11px ${MONO}`);
@@ -841,7 +862,7 @@ function legend(tab){
       item(0,p=>{txt(p,0,Y+4,'tên?','nm mut');return 30},'cột cho phép NULL');
       item(40,p=>el('path',{d:`M0,${Y}H40`,stroke:'#4f5d75','stroke-width':1,'marker-start':'url(#m-dot)','marker-end':'url(#m-open)'},p),'FK → cột được tham chiếu (ON DELETE RESTRICT)');
     }
-    item(36,ghost,tab==='class'?'Lớp ngoài phân hệ':'Bảng ngoài phân hệ');
+    item(36,ghost,tab==='class'?'Lớp ngoài phân hệ':tab==='erd'?'Bảng ngoài hình (chỉ cột được tham chiếu)':'Bảng ngoài phân hệ');
   }
   const W=Math.ceil(maxX),H=(row+1)*RH+12;svg.setAttribute('width',W);svg.setAttribute('height',H);svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
   return{svg,w:W,h:H,g};
@@ -853,6 +874,7 @@ const CAP={
   ucd:()=>'Mỗi use case phân rã thành các chức năng con = thao tác trong <code>docs/api</code> (bảng thao tác và ma trận tác nhân); một chức năng con có thể gộp các thao tác cùng loại, ví dụ xem danh sách và chi tiết. Tác nhân gộp theo quy ước của sơ đồ tổng quát. Quan hệ include/extend lấy từ <code>docs/01</code> mục C. Quy tắc nghiệp vụ gom từ cột Rule của hợp đồng API.',
   seq:()=>`Thứ tự thao tác lấy từ phần mô tả đầu lớp dịch vụ trong mã nguồn (ngày 26/11/2026) và từ quy tắc nghiệp vụ; <b>chưa chạy thử từng luồng để quan sát</b>. <code>alt</code>: các trường hợp loại trừ nhau; <code>opt</code>: bước có điều kiện; <code>loop</code>: lặp. Nguồn: ${curSeq().src}`,
   class:()=>`Lớp có entity Java thật: ${DATA.classes.filter(c=>c.java).length}/${DATA.classes.length}, thao tác lấy từ method nghiệp vụ (bỏ get/set); lớp còn lại suy ra từ bảng. Khóa ngoại thể hiện bằng quan hệ, không liệt kê trong thuộc tính. Mọi lớp kế thừa <code>TimestampedEntity</code> (createdAt, updatedAt). Chỉ vẽ quan hệ đi ra khỏi phân hệ đang xem. Bỏ 2 bảng không dùng (surgeries, branch_home_visit_fees).`,
+  erd:()=>`<b>ERD rút gọn: ${DATA.erd.keep.length} trong ${DATA.meta.tables} bảng</b>, chọn theo 30 use case đặc tả chi tiết của báo cáo (không phải toàn bộ 85 use case), chia 5 hình theo luồng nghiệp vụ. Không vẽ khóa ngoại tới ${DATA.meta.tables-DATA.erd.keep.length} bảng không chọn, và khóa ngoại tới <code>accounts</code> (người tạo, người sửa…) ngoài hình B; các cột đó bị ẩn và tính vào "+ N cột khác". Khóa ngoại sang bảng của hình khác vẽ tới khối nét đứt. Danh sách đủ ${DATA.meta.tables} bảng nằm ở tab Database.`,
   db:()=>`Schema thật theo ${DATA.meta.migrations} migration (V1–V64): ${DATA.meta.tables} bảng, ${DATA.meta.fks} khóa ngoại, <b>mọi khóa ngoại đều ON DELETE RESTRICT</b> (không CASCADE). Chỉ vẽ khóa ngoại đi ra khỏi phân hệ đang xem. surgeries và branch_home_visit_fees còn trong DB nhưng không dùng (nét đứt). Tạo ngày ${DATA.meta.builtAt}.`,
 };
 function renderSide(){
@@ -881,6 +903,14 @@ function renderSide(){
     const on=$('.chip[aria-pressed=true]',side);if(on)on.scrollIntoView({block:'nearest'});
     return;
   }
+  if(S.tab==='erd'){
+    side.innerHTML=`<h2>ERD rút gọn · ${DATA.erd.keep.length}/${DATA.meta.tables} bảng</h2><div class="chips">${DATA.erd.figs.map(f=>`<button class="chip" style="--c:#4f5d75" data-f="${f.id}" aria-pressed="${f.id===S.sel.erd}"><span><i class="dot"></i>${f.title}</span><small>${f.tables.length}</small></button>`).join('')}</div>
+    <h2 style="margin-top:14px">Hiển thị</h2><label><input type="checkbox" id="kOnly" ${S.keysErd?'checked':''}> Chỉ cột khóa (PK, FK, UQ)</label>
+    <p class="hint">Số bên phải là số bảng của hình. Khối nét đứt bên trái là bảng của hình khác mà hình đang xem tham chiếu tới.</p>`;
+    $$('.chip',side).forEach(b=>b.onclick=()=>{S.sel.erd=b.dataset.f;rebuild()});
+    $('#kOnly',side).onchange=e=>{S.keysErd=e.target.checked;rebuild()};
+    return;
+  }
   if(S.tab==='uc'){side.innerHTML='<h2>Chi tiết</h2><div id="ucinfo"></div>';onPick(null);return}
   const tab=S.tab,src=tab==='db'?DATA.db:DATA.classes;
   const cnt=Object.fromEntries(DATA.groups.map(g=>[g.id,src.filter(t=>t.group===g.id).length]));
@@ -895,11 +925,12 @@ function renderSide(){
 }
 
 /* ---------- vòng đời ---------- */
-const TITLES={uc:'Biểu đồ Use Case tổng quát',ucd:'Sơ đồ use case chi tiết',seq:'Sơ đồ tuần tự',class:'Biểu đồ lớp thực thể',db:'Cơ sở dữ liệu (Database schema)'};
+const TITLES={uc:'Biểu đồ Use Case tổng quát',ucd:'Sơ đồ use case chi tiết',seq:'Sơ đồ tuần tự',erd:'ERD rút gọn cho báo cáo',class:'Biểu đồ lớp thực thể',db:'Cơ sở dữ liệu (Database schema)'};
 function viewLabel(){
   if(S.tab==='ucd'){const d=curUc(),ids=[...new Set(d.subs.flatMap(x=>x.a))].map(a=>a==='USER'?'A02–A08':a==='STAFF'?'A05–A08':a);return 'Phân hệ '+DATA.uc.modules.find(m=>m.id===d.module).title+' · '+d.subs.length+' chức năng · tác nhân '+ids.join(', ')}
   if(S.tab==='seq'){const d=curSeq();return `${d.uc?d.uc+' · ':''}${d.msgs} thông điệp · ${d.parts.length} cột`}
   if(S.tab==='uc')return 'Toàn hệ thống · 19 phân hệ · 85 use case';
+  if(S.tab==='erd'){const f=curFig();return `${f.tables.length}/${DATA.meta.tables} bảng của hệ thống · không vẽ khóa ngoại tới ${f.id==='B'?'':'accounts và tới '}${DATA.meta.tables-DATA.erd.keep.length} bảng không chọn`}
   const s=S.sel[S.tab];if(s.size===DATA.groups.length)return 'Tất cả phân hệ';
   return 'Phân hệ: '+[...s].map(g=>grpTitle[g]).join(', ');
 }
@@ -923,7 +954,7 @@ window.addEventListener('resize',()=>{});
 /* ---------- xuất ảnh ---------- */
 function toast(s){const t=$('#toast');t.textContent=s;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),2600)}
 function buildExport(){
-  const b=bbox(),PAD=36,TOP=64,lg=legend(S.tab);
+  const b=bbox(),PAD=36,TOP=64,lg=legend(S.tab,S.tab==='erd'?Math.max(560,b.width):1240);
   const W=Math.ceil(Math.max(b.width+2*PAD,lg.w+2*PAD,520)),H=Math.ceil(TOP+b.height+PAD+lg.h+PAD/2+18);
   const out=el('svg',{xmlns:NS,class:'dg',width:W,height:H,viewBox:`0 0 ${W} ${H}`,role:'img','aria-labelledby':'x-title x-desc'});
   const t=el('title',{id:'x-title'},out);t.textContent=TITLES[S.tab];
@@ -932,7 +963,7 @@ function buildExport(){
   const dd=stage.querySelector('defs').cloneNode(true);out.appendChild(dd);
   const pt=el('pattern',{id:'x-dots',width:22,height:22,patternUnits:'userSpaceOnUse'},dd);el('circle',{cx:1,cy:1,r:1,fill:'rgba(45,49,66,.16)'},pt);
   el('rect',{width:W,height:H,fill:'#f5f5f5'},out);el('rect',{width:W,height:H,fill:'url(#x-dots)'},out);
-  txt(out,PAD,34,S.tab==='ucd'?'Use case '+curUc().uc+': '+curUc().title:S.tab==='seq'?'Tuần tự '+curSeq().id+': '+curSeq().title:TITLES[S.tab]+' — Pet Care','ttl');
+  txt(out,PAD,34,S.tab==='ucd'?'Use case '+curUc().uc+': '+curUc().title:S.tab==='seq'?'Tuần tự '+curSeq().id+': '+curSeq().title:S.tab==='erd'?'ERD rút gọn — '+curFig().title:TITLES[S.tab]+' — Pet Care','ttl');
   txt(out,PAD,52,viewLabel(),'stt');
   const cp=vp.cloneNode(true);cp.removeAttribute('id');cp.setAttribute('transform',`translate(${PAD-b.x + (W-2*PAD-b.width)/2},${TOP-b.y})`);
   $$('.hl,.pick,.focus',cp).forEach(x=>x.classList.remove('hl','pick','focus'));
@@ -948,7 +979,7 @@ function inlineVars(xml){
   return out;
 }
 function download(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
-function fname(ext){if(S.tab==='seq')return 'petcare-tuan-tu-'+S.sel.seq.replace('.','')+'.'+ext;if(S.tab==='ucd')return 'petcare-uc-chi-tiet-'+S.sel.ucd+'.'+ext;const v=S.tab==='uc'?'usecase':S.tab==='class'?'lop-thuc-the':'db-schema';const s=S.tab==='uc'?'':'-'+(S.sel[S.tab].size===DATA.groups.length?'tat-ca':[...S.sel[S.tab]].join('+'));return `petcare-${v}${s}.${ext}`}
+function fname(ext){if(S.tab==='erd')return 'petcare-erd-'+S.sel.erd+'.'+ext;if(S.tab==='seq')return 'petcare-tuan-tu-'+S.sel.seq.replace('.','')+'.'+ext;if(S.tab==='ucd')return 'petcare-uc-chi-tiet-'+S.sel.ucd+'.'+ext;const v=S.tab==='uc'?'usecase':S.tab==='class'?'lop-thuc-the':'db-schema';const s=S.tab==='uc'?'':'-'+(S.sel[S.tab].size===DATA.groups.length?'tat-ca':[...S.sel[S.tab]].join('+'));return `petcare-${v}${s}.${ext}`}
 async function doExport(kind){
   try{
     const{svg,W,H}=buildExport();

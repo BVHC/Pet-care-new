@@ -8,6 +8,7 @@ import { USE_CASES, ACTORS, MODULES_UC, ucLinks, layoutUC } from './usecases.mjs
 import { DETAIL } from './ucdetail.mjs';
 import { parseApi } from './parse-api.mjs';
 import { parseSequences } from './sequence.mjs';
+import { ERD_FIGS, ERD_KEEP, ERD_ALL, checkErd } from './erd-report.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '../../..');
@@ -193,6 +194,7 @@ const data = {
   uc: { actors: ACTORS, modules: MODULES_UC, cases: USE_CASES, links: ucLinks(), pos: layoutUC(ucLinks()) },
   ucd,
   seq: parseSequences(ROOT),
+  erd: (checkErd(dbTables.map(t => t.name)), { keep: ERD_KEEP, figs: [ERD_ALL, ...ERD_FIGS] }),
 };
 const tpl = readFileSync(join(HERE, 'template.html'), 'utf8');
 const out = join(ROOT, 'docs/diagrams/petcare-system-diagrams.html');
