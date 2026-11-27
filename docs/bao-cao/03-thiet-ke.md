@@ -193,7 +193,7 @@ Các ràng buộc dưới đây là lưới an toàn cuối cùng: service kiể
 
 *Nguồn: `docs/05-erd.md` các mục bảng và mục 13.*
 
-**Migration.** Schema do Flyway (công cụ áp các tệp SQL đánh số theo thứ tự) sở hữu, ứng dụng chạy với `ddl-auto=validate` nên entity phải khớp bảng. Có **63 tệp migration**, V1 đến V64. V49 để trống có chủ đích: cơ sở dữ liệu đã áp V50 sẽ không khởi động nếu V49 xuất hiện sau (ADR-0114). Migration đã áp không được sửa (Flyway kiểm checksum) và không có bản lùi; muốn đổi thì thêm migration mới (số kế tiếp V65).
+**Migration.** Schema do Flyway (công cụ áp các tệp SQL đánh số theo thứ tự) sở hữu, ứng dụng chạy với `ddl-auto=validate` nên entity phải khớp bảng. Có **64 tệp migration**, V1 đến V64 và V66 (V66 viết ngày 27/11/2026, chưa áp lên DB demo). V49 để trống có chủ đích: cơ sở dữ liệu đã áp V50 sẽ không khởi động nếu V49 xuất hiện sau (ADR-0114). Migration đã áp không được sửa (Flyway kiểm checksum) và không có bản lùi; muốn đổi thì thêm migration mới (số kế tiếp V67; V65 sẽ bỏ trống mãi vì trigger khóa bệnh án, viết với số V65, sẽ vào cây mã với số V67 do V66 đã đi trước).
 
 Sáu hình dưới là ER rút gọn theo nhóm nghiệp vụ, chỉ vẽ bảng chính với khóa chính (PK), khóa ngoại (FK), khóa duy nhất (UK) và vài cột đặc trưng; các bảng còn lại, `document_counters` và hai bảng không dùng nằm ở phụ lục mô tả từng bảng.
 

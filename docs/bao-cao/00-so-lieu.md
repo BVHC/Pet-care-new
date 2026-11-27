@@ -18,7 +18,7 @@
 | Endpoint (hợp đồng HTTP v1) | 232, 12 module | **345** thao tác trong 24 file = 231 giai đoạn 1 + 114 tầng 3 và AI | **347** trong 24 file = **232** giai đoạn 1 (12 module) + **115** tầng 3 và AI (12 module). Thêm `identity` #40 (đăng nhập Google) và `workforce` #17 | `node docs/api/check-contracts.mjs` → "ALL CONTRACTS PASS — 24 file, 347 operations"; `count.py` cùng ra 347 |
 | Handler backend | — | **263** annotation | **297** annotation; **297 / 297** khớp một-một với thao tác của hợp đồng theo (method, path) | `git grep -hE '@(Get\|Post\|Put\|Patch\|Delete)Mapping' -- BE/src/main/java \| wc -l` → 297; `count-ops.py` → "khớp 297 / 347; không có trong hợp đồng: 0" |
 | Bảng cơ sở dữ liệu | 52 model / 55 bảng | `docs/05` có **59** mục bảng. Schema thật có **88** bảng (90 tạo, 2 bị xóa ở V51); 2 bảng giữ lại không dùng (`surgeries`, `branch_home_visit_fees`), nên **86** đang dùng | **88** (90 − 2), không đổi; `docs/05` **59** mục. 29 bảng của schema chưa có mục trong `docs/05` (nằm ở `docs/07`, `08`, `09`) | `count.py`, `count2.py` (đếm `CREATE TABLE`, trừ `DROP TABLE`) |
-| Migration Flyway | — | **57** file, V1–V58; V49 để trống | **63** file, V1–V64; V49 vẫn trống có chủ đích (ADR-0114). Số kế tiếp V65 | `ls BE/src/main/resources/db/migration \| wc -l` → 63 |
+| Migration Flyway | — | **57** file, V1–V58; V49 để trống | **64** file, V1–V64 và V66 (V66 viết 27/11/2026, ADR-0157, chưa áp DB demo); V49 vẫn trống có chủ đích (ADR-0114); V65 sẽ bỏ trống mãi như V49: trigger khóa bệnh án (ADR-0153) được viết với số V65 nhưng khi vào cây mã sẽ lấy số V67, vì V66 đã đi trước và Flyway chạy với `outOfOrder = false`. Số kế tiếp V67 | `ls BE/src/main/resources/db/migration \| wc -l` → 64 (27/11/2026) |
 | Quyết định kiến trúc (ADR) | — | **144** file, 140 số khác nhau; số lớn nhất 0146; 4 số trùng | **152** file (không tính `INDEX.md`), **146** số khác nhau; số lớn nhất 0152. **6 số trùng**, mỗi số hai file nên khi trích dẫn phải ghi tên file: 0088, 0122, 0123, 0124, 0148, 0149. Trạng thái: 129 Accepted, 18 Proposed, 5 chưa phân loại (dòng trạng thái không đọc được bằng biểu thức chính quy) | `ls docs/adr`; `count.py` |
 | Số thư mục `module/` đã có mã | — | 17 | **19** | `ls BE/src/main/java/com/petcare/module` |
 
@@ -96,7 +96,7 @@ Chỉ dùng ở chương 5 và mục 1.3. Số tạm, **ghi nhận từ các l�
 | Lớp `*Job` | 26 | `git ls-files 'BE/src/main/java/**/*Job.java' \| wc -l` |
 | Annotation `@Scheduled` | 28 | `git grep -h '@Scheduled' -- BE/src/main/java \| wc -l` |
 | Sự kiện đồng bộ (record `*Event` trong gói `api`) | 7: `PetDeceasedEvent`, `PetOwnerTransferredEvent`, `BranchClinicCancellationEvent`, `AccountLockedEvent`, `AccountUnlockedEvent`, `StaffLeftBranchEvent`, `CustomerMergedEvent` (khai báo, chưa có bên phát) | `git ls-files 'BE/src/main/java/**/api/*Event.java'` |
-| Khóa cấu hình [CFG] (`ConfigKey`) | 86 | đếm hằng số trong `ConfigKey.java` |
+| Khóa cấu hình [CFG] (`ConfigKey`) | 87 | đếm hằng số trong `ConfigKey.java` (27/11/2026: +1 `ai.chat.intent_llm_enabled`, V66, ADR-0157; trước đó 86) |
 | Thư mục module có mã | 19: ai, appointment, boarding, branch, care, catalog, content, customer, fees, identity, inpatient, inventory, payment, report, returns, sales, shop, visit, workforce | `ls BE/src/main/java/com/petcare/module` |
 | Module trong đặc tả `docs/06` mục 2 | 24 (11 nhóm miền + `report` + 12 tầng 3 và AI) | đếm hàng bảng mục 2 |
 | Vai trò tài khoản | 7: CUSTOMER, ADMIN, SUPER_MANAGER, BRANCH_MANAGER, RECEPTIONIST, VET, CARETAKER | `docs/05` (`accounts.role`); ADR-0003 |
@@ -135,9 +135,9 @@ Chỉ dùng ở chương 5 và mục 1.3. Số tạm, **ghi nhận từ các l�
 | Origin CORS mặc định của backend | 2: cổng 5173 và 3000 |
 | Bắt buộc có | biến `JWT_SECRET`; thiếu `GEMINI_API_KEY` thì chatbot không khả dụng; thiếu `GOOGLE_CLIENT_ID` thì đăng nhập Google trả 503 |
 
-## Bảng S.5. Số đo phân hệ AI (ghi nhận, không đo lại ngày 25/11)
+## Bảng S.5. Số đo phân hệ AI (ghi nhận, không đo lại ngày 25/11; riêng dòng 9 đo ngày 27/11)
 
-**Mọi dòng dưới đây là số ghi nhận từ tài liệu và tệp kết quả của nhóm; không đo lại.** Docker tắt ngày 25/11 nên không đọc được DB demo. Mỗi lần đo dùng kho tri thức, cây mã và định nghĩa p95 khác nhau; **không so sánh các lần đo khác kho**. Ba định nghĩa p95: spike (đo ở máy khách, chỉ lệnh thành công, bỏ giãn nhịp và chờ thử lại); T77 (cột `latency_ms` do backend ghi, chỉ đường gọi mô hình không lỗi); bộ v2 (đường gọi mô hình theo từng cấu hình).
+**Dòng 1 đến 8 dưới đây là số ghi nhận từ tài liệu và tệp kết quả của nhóm; không đo lại. Dòng 9 là lần đo mới ngày 27/11/2026.** Docker tắt ngày 25/11 nên không đọc được DB demo. Mỗi lần đo dùng kho tri thức, cây mã và định nghĩa p95 khác nhau; **không so sánh các lần đo khác kho**. Ba định nghĩa p95: spike (đo ở máy khách, chỉ lệnh thành công, bỏ giãn nhịp và chờ thử lại); T77 (cột `latency_ms` do backend ghi, chỉ đường gọi mô hình không lỗi); bộ v2 (đường gọi mô hình theo từng cấu hình).
 
 | # | Lần đo, ngày | Nguồn | Cây mã; kho tri thức | Kết quả |
 |---|---|---|---|---|
@@ -149,12 +149,13 @@ Chỉ dùng ở chương 5 và mục 1.3. Số tạm, **ghi nhận từ các l�
 | 6 | Baseline 43 câu trên kho mới, 16/11 | `t77-t92-base.*` | BE 8089; kho 35 | **34 / 43**; p95 2 786 ms (29 lượt); `UNAVAILABLE` 0 |
 | 7 | T92b điều tra, 18/11 | `t77-t92b-*`; `ket-qua-t92b-dieu-tra.md`; ADR-0136 "Điều tra T92b" | mã `ce9ec0b`; kho 35 rồi 39; 189 lệnh gọi Google | cấu hình demo **35 / 43**; nạp thử 4 tài liệu **38 / 43**; nạp thật vào DB demo (id 67–70): 4 câu liên quan đạt, chỉ đo 4 câu. Q09 là ca đầu tiên truy hồi vector chưa đủ (đoạn đúng ở hạng 6, cắt bởi K = 5) |
 | 8 | Kiểm giới hạn nạp tệp, 19/11 | ADR-0147 "Đã đo" | `c0eac03`; bản sao DB | không phải chất lượng chatbot: biên 10 240 kB, 409, 400 |
+| 9 | Bộ phân loại câu hỏi cá nhân mơ hồ, 27/11 | ADR-0157 "Kết quả" | cây mã ngày 27/11/2026, chưa dựng lại backend; gọi thẳng Gemini bằng đúng lời nhắc và lược đồ trong mã, chưa đi qua backend thật | 16 câu (4 lịch hẹn, 3 lịch tiêm, 9 câu chung gồm 3 ví dụ "không phải cá nhân" của BR-AI-26 và 1 câu chèn chỉ thị): **15 / 15 câu có phản hồi đúng nhãn**, 1 lượt bị Google trả HTTP 503; độ trễ trung vị 1,1 s, có lượt 19–27 s khi Google quá tải. Bản đầu giới hạn 20 token ra làm 16 / 16 câu bị cắt JSON; đã nâng lên 64 |
 
 **Số tài liệu `PUBLISHED` theo thời điểm** (mỗi số thuộc một kho; không chép số cũ như số mới): 32 (10–11/11: 29 tự soạn + 3 phác đồ; 52 đoạn); 28 (13/11 13:41); 35 (từ 13/11 14:36, kho của mọi lượt đo 16/11); 39 (từ 18/11, thêm id 67–70). Số hiện tại phải đọc lại từ DB demo ở ngày chốt: `TODO(T84)`.
 
-**Trạng thái bốn công tắc `ai.chat.*` trên DB demo** (bản ghi cuối 18–19/11, **không đọc lại ngày 25/11**): `general_knowledge_enabled` bật từ 13/11 (V52); `business_intent_enabled` tắt (V53); `pet_context_enabled` tắt (V56); `open_domain_enabled` tắt (V57). Mặc định trong migration của cả bốn là `false`. `ai.ingest.max_file_kb` mặc định 2048 (V59). `TODO(T84)`: đọc lại bằng `GET /api/system-configs` ở ngày chốt.
+**Trạng thái năm công tắc `ai.chat.*` trên DB demo** (bản ghi cuối 18–19/11, **không đọc lại ngày 25/11**; công tắc thứ năm viết ngày 27/11): `general_knowledge_enabled` bật từ 13/11 (V52); `business_intent_enabled` tắt (V53); `pet_context_enabled` tắt (V56); `open_domain_enabled` tắt (V57); `intent_llm_enabled` (V66, ADR-0157) mới có trong mã, **chưa áp lên DB demo** nên chưa có giá trị ở đó. Mặc định trong migration của bốn công tắc đầu là `false`, của công tắc thứ năm là `true`. `ai.ingest.max_file_kb` mặc định 2048 (V59). `TODO(T84)`: đọc lại bằng `GET /api/system-configs` ở ngày chốt.
 
-**Tham số truy hồi và an toàn:** ngưỡng cosine τ = 0,60; K = 5 đoạn; hết giờ gọi mô hình 15 giây; 17 cụm từ khóa cấp cứu; 16 cụm rủi ro y khoa; đoạn dài 300–1200 ký tự, chồng lấn 100; embedding theo lô 16 (nghỉ 800 ms); mô hình ngôn ngữ nhiệt độ 0,2, tối đa 600 token ra. Điểm gợi ý: `100 × (0,5·A + 0,3·H + 0,2·P)`, làm tròn HALF_UP một chữ số (ADR-0133). Nguồn: ADR-0122, 0130, 0133, 0141, 0142; `docs/07`.
+**Tham số truy hồi và an toàn:** ngưỡng cosine τ = 0,60; K = 5 đoạn; hết giờ gọi mô hình 15 giây; 17 cụm từ khóa cấp cứu; 16 cụm rủi ro y khoa; đoạn dài 300–1200 ký tự, chồng lấn 100; embedding theo lô 16 (nghỉ 800 ms); mô hình ngôn ngữ nhiệt độ 0,2, tối đa 600 token ra; bộ phân loại câu mơ hồ (ADR-0157) nhiệt độ 0, tối đa 64 token ra. Điểm gợi ý: `100 × (0,5·A + 0,3·H + 0,2·P)`, làm tròn HALF_UP một chữ số (ADR-0133). Nguồn: ADR-0122, 0130, 0133, 0141, 0142; `docs/07`.
 
 **Bộ 43 câu theo nhóm** (số câu đạt, một lượt, cấu hình A; ghi nhận từ tệp tổng hợp của ba lần chạy bằng backend thật: T77 đợt 2 lượt 1 (kho 32), baseline 16/11 (kho 35), nạp thử 18/11 (kho 39); ADR-0136 "Điều tra T92b"; chưa kiểm lại từng tệp). Ba cột thuộc ba kho khác nhau, không so sánh trực tiếp:
 

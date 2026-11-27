@@ -304,7 +304,7 @@ sequenceDiagram
     Note over S,G: Gemini lỗi, quá 15 giây hoặc hết hạn mức: UNAVAILABLE, HTTP 200 (BR-AI-10)
 ```
 
-**Hình TT.12. Chuỗi hỏi đáp của chatbot.** *Nguồn: `docs/07` mục 5.2; BR-AI-03 đến BR-AI-10, BR-AI-12; ADR-0136, ADR-0141; thứ tự lớp chặn đã nêu ở Hình 6.2 và Bảng 6.2 của `06-phan-he-ai.md`. Hình bỏ các công tắc nghiệp vụ, lời chào, ngữ cảnh thú và chế độ mở (mặc định tắt); công tắc kiến thức chung bật hay tắt là trạng thái cấu hình, đọc lại ở ngày chốt (Bảng S.5).*
+**Hình TT.12. Chuỗi hỏi đáp của chatbot.** *Nguồn: `docs/07` mục 5.2; BR-AI-03 đến BR-AI-10, BR-AI-12; ADR-0136, ADR-0141, ADR-0157; thứ tự lớp chặn đã nêu ở Hình 6.2 và Bảng 6.2 của `06-phan-he-ai.md`. Hình bỏ các công tắc nghiệp vụ, lời chào, ngữ cảnh thú và chế độ mở (mặc định tắt) và bước phân loại câu hỏi cá nhân mơ hồ của chat đăng nhập (công tắc `intent_llm_enabled`, mặc định bật, ADR-0157), nên "ý định cá nhân" trong hình là loại nhận ra bằng luật từ khóa; công tắc kiến thức chung bật hay tắt là trạng thái cấu hình, đọc lại ở ngày chốt (Bảng S.5).*
 
 ## TT.13. Quản lý tri thức chatbot (UC93)
 

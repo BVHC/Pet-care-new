@@ -8,7 +8,7 @@ Chương này nói hệ thống được cài đặt ở thành phần nào; thi
 
 **Công cụ và thiết bị.** Backend dùng Java 21 và Maven; frontend dùng Node.js và npm; Docker Desktop là bắt buộc cho môi trường dựng sẵn và kiểm thử tích hợp. Giao diện được kiểm thử ở khung nhìn máy tính để bàn bằng trình duyệt hiện đại. `TODO(T84)`: cấu hình máy tối thiểu.
 
-**Dựng môi trường.** Docker Compose khai báo năm dịch vụ: PostgreSQL (ảnh pgvector), Redis, Mailpit (SMTP giả), backend, frontend. Khi backend khởi động, Flyway áp các migration (V1 đến V64, V49 để trống) và nạp 86 khóa [CFG]. ADMIN đầu tiên tạo bằng SQL; dữ liệu mẫu dựng bằng tập lệnh gọi API của backend.
+**Dựng môi trường.** Docker Compose khai báo năm dịch vụ: PostgreSQL (ảnh pgvector), Redis, Mailpit (SMTP giả), backend, frontend. Khi backend khởi động, Flyway áp các migration (V1 đến V64 và V66, V49 và V65 để trống) và nạp 87 khóa [CFG]. ADMIN đầu tiên tạo bằng SQL; dữ liệu mẫu dựng bằng tập lệnh gọi API của backend.
 
 **Cổng và biến.** Backend 8081 khi chạy trực tiếp, 8080 trong Docker; frontend 5173 và 3000 (Docker); PostgreSQL 5432 (`DB_PORT`; đặt 5434 nếu máy đã có PostgreSQL riêng); Redis 6379; Mailpit SMTP 1025, giao diện 8025. Biến của backend: `DB_*`, `REDIS_*`, `MAIL_*`, `RATE_LIMIT_*`, `PAYMENT_*`, `JWT_SECRET` (bắt buộc), `GEMINI_API_KEY`, `GOOGLE_CLIENT_ID`; thiếu hai khóa cuối thì chatbot không khả dụng và đăng nhập Google trả 503. Biến của frontend: `VITE_API_URL`, `VITE_API_MOCK`, `VITE_API_MOCK_ONLY`.
 

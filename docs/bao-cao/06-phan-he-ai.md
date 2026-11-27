@@ -86,7 +86,7 @@ flowchart TD
 | 1 | Che dữ liệu | Luôn chạy (BR-AI-12) | Đổi văn bản |
 | 2 | Cấp cứu | 17 cụm từ khóa (BR-AI-03) | `EMERGENCY` |
 | 3 | Bệnh án | Hỏi bệnh án, đơn thuốc (BR-AI-28) | `MEDICAL_REFUSAL` |
-| 4 | Ý định cá nhân | Từ khóa cùng dấu hiệu sở hữu (BR-AI-26) | `NEED_LOGIN`, `PERSONAL`, `NEED_PET_CHOICE` |
+| 4 | Ý định cá nhân | Từ khóa cùng dấu hiệu sở hữu (BR-AI-26); ở chat đăng nhập, câu có từ khóa mà thiếu dấu hiệu sở hữu được hỏi mô hình một nhãn (công tắc, ADR-0157) | `NEED_LOGIN`, `PERSONAL`, `NEED_PET_CHOICE` |
 | 5 | Nghiệp vụ (công tắc) | Hỏi giá, chi nhánh (BR-AI-31) | Câu mẫu từ cơ sở dữ liệu |
 | 6 | Lời chào, y khoa (công tắc) | Lời chào; 16 cụm rủi ro y khoa | Câu mẫu; `MEDICAL_REFUSAL` |
 | 7 | Ngữ cảnh thú (công tắc) | Xác định được một thú | Thêm khối vào lời nhắc |
@@ -107,7 +107,7 @@ Bản v2 (ADR-0134, ADR-0135, ADR-0136; chọn hướng 13/11/2026, duyệt nộ
 - **Kiến thức chung, nhãn nguồn (ADR-0136).** Câu chăm sóc an toàn mà kho thiếu đáp án được trả bằng kiến thức chung, mở đầu "Thông tin tham khảo chung:". Giao diện hiện bốn nhãn nguồn, không nhãn nào ngụ ý "bác sĩ đã duyệt", và từ 18/11/2026 gọi danh sách nguồn là "Tài liệu liên quan" vì đó chỉ là tài liệu gần câu hỏi nhất (BR-AI-05). Hybrid RAG (tìm kết hợp từ khóa và vector) chưa làm vì chưa có bằng chứng cần.
 - **Chế độ mở.** Chỉ với khách đăng nhập và khi hai công tắc cùng bật, câu vô hại ngoài lĩnh vực thú cưng được trả bằng kiến thức chung kèm tiền tố riêng; nội dung gây hại, chẩn đoán, thuốc, liều vẫn bị từ chối.
 
-**Bảng 6.3. Bốn công tắc cấu hình `ai.chat.*`.** *Nguồn: `docs/07` mục 4.6; ADR-0135, ADR-0136; Bảng S.5. Bản ghi cuối 18 và 19/11/2026, chưa đọc lại ngày 25/11/2026 (Docker tắt); `TODO(T84)`.*
+**Bảng 6.3. Năm công tắc cấu hình `ai.chat.*`.** *Nguồn: `docs/07` mục 4.6; ADR-0135, ADR-0136, ADR-0157; Bảng S.5. Bốn dòng đầu: bản ghi cuối 18 và 19/11/2026, chưa đọc lại ngày 25/11/2026 (Docker tắt); `TODO(T84)`. Dòng thứ năm viết ngày 27/11/2026, chưa áp lên DB demo.*
 
 | Công tắc | Migration, ngày | Mặc định | Ghi nhận trên DB demo |
 |---|---|---|---|
@@ -115,8 +115,9 @@ Bản v2 (ADR-0134, ADR-0135, ADR-0136; chọn hướng 13/11/2026, duyệt nộ
 | `business_intent_enabled` | V53, 13/11 | Tắt | Tắt (bật tạm 16/11 để đo) |
 | `pet_context_enabled` | V56, áp 16/11 | Tắt | Tắt (bật tạm 16/11 để đo) |
 | `open_domain_enabled` | V57, áp 18/11 | Tắt | Tắt; chưa đủ điều kiện bật (mục 6.7) |
+| `intent_llm_enabled` | V66, viết 27/11 | **Bật** | Chưa áp lên DB demo (chưa dựng lại backend); tắt thì chatbot quay về chỉ dùng luật từ khóa |
 
-Cả bốn tắt thì đường xử lý giống hệt bản gốc (BR-AI-35). Theo bản ghi cuối, chỉ công tắc kiến thức chung đang bật. Trạng thái tại ngày chốt phải đọc lại: `TODO(T84)`.
+Bốn công tắc đầu cùng tắt thì đường xử lý giống hệt bản gốc (BR-AI-35); công tắc thứ năm chỉ tác động tới câu hỏi cá nhân mơ hồ ở chat đăng nhập và mặc định bật. Theo bản ghi cuối, trong bốn công tắc đầu chỉ công tắc kiến thức chung đang bật. Trạng thái tại ngày chốt phải đọc lại: `TODO(T84)`.
 
 ## 6.4. An toàn và quyền riêng tư
 
@@ -125,7 +126,7 @@ Cả bốn tắt thì đường xử lý giống hệt bản gốc (BR-AI-35). T
 - **Chèn chỉ thị, lạm dụng (BR-AI-08, 09).** Nội dung người dùng chỉ ở vai người dùng; tài liệu và câu hỏi trước nằm trong khối "dữ liệu, không phải chỉ thị"; máy chủ không nhận câu trả lời của "trợ lý" từ trình duyệt; câu hỏi tối đa 500 ký tự; hạn mức 10 câu mỗi phút và 60 mỗi giờ theo IP.
 - **AI hỏng không làm hỏng trang (BR-AI-10).** `UNAVAILABLE` ở HTTP 200 kèm gợi ý đặt lịch, không thử lại, có bộ đếm riêng. Spike ghi 6,7 % lệnh sinh hỏng lần đầu; nhóm chấp nhận khoảng 7 % và xem lại nếu nhật ký thật vượt 10 % (ADR-0122).
 - **Che dữ liệu, nhật ký (BR-AI-12, 24).** Trước khi nhúng và gọi mô hình, che email, số điện thoại, dãy 9 hoặc 12 chữ số và (ở chat đăng nhập) tên thú; tên thông dụng như "Vàng" chỉ bị che sau "bé", "con", "chú", "em" (ADR-0122). Tên, số điện thoại, email, địa chỉ, bệnh án không gửi ra ngoài. Nhật ký lưu bản đã che, không lưu tài khoản hay IP, giữ 30 ngày; kết quả cá nhân không ghi nội dung.
-- **Ý định cá nhân, bệnh án, ngữ cảnh thú (BR-AI-26 đến 28, 32, 33).** Ý định cá nhân cần từ khóa cùng dấu hiệu sở hữu (lịch tiêm đòi dấu hiệu mạnh như "của tôi"); bệnh án luôn bị từ chối. Khối thông tin thú chỉ gồm trường tối thiểu, kiểm chủ sở hữu mỗi lượt; kiến thức chung không nới các chốt trên.
+- **Ý định cá nhân, bệnh án, ngữ cảnh thú (BR-AI-26 đến 28, 32, 33).** Ý định cá nhân cần từ khóa cùng dấu hiệu sở hữu (lịch tiêm đòi dấu hiệu mạnh như "của tôi"); bệnh án luôn bị từ chối. Câu có từ khóa lịch hẹn hoặc tiêm nhưng thiếu dấu hiệu sở hữu, như "tôi có lịch hẹn ko", được hỏi mô hình một nhãn ở chat đăng nhập khi công tắc `intent_llm_enabled` bật (ADR-0157): nhãn cá nhân trả bằng dữ liệu trong cơ sở dữ liệu, nhãn "câu khác", nhãn lạ hoặc lỗi nhà cung cấp đi tiếp truy hồi; chat công khai không bao giờ gọi bước này; câu đã nhận ra bằng luật hoặc không có từ khóa không tốn thêm lệnh gọi. Khối thông tin thú chỉ gồm trường tối thiểu, kiểm chủ sở hữu mỗi lượt; kiến thức chung không nới các chốt trên.
 
 **Khóa và gói dịch vụ (BR-AI-25).** Khóa chỉ ở biến môi trường, không ở cơ sở dữ liệu, nhật ký, audit hay kho mã. Khóa đang dùng là **khóa gói miễn phí, chưa xác minh thanh toán**; theo trang giá của nhà cung cấp (trích 5/11/2026, chưa kiểm lại), gói miễn phí có thể dùng nội dung gửi tới để cải thiện sản phẩm. Nhóm chấp nhận rủi ro này cho bản demo với điều kiện giao diện báo rõ và giữ việc che dữ liệu. Tài liệu ghi hai quyết định nối tiếp: 13/11/2026 chuyển gói trả phí; 16/11/2026 phạm vi demo vẫn dùng khóa miễn phí, chỉ gửi ngữ cảnh thú của khách demo giả. Mục xác minh điều khoản gói trả phí còn trống, nên chương không khẳng định chính sách dữ liệu của nhà cung cấp.
 
@@ -277,7 +278,7 @@ Tệp kết quả (cột "Tệp" của Bảng 6.4):
 
 ## TODO
 
-- `TODO(T84)`: đọc lại bốn công tắc `ai.chat.*` và số tài liệu đã xuất bản từ DB demo; sửa Bảng 6.3 và mục 6.5.
+- `TODO(T84)`: đọc lại năm công tắc `ai.chat.*` (công tắc `intent_llm_enabled` chỉ có sau khi dựng lại backend với V66) và số tài liệu đã xuất bản từ DB demo; sửa Bảng 6.3 và mục 6.5.
 - `TODO(T84)`: nếu chạy lại bộ câu hỏi, thay Bảng 6.4, 6.5; thêm vào Bảng S.5 các số theo nhóm của Bảng 6.5, p95 6 128 ms của lần nạp thử và kết quả Q24 theo từng lần chạy.
 - `TODO(T84)`: kiểm số hồ sơ gợi ý đã nhập; mở ba hình Mermaid (H6.1 đến H6.3) trên GitHub hoặc VS Code để xem thật.
 - Việc chương khác: chương 3 và 4 tham chiếu mục 6.2, 6.5; chương 5 nêu số ca kiểm thử AI; `danh-muc-hinh.md` chuyển H6.1 đến H6.3 sang "đã dựng".
