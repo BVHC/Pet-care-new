@@ -10,6 +10,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Component;
 
+import io.micrometer.core.instrument.MeterRegistry;
+
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -19,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Fail-open có circuit-breaker: Redis lỗi hoặc quá {@code spring.data.redis.timeout} thì cho request qua, log
  * {@code RATE_LIMIT_UNAVAILABLE} một lần và bỏ qua Redis trong {@code app.rate-limit.breaker-seconds} giây (đồng hồ
  * {@link Clock}) để mỗi request không phải chờ hết timeout. Đăng nhập luôn dùng được, đổi lại tạm thời không có giới hạn.
+ * Mỗi lần mở circuit tăng {@code petcare.ratelimit.unavailable} (docs/adr/0155).
  */
 @Slf4j
 @Component
@@ -40,13 +43,18 @@ public class RedisRateLimiter implements RateLimiter {
     @SuppressWarnings("rawtypes")
     private static final DefaultRedisScript<List> REDIS_SCRIPT = new DefaultRedisScript<>(SCRIPT, List.class);
 
+    static final String UNAVAILABLE = "petcare.ratelimit.unavailable";
+
     private final StringRedisTemplate redis;
     private final Clock clock;
     private final Duration breakerOpen;
+    private final MeterRegistry meters;
     private volatile Instant breakerOpenUntil = Instant.MIN;
 
-    public RedisRateLimiter(StringRedisTemplate redis, Clock clock, RateLimitProperties properties) {
+    public RedisRateLimiter(StringRedisTemplate redis, Clock clock, RateLimitProperties properties,
+            MeterRegistry meters) {
         this.redis = redis;
+        this.meters = meters;
         this.clock = clock;
         this.breakerOpen = Duration.ofSeconds(properties.breakerSeconds());
     }
@@ -67,6 +75,7 @@ public class RedisRateLimiter implements RateLimiter {
             return count <= limit ? Decision.ALLOWED : Decision.denied(ttl);
         } catch (RuntimeException ex) {
             breakerOpenUntil = now.plus(breakerOpen);
+            meters.counter(UNAVAILABLE).increment();
             log.warn("RATE_LIMIT_UNAVAILABLE: bỏ qua giới hạn tần suất {}s, cho request đi qua ({})",
                     breakerOpen.toSeconds(), ex.toString());
             return Decision.ALLOWED;

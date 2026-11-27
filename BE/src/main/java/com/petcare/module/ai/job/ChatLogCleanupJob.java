@@ -3,6 +3,7 @@ package com.petcare.module.ai.job;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -17,6 +18,7 @@ import com.petcare.module.identity.api.ConfigKey;
 import com.petcare.module.identity.api.SystemConfigApi;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,6 +39,7 @@ public class ChatLogCleanupJob {
     private final SystemConfigApi config;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public ChatLogCleanupJob(ChatLogCleanupService cleanup, ChatLogCleanupProperties properties, SystemConfigApi config,
@@ -51,6 +54,12 @@ public class ChatLogCleanupJob {
         this.config = config;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.chat-log-cleanup.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -73,9 +82,12 @@ public class ChatLogCleanupJob {
             } while (batch == properties.batchSize());
             log.info("CHAT_LOG_CLEANUP deleted={} cutoff={} budgetHit={} durationMs={}", deleted, cutoff, budgetHit,
                     elapsedMs(started));
+            jobMetrics.record("chat_log_cleanup", JobMetrics.Outcome.finished(budgetHit),
+                    Map.of("deleted", deleted));
         } catch (RuntimeException e) {
             log.error("CHAT_LOG_CLEANUP_FAILED deletedSoFar={} cutoff={} durationMs={}", deleted, cutoff,
                     elapsedMs(started), e);
+            jobMetrics.record("chat_log_cleanup", JobMetrics.Outcome.FAILED, Map.of("deleted", deleted));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

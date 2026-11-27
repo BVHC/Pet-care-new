@@ -45,8 +45,10 @@ import com.petcare.module.care.job.NotificationOutboxProperties;
 import com.petcare.module.care.job.PriorityNotificationJob;
 import com.petcare.module.care.service.DeliveryLane;
 import com.petcare.module.care.service.NotificationDispatchService;
+import com.petcare.module.care.service.NotificationDispatchService.Claim;
 import com.petcare.module.care.service.NotificationDispatchService.DispatchPolicy;
-import com.petcare.module.care.service.NotificationDispatchService.DispatchResult;
+import com.petcare.module.care.service.OutboxMailSender;
+import com.petcare.module.care.service.OutboxMailSender.SendReport;
 import com.petcare.module.identity.api.NotificationTemplateCode;
 import com.petcare.support.MutableClock;
 
@@ -58,8 +60,9 @@ import jakarta.mail.internet.MimeMessage;
 
 /**
  * Worker ST20 trên Postgres 17 + SMTP thật trong JVM (GreenMail, cổng 3025 của profile test) — docs/adr/0012: gửi
- * và xóa mã OTP, luồng HIGH không xếp sau tồn đọng NORMAL, thử lại khi SMTP sập, SMTP treo không giữ transaction,
- * không gửi trùng, bỏ qua dòng đang khóa, không đụng dòng IN_APP, migration V4.
+ * và xóa mã OTP, luồng HIGH không xếp sau tồn đọng NORMAL, thử lại khi SMTP sập, không gửi trùng, bỏ qua dòng đang
+ * khóa, không đụng dòng IN_APP, migration V4. docs/adr/0154: SMTP chạy ngoài transaction (trong lúc SMTP treo không
+ * còn khóa dòng hay phiên "idle in transaction"), dòng đã nhận hiện lại sau hạn giữ, bước ghi với vé cũ không đè.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -99,6 +102,9 @@ class NotificationOutboxIT {
 
     @Autowired
     private NotificationDispatchService dispatch;
+
+    @Autowired
+    private OutboxMailSender sender;
 
     @Autowired
     private NotificationOutboxProperties properties;
@@ -227,13 +233,14 @@ class NotificationOutboxIT {
         for (int i = 1; i <= 20; i++) {
             ids.add(insertEmail(NORMAL_TEMPLATE, "bulk" + i + "@petcare.test", "{\"so\": " + i + "}", T0));
         }
-        double connectionsBefore = normalConnections();
+        double batchesBefore = normalBatches();
 
         normalJob.run();
 
         assertThat(SMTP.waitForIncomingEmail(10_000, 20)).isTrue();
         assertThat(SMTP.getReceivedMessages()).hasSize(20);
-        assertThat(normalConnections() - connectionsBefore).as("một kết nối cho cả lô").isEqualTo(1.0);
+        assertThat(normalBatches() - batchesBefore).as("một lời gọi JavaMailSender (một kết nối) cho cả lô")
+                .isEqualTo(1.0);
         assertThat(count("status = 'SENT' AND attempts = 1")).isEqualTo(20);
         assertThat(Arrays.stream(SMTP.getReceivedMessages()).map(NotificationOutboxIT::messageId).toList())
                 .containsExactlyInAnyOrderElementsOf(ids.stream().map(id -> "<notification-" + id + "@petcare.local>")
@@ -242,7 +249,8 @@ class NotificationOutboxIT {
 
     /**
      * SMTP câm khi lô NORMAL kết nối: timeout đọc lời chào (3 s ở profile test) cắt lô, chỉ dòng đầu bị tính một lần
-     * thử, các dòng khác nguyên vẹn; không còn phiên "idle in transaction".
+     * thử, các dòng khác về hạn cũ. <b>Trong lúc chờ SMTP</b> (docs/adr/0154): bước nhận đã commit (dòng mang vé = hạn
+     * giữ), không dòng nào bị khóa và không có phiên "idle in transaction".
      */
     @Test
     void hungSmtpStopsNormalBatchAndLeavesRestUntouched() throws Exception {
@@ -250,15 +258,23 @@ class NotificationOutboxIT {
         long second = insertEmail(NORMAL_TEMPLATE, "b@petcare.test", "{\"so\": 2}", T0);
         long third = insertEmail(NORMAL_TEMPLATE, "c@petcare.test", "{\"so\": 3}", T0);
         int originalPort = mailSender.getPort();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         try (ServerSocket silent = new ServerSocket(0)) {
             mailSender.setPort(silent.getLocalPort());
             long started = System.nanoTime();
 
-            normalJob.run();
+            Future<?> run = executor.submit(normalJob::run);
+            Thread.sleep(1_000);
+            assertThat(run.isDone()).as("lô vẫn đang chờ SMTP").isFalse();
+            assertNoLockAndNoOpenTransaction(first, second, third);
+            assertThat(((java.sql.Timestamp) row(first).get("next_attempt_at")).toInstant())
+                    .as("bước nhận đã commit vé trước khi gửi").isEqualTo(T0.plus(properties.normalClaimLease()));
+            run.get(20, TimeUnit.SECONDS);
 
             assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(10));
         } finally {
             mailSender.setPort(originalPort);
+            executor.shutdownNow();
         }
 
         assertThat(row(first).get("attempts")).isEqualTo(1);
@@ -268,6 +284,8 @@ class NotificationOutboxIT {
         for (long untouched : List.of(second, third)) {
             assertThat(row(untouched).get("attempts")).isEqualTo(0);
             assertThat(row(untouched).get("status")).isEqualTo("PENDING");
+            assertThat(((java.sql.Timestamp) row(untouched).get("next_attempt_at")).toInstant())
+                    .as("chưa thử: về hạn cũ").isEqualTo(T0);
         }
         assertThat(jdbc.queryForObject("""
                 SELECT count(*) FROM pg_stat_activity
@@ -317,32 +335,84 @@ class NotificationOutboxIT {
     }
 
     /**
-     * SMTP nhận kết nối nhưng không trả lời: timeout đọc (3 s ở profile test) cắt lần gửi, dòng được lên lịch thử lại,
-     * không còn phiên "idle in transaction" nào giữ khóa.
+     * SMTP nhận kết nối nhưng không trả lời: timeout đọc (3 s ở profile test) cắt lần gửi, dòng được lên lịch thử lại.
+     * Trong lúc chờ, dòng OTP không bị khóa và không có phiên "idle in transaction" (docs/adr/0154).
      */
     @Test
     void hungSmtpIsCutByTimeoutAndReleasesTransaction() throws Exception {
         enqueueOtp("an@petcare.test", "123456");
         long id = onlyRowId();
         int originalPort = mailSender.getPort();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
         try (ServerSocket silent = new ServerSocket(0)) {
             mailSender.setPort(silent.getLocalPort());
             long started = System.nanoTime();
 
-            priorityJob.run();
+            Future<?> run = executor.submit(priorityJob::run);
+            Thread.sleep(1_000);
+            assertThat(run.isDone()).as("lần gửi vẫn đang chờ SMTP").isFalse();
+            assertNoLockAndNoOpenTransaction(id);
+            run.get(20, TimeUnit.SECONDS);
 
             assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(10));
         } finally {
             mailSender.setPort(originalPort);
+            executor.shutdownNow();
         }
 
         Map<String, Object> row = row(id);
         assertThat(row.get("status")).isEqualTo("PENDING");
         assertThat(row.get("attempts")).isEqualTo(1);
-        assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM pg_stat_activity
-                WHERE datname = current_database() AND state LIKE 'idle in transaction%'
-                """, Long.class)).isZero();
+        assertThat(((java.sql.Timestamp) row.get("next_attempt_at")).toInstant())
+                .isEqualTo(T0.plus(Duration.ofMinutes(1)));
+    }
+
+    // ---------------------------------------------------------------- hạn giữ và vé (docs/adr/0154)
+
+    /**
+     * Chết sau khi nhận dòng, trước khi gửi: dòng ẩn khỏi lượt quét tới hết hạn giữ rồi tự hiện lại và được gửi, không
+     * tốn lần thử nào cho lần nhận bị bỏ dở.
+     */
+    @Test
+    void claimedButAbandonedRowIsSentAfterLease() throws Exception {
+        enqueueOtp("an@petcare.test", "123456");
+        long id = onlyRowId();
+        Claim abandoned = dispatch.claimNextHigh(T0, policy(), properties.priorityClaimLease());
+        assertThat(abandoned.mails()).hasSize(1);
+
+        priorityJob.run();
+        assertThat(SMTP.getReceivedMessages()).as("còn trong hạn giữ: không lượt nào gửi").isEmpty();
+
+        clock.advance(properties.priorityClaimLease());
+        priorityJob.run();
+
+        assertThat(singleMessage().getMessageID()).isEqualTo("<notification-" + id + "@petcare.local>");
+        assertThat(row(id).get("status")).isEqualTo("SENT");
+        assertThat(row(id).get("attempts")).isEqualTo(1);
+    }
+
+    /**
+     * Lượt cũ gửi chậm quá hạn giữ, lượt mới đã nhận lại và gửi xong: bước ghi của lượt cũ mang vé cũ nên không đổi gì
+     * (không tính thêm lần, không ghi đè {@code sent_at}).
+     */
+    @Test
+    void settleWithExpiredTicketChangesNothing() {
+        enqueueOtp("an@petcare.test", "123456");
+        long id = onlyRowId();
+        Claim slow = dispatch.claimNextHigh(T0, policy(), properties.priorityClaimLease());
+        clock.advance(properties.priorityClaimLease().plusSeconds(1));
+        priorityJob.run();
+        Map<String, Object> afterNewRun = row(id);
+        assertThat(afterNewRun.get("status")).isEqualTo("SENT");
+
+        SendReport late = sender.send(slow.mails(), DeliveryLane.HIGH);
+        var settled = dispatch.settle(DeliveryLane.HIGH, clock.instant(), policy(), late.deliveries());
+
+        assertThat(settled.stale()).isEqualTo(1);
+        assertThat(settled.sent()).isZero();
+        Map<String, Object> after = row(id);
+        assertThat(after.get("attempts")).isEqualTo(1);
+        assertThat(after.get("sent_at")).isEqualTo(afterNewRun.get("sent_at"));
     }
 
     // ---------------------------------------------------------------- đồng thời
@@ -380,29 +450,36 @@ class NotificationOutboxIT {
         assertThat(row(id).get("attempts")).isEqualTo(0);
     }
 
-    /** Hai luồng gọi cùng lúc trên một dòng: đúng một lần gửi. */
+    /** Hai lượt nhận cùng lúc trên một dòng: đúng một lượt có thư (SKIP LOCKED + vé), đúng một lần gửi. */
     @Test
     void concurrentDispatchSendsOnce() throws Exception {
         enqueueOtp("an@petcare.test", "123456");
-        DispatchPolicy policy = new DispatchPolicy(properties.maxAttempts(), properties.initialBackoff(),
-                properties.mailFrom());
         CountDownLatch start = new CountDownLatch(1);
-        Callable<DispatchResult> call = () -> {
+        Callable<Claim> call = () -> {
             await(start);
-            return dispatch.dispatchNext(DeliveryLane.HIGH, T0, policy);
+            return dispatch.claimNextHigh(T0, policy(), properties.priorityClaimLease());
         };
         ExecutorService executor = Executors.newFixedThreadPool(2);
+        List<Claim> claims = new ArrayList<>();
         try {
-            List<Future<DispatchResult>> futures = List.of(executor.submit(call), executor.submit(call));
+            List<Future<Claim>> futures = List.of(executor.submit(call), executor.submit(call));
             start.countDown();
-            List<DispatchResult> results = new ArrayList<>();
-            for (Future<DispatchResult> future : futures) {
-                results.add(future.get(20, TimeUnit.SECONDS));
+            for (Future<Claim> future : futures) {
+                claims.add(future.get(20, TimeUnit.SECONDS));
             }
-            assertThat(results).containsExactlyInAnyOrder(DispatchResult.SENT, DispatchResult.NONE);
         } finally {
             executor.shutdownNow();
         }
+        assertThat(claims).extracting(claim -> claim.mails().size()).containsExactlyInAnyOrder(1, 0);
+        for (Claim claim : claims) {
+            SendReport report = sender.send(claim.mails(), DeliveryLane.HIGH);
+            if (!report.deliveries().isEmpty()) {
+                dispatch.settle(DeliveryLane.HIGH, T0, policy(), report.deliveries());
+            }
+        }
+        assertThat(SMTP.waitForIncomingEmail(5_000, 1)).isTrue();
+        assertThat(SMTP.getReceivedMessages()).hasSize(1);
+        priorityJob.run();
         assertThat(SMTP.getReceivedMessages()).hasSize(1);
     }
 
@@ -453,9 +530,30 @@ class NotificationOutboxIT {
         return messages[0];
     }
 
-    private double normalConnections() {
-        Counter counter = meters.find("notification.outbox.smtp.connections").tag("lane", "NORMAL").counter();
+    private double normalBatches() {
+        Counter counter = meters.find("notification.outbox.smtp.batches").tag("lane", "NORMAL").counter();
         return counter == null ? 0 : counter.count();
+    }
+
+    private DispatchPolicy policy() {
+        return new DispatchPolicy(properties.maxAttempts(), properties.initialBackoff(), properties.mailFrom());
+    }
+
+    /**
+     * Trong lúc worker đang chờ SMTP: các dòng khóa được ngay ({@code NOWAIT} không lỗi) và không có phiên nào của
+     * CSDL test ở trạng thái "idle in transaction" (docs/adr/0154).
+     */
+    private void assertNoLockAndNoOpenTransaction(long... ids) {
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            for (long id : ids) {
+                assertThat(jdbc.queryForObject("SELECT id FROM notification_outbox WHERE id = ? FOR UPDATE NOWAIT",
+                        Long.class, id)).isEqualTo(id);
+            }
+        });
+        assertThat(jdbc.queryForObject("""
+                SELECT count(*) FROM pg_stat_activity
+                WHERE datname = current_database() AND state LIKE 'idle in transaction%'
+                """, Long.class)).isZero();
     }
 
     private static String messageId(MimeMessage message) {

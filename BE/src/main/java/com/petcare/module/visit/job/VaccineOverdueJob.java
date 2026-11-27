@@ -3,6 +3,7 @@ package com.petcare.module.visit.job;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 import com.petcare.module.visit.service.VaccineOverdueService;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,6 +35,7 @@ public class VaccineOverdueJob {
     private final VaccineOverdueService overdue;
     private final VaccineOverdueProperties properties;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public VaccineOverdueJob(VaccineOverdueService overdue, VaccineOverdueProperties properties) {
@@ -43,6 +46,12 @@ public class VaccineOverdueJob {
         this.overdue = overdue;
         this.properties = properties;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.vaccine-overdue.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -83,8 +92,12 @@ public class VaccineOverdueJob {
             } while (ids.size() == properties.batchSize());
             log.info("VACCINE_OVERDUE created={} notCreated={} skipped={} failed={} stoppedByBudget={} cutoff={} "
                     + "durationMs={}", created, notCreated, skipped, failed, stoppedByBudget, cutoff, elapsedMs(started));
+            jobMetrics.record("vaccine_overdue", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("created", created, "not_created", notCreated, "skipped", skipped, "failed", failed));
         } catch (RuntimeException e) {
             log.error("VACCINE_OVERDUE_FAILED createdSoFar={} durationMs={}", created, elapsedMs(started), e);
+            jobMetrics.record("vaccine_overdue", JobMetrics.Outcome.FAILED,
+                    Map.of("created", created, "not_created", notCreated, "skipped", skipped, "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

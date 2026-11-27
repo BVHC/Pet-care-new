@@ -23,6 +23,9 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.web.filter.CorsFilter;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
+
 /**
  * Xác thực bằng JWT HS256 gắn với phiên lưu trong DB (docs/adr/0003). Stateless: không có HTTP session, mỗi request
  * mang bearer token và {@link JwtAuthenticationFilter} kiểm tra lại phiên, nên phiên bị hủy mất hiệu lực ngay ở request
@@ -35,9 +38,15 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 @EnableConfigurationProperties({JwtProperties.class, RateLimitProperties.class})
 public class SecurityConfig {
 
-    /** Không cần đăng nhập: health, tài liệu API và các path public của contract (docs/api/00-method.md §3.1). */
+    /**
+     * Không cần đăng nhập: health, tài liệu API và các path public của contract (docs/api/00-method.md §3.1).
+     * {@code /actuator/prometheus} chỉ được expose khi actuator chạy trên cổng management riêng không publish ra host
+     * (Spring Boot gắn chuỗi filter này cả vào cổng đó; {@code ManagementExposureGuard} chặn trường hợp lộ trên cổng
+     * app); {@code /livez}, {@code /readyz} là probe trên cổng app (docs/adr/0155).
+     */
     static final String[] PUBLIC_PATHS = {
-            "/actuator/health", "/actuator/health/**", "/actuator/info",
+            "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus",
+            "/livez", "/readyz",
             "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**",
             "/api/auth/register", "/api/auth/register/**", "/api/auth/login", "/api/auth/google", "/api/auth/refresh",
             "/api/auth/password/**",
@@ -68,11 +77,14 @@ public class SecurityConfig {
             SessionAuthenticator sessionAuthenticator,
             @Qualifier("handlerExceptionResolver") HandlerExceptionResolver resolver,
             RateLimitProperties rateLimitProperties,
-            ObjectProvider<RateLimiter> rateLimiter) throws Exception {
+            ObjectProvider<RateLimiter> rateLimiter,
+            ObjectProvider<MeterRegistry> meters) throws Exception {
         // Giới hạn tần suất theo IP (docs/adr/0100): chỉ có khi app.rate-limit.enabled=true (có bean RedisRateLimiter).
         // Đặt sau CorsFilter để 429 vẫn mang header CORS; trước mọi filter xác thực nên không tốn BCrypt / DB.
+        // MeterRegistry qua ObjectProvider: slice @WebMvcTest không có bean này, rơi về registry toàn cục (docs/adr/0155).
         rateLimiter.ifAvailable(limiter -> http.addFilterAfter(
-                new RateLimitFilter(limiter, rateLimitProperties, resolver), CorsFilter.class));
+                new RateLimitFilter(limiter, rateLimitProperties, resolver,
+                        meters.getIfAvailable(() -> Metrics.globalRegistry)), CorsFilter.class));
         return http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(withDefaults())

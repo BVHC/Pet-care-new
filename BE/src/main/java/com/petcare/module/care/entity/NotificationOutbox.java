@@ -96,6 +96,24 @@ public class NotificationOutbox extends CreatedAtEntity {
         return row;
     }
 
+    /**
+     * Nhận dòng để gửi ngoài transaction (docs/adr/0154): đặt {@code next_attempt_at = until} nên lượt quét khác không
+     * thấy dòng tới hạn giữ; giá trị này là vé để ghi kết quả ({@link #isClaimedBy}). Không tính lần gửi.
+     */
+    public void claim(Instant until) {
+        nextAttemptAt = until;
+    }
+
+    /** Thư chưa được thử (lô dừng vì lỗi máy chủ): trả dòng về hạn cũ, không tính lần gửi. */
+    public void release(Instant dueAt) {
+        nextAttemptAt = dueAt;
+    }
+
+    /** Vé nhận dòng còn hiệu lực: dòng vẫn {@code PENDING} và chưa bị lượt khác nhận lại sau khi hết hạn giữ. */
+    public boolean isClaimedBy(Instant claimToken) {
+        return status == OutboxStatus.PENDING && claimToken.equals(nextAttemptAt);
+    }
+
     /** Gửi thành công: {@code SENT}, tính một lần gửi, xóa khóa nhạy cảm. */
     public void markSent(Instant now) {
         attempts++;

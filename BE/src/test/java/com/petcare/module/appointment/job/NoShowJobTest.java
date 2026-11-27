@@ -25,10 +25,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.transaction.annotation.Transactional;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 import com.petcare.module.appointment.service.AppointmentNoShowService;
 import com.petcare.module.appointment.service.AppointmentNoShowService.NoShowResult;
 import com.petcare.module.appointment.service.NoShowCutoff;
 import com.petcare.platform.config.TimeConfig;
+import com.petcare.platform.metrics.JobMetrics;
 
 /** {@link NoShowJob} (docs/adr/0053): keyset, lỗi từng lịch, ngân sách thời gian, không ném khỏi {@code run()}. */
 class NoShowJobTest {
@@ -39,10 +42,22 @@ class NoShowJobTest {
     private final AppointmentNoShowService service = mock(AppointmentNoShowService.class);
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
     private final AtomicLong nanos = new AtomicLong();
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
 
     private NoShowJob job(int batchSize, Duration budget) {
         when(service.cutoff(NOW)).thenReturn(CUTOFF);
-        return new NoShowJob(service, new NoShowProperties("0 */5 * * * *", batchSize, budget), clock, nanos::get);
+        NoShowJob job = new NoShowJob(service, new NoShowProperties("0 */5 * * * *", batchSize, budget), clock,
+                nanos::get);
+        job.setJobMetrics(new JobMetrics(meters));
+        return job;
+    }
+
+    private double runs(String outcome) {
+        return meters.get(JobMetrics.RUNS).tags("job", "no_show", "outcome", outcome).counter().count();
+    }
+
+    private double items(String result) {
+        return meters.get(JobMetrics.ITEMS).tags("job", "no_show", "result", result).counter().count();
     }
 
     @Test
@@ -72,6 +87,9 @@ class NoShowJobTest {
 
         verify(service).markNoShow(2L, CUTOFF);
         verify(service).findOverdueIds(CUTOFF, 2, 2);
+        assertThat(runs("ok")).as("lỗi lẻ của một lịch vẫn là lượt OK").isEqualTo(1);
+        assertThat(items("marked")).isEqualTo(1);
+        assertThat(items("failed")).isEqualTo(1);
     }
 
     @Test
@@ -88,6 +106,8 @@ class NoShowJobTest {
         verify(service).markNoShow(1L, CUTOFF);
         verify(service).markNoShow(2L, CUTOFF);
         verify(service, never()).markNoShow(3L, CUTOFF);
+        assertThat(runs("budget_stopped")).isEqualTo(1);
+        assertThat(items("marked")).isEqualTo(2);
     }
 
     @Test
@@ -95,10 +115,13 @@ class NoShowJobTest {
         when(service.cutoff(any())).thenThrow(new IllegalStateException("config"));
         NoShowJob job = new NoShowJob(service, new NoShowProperties("0 */5 * * * *", 10, Duration.ofSeconds(1)), clock,
                 nanos::get);
+        job.setJobMetrics(new JobMetrics(meters));
 
         job.run();
 
         verify(service, never()).findOverdueIds(any(), anyLong(), anyInt());
+        assertThat(runs("failed")).isEqualTo(1);
+        assertThat(meters.find(JobMetrics.RUNS).tag("outcome", "ok").counter()).isNull();
     }
 
     @Test

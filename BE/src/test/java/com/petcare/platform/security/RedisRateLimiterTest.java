@@ -20,6 +20,8 @@ import org.springframework.data.redis.core.script.RedisScript;
 
 import com.petcare.support.MutableClock;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * Quyết định cho qua / chặn và circuit-breaker của {@link RedisRateLimiter} với Redis giả (docs/adr/0100). Đếm atomic
  * và TTL trên Redis thật được chứng minh ở {@code RedisRateLimiterIT}.
@@ -34,7 +36,8 @@ class RedisRateLimiterTest {
             new RateLimitProperties.Rule(30, 60), new RateLimitProperties.Rule(10, 60),
             new RateLimitProperties.Rule(10, 60), new RateLimitProperties.Rule(10, 60),
             new RateLimitProperties.Rule(60, 3600), 10);
-    private final RedisRateLimiter limiter = new RedisRateLimiter(redis, clock, properties);
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    private final RedisRateLimiter limiter = new RedisRateLimiter(redis, clock, properties, meters);
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private void redisReturns(long count, long ttl) {
@@ -86,6 +89,8 @@ class RedisRateLimiterTest {
         assertThat(limiter.tryAcquire("rl:login:1.2.3.4", 10, WINDOW)).isEqualTo(RateLimiter.Decision.ALLOWED);
 
         verifyRedisCalls(1);
+        assertThat(meters.get(RedisRateLimiter.UNAVAILABLE).counter().count())
+                .as("đếm một lần mở circuit, không đếm request đi qua khi circuit đang mở").isEqualTo(1);
     }
 
     @Test

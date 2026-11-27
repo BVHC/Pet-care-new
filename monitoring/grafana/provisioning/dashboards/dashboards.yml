@@ -1,0 +1,13 @@
+# Dashboard nạp từ file trong repo (docs/adr/0155). Sửa trên giao diện không được lưu lại: sửa file JSON rồi commit.
+apiVersion: 1
+
+providers:
+  - name: petcare
+    folder: Pet Care
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 60
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

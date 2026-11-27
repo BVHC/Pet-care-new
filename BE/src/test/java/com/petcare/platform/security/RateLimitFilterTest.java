@@ -24,6 +24,8 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import com.petcare.platform.exception.TooManyRequestsException;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * {@link RateLimitFilter} (docs/adr/0100): đúng nhóm path / method, khóa theo IP, chặn thì không tới chain và lỗi đi
  * qua {@code HandlerExceptionResolver}. Bộ đếm là giả; phần đếm thật nằm ở {@code RedisRateLimiterIT}.
@@ -54,7 +56,8 @@ class RateLimitFilterTest {
             new RateLimitProperties.Rule(30, 60), new RateLimitProperties.Rule(10, 45),
             new RateLimitProperties.Rule(7, 30), new RateLimitProperties.Rule(5, 20),
             new RateLimitProperties.Rule(25, 1800), 10);
-    private final RateLimitFilter filter = new RateLimitFilter(limiter, properties, resolver);
+    private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
+    private final RateLimitFilter filter = new RateLimitFilter(limiter, properties, resolver, meters);
 
     private MockFilterChain run(String method, String uri, String remoteAddr) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest(method, uri);
@@ -127,6 +130,7 @@ class RateLimitFilterTest {
                 new RecordingLimiter.Call("rl:ai:203.0.113.9", 5, Duration.ofSeconds(20)),
                 new RecordingLimiter.Call("rl:ai-hour:203.0.113.9", 25, Duration.ofSeconds(1800)));
         assertThat(chain.getRequest()).as("cho qua khi cả hai cửa sổ dưới ngưỡng").isNotNull();
+        assertThat(meters.find(RateLimitFilter.REJECTED).counters()).as("cho qua thì không đếm").isEmpty();
     }
 
     @Test
@@ -143,6 +147,9 @@ class RateLimitFilterTest {
         ArgumentCaptor<Exception> error = ArgumentCaptor.forClass(Exception.class);
         verify(resolver).resolveException(any(), any(), isNull(), error.capture());
         assertThat(((TooManyRequestsException) error.getValue()).retryAfterSeconds()).isEqualTo(13);
+        assertThat(meters.get(RateLimitFilter.REJECTED).tags("group", "AI", "window", "ai").counter().count())
+                .isEqualTo(1);
+        assertThat(meters.find(RateLimitFilter.REJECTED).tag("window", "ai-hour").counter()).isNull();
     }
 
     @Test
@@ -160,6 +167,8 @@ class RateLimitFilterTest {
         ArgumentCaptor<Exception> error = ArgumentCaptor.forClass(Exception.class);
         verify(resolver).resolveException(any(), any(), isNull(), error.capture());
         assertThat(((TooManyRequestsException) error.getValue()).retryAfterSeconds()).isEqualTo(1700);
+        assertThat(meters.get(RateLimitFilter.REJECTED).tags("group", "AI", "window", "ai-hour").counter().count())
+                .isEqualTo(1);
     }
 
     @Test
@@ -177,6 +186,8 @@ class RateLimitFilterTest {
         verify(resolver).resolveException(any(), any(), isNull(), error.capture());
         assertThat(error.getValue()).isInstanceOf(TooManyRequestsException.class);
         assertThat(((TooManyRequestsException) error.getValue()).retryAfterSeconds()).isEqualTo(42);
+        assertThat(meters.get(RateLimitFilter.REJECTED).tags("group", "LOGIN", "window", "login").counter().count())
+                .isEqualTo(1);
     }
 
     @Test

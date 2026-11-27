@@ -60,6 +60,7 @@ import com.petcare.module.visit.api.FollowUpApi;
 import com.petcare.platform.exception.AccessDeniedScopeException;
 import com.petcare.platform.exception.BusinessRuleViolationException;
 import com.petcare.platform.exception.ResourceNotFoundException;
+import com.petcare.platform.metrics.BusinessMetrics;
 import com.petcare.platform.security.BranchScope;
 import com.petcare.platform.security.SecurityPrincipal;
 
@@ -96,9 +97,10 @@ class AppointmentBookingServiceTest {
     private final AppointmentRepository appointments = mock(AppointmentRepository.class);
     private final Clock clock = mock(Clock.class);
     private final SecurityPrincipal principal = mock(SecurityPrincipal.class);
+    private final BusinessMetrics metrics = mock(BusinessMetrics.class);
     private final AppointmentBookingService service = new AppointmentBookingService(scope, customers, pets, catalog,
             branchLocks, branches, restrictions, followUps, configs, locks, codes, appointments,
-            new AppointmentTransitionHandler(), Mappers.getMapper(AppointmentMapper.class), clock);
+            new AppointmentTransitionHandler(), Mappers.getMapper(AppointmentMapper.class), clock, metrics);
 
     @BeforeEach
     void setUp() {
@@ -147,6 +149,7 @@ class AppointmentBookingServiceTest {
         order.verify(followUps).cancelRemindedFollowUpTasks(PET);
         order.verify(branches).findBranch(BRANCH);
         verify(scope, never()).check(any());
+        verify(metrics).increment(BusinessMetrics.APPOINTMENT_BOOKED, "branch", "3", "channel", "ONLINE");
 
         Appointment saved = savedAppointment();
         assertThat(saved.getCode()).isEqualTo("LH-261015-0042");
@@ -194,7 +197,7 @@ class AppointmentBookingServiceTest {
         assertThatThrownBy(() -> service.bookAppointment(request(DAY, START, null)))
                 .isInstanceOf(BusinessRuleViolationException.class).hasMessageContaining("BR-LH-03");
         verify(appointments, never()).saveAndFlush(any());
-        verifyNoInteractions(followUps);
+        verifyNoInteractions(followUps, metrics);
     }
 
     @Test

@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.LongSupplier;
 
@@ -18,6 +19,7 @@ import com.petcare.module.shop.service.OnlineOrderPaymentExpiryService.DueOrder;
 import com.petcare.module.shop.service.OnlineOrderPaymentExpiryService.Result;
 import com.petcare.platform.config.TimeConfig;
 import com.petcare.platform.config.TraceContext;
+import com.petcare.platform.metrics.JobMetrics;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,6 +38,7 @@ public class OnlineOrderPaymentExpiryJob {
     private final OnlineOrderPaymentExpiryProperties properties;
     private final Clock clock;
     private final LongSupplier ticker;
+    private JobMetrics jobMetrics = JobMetrics.NOOP;
 
     @Autowired
     public OnlineOrderPaymentExpiryJob(OnlineOrderPaymentExpiryService expiry,
@@ -49,6 +52,12 @@ public class OnlineOrderPaymentExpiryJob {
         this.properties = properties;
         this.clock = clock;
         this.ticker = ticker;
+    }
+
+    /** Kết quả từng lượt chạy cho Prometheus (docs/adr/0155); job dựng tay trong test giữ {@link JobMetrics#NOOP}. */
+    @Autowired
+    void setJobMetrics(JobMetrics jobMetrics) {
+        this.jobMetrics = jobMetrics;
     }
 
     @Scheduled(cron = "${app.jobs.online-order-payment-expiry.cron}", zone = TimeConfig.BUSINESS_ZONE_ID)
@@ -90,9 +99,13 @@ public class OnlineOrderPaymentExpiryJob {
             } while (rows.size() == properties.batchSize());
             log.info("ONLINE_ORDER_PAYMENT_EXPIRY expired={} skipped={} failed={} stoppedByBudget={} now={} durationMs={}",
                     expired, skipped, failed, stoppedByBudget, now, elapsedMs(started));
+            jobMetrics.record("online_order_payment_expiry", JobMetrics.Outcome.finished(stoppedByBudget),
+                    Map.of("expired", expired, "skipped", skipped, "failed", failed));
         } catch (RuntimeException e) {
             log.error("ONLINE_ORDER_PAYMENT_EXPIRY_FAILED expiredSoFar={} now={} durationMs={}", expired, now,
                     elapsedMs(started), e);
+            jobMetrics.record("online_order_payment_expiry", JobMetrics.Outcome.FAILED,
+                    Map.of("expired", expired, "skipped", skipped, "failed", failed));
         } finally {
             MDC.remove(TraceContext.MDC_KEY);
         }

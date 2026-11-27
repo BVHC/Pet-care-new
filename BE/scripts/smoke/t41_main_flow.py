@@ -163,7 +163,8 @@ def start_stack():
     deadline = time.time() + 300
     while time.time() < deadline:
         try:
-            status, body = http("GET", "/actuator/health")
+            # Actuator đã chuyển sang cổng management nội bộ (docs/adr/0155); /readyz là probe trên cổng API.
+            status, body = http("GET", "/readyz")
             if status == 200 and (body or {}).get("status") == "UP":
                 print("» Backend UP", flush=True)
                 return

@@ -3,7 +3,9 @@ package com.petcare.module.care.service;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,9 +21,7 @@ import com.petcare.module.care.entity.OutboxStatus;
 import com.petcare.module.care.repository.LaneBacklog;
 import com.petcare.module.care.repository.NotificationOutboxRepository;
 import com.petcare.module.care.service.NotificationTemplateRenderer.Rendered;
-import com.petcare.module.care.service.SmtpBatchSender.Attempt;
-import com.petcare.module.care.service.SmtpBatchSender.BatchResult;
-import com.petcare.module.care.service.SmtpBatchSender.Outcome;
+import com.petcare.module.care.service.OutboxMailSender.Delivery;
 import com.petcare.module.identity.api.NotificationTemplateQueryApi;
 import com.petcare.module.identity.api.NotificationTemplateQueryApi.TemplateView;
 
@@ -33,15 +33,19 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Gửi email từ {@code notification_outbox} — ST20 (docs/adr/0012). Luồng HIGH: mỗi lời gọi {@link #dispatchNext} là
- * một transaction cho đúng một dòng: khóa dòng đến hạn ({@code SKIP LOCKED}) → dựng thư → SMTP → cập nhật trạng thái →
- * commit. Luồng NORMAL: {@link #dispatchNextBatch} khóa tối đa N dòng và gửi trên một kết nối SMTP trong một
- * transaction (docs/adr/0017). At-least-once: SMTP đã nhận mà commit lỗi thì lượt sau gửi lại, cùng {@code Message-ID}.
+ * Phần CSDL của ST20 email (docs/adr/0012, docs/adr/0154): <b>nhận dòng</b> và <b>ghi kết quả</b>, mỗi bước một
+ * transaction ngắn; SMTP chạy giữa hai bước, ngoài transaction ({@link OutboxMailSender}).
+ * <ol>
+ * <li>Nhận dòng: khóa dòng đến hạn ({@code SKIP LOCKED}) → dựng thư → đặt {@code next_attempt_at} = hạn giữ (vé) →
+ * commit. Lượt khác không thấy dòng tới hạn giữ; chết giữa chừng thì dòng tự hiện lại khi hết hạn.</li>
+ * <li>Ghi kết quả: khóa từng dòng theo {@code id} tăng dần, kiểm lại vé dưới khóa, rồi {@code SENT} / thử lại /
+ * {@code FAILED} / trả về hạn cũ. Vé lệch (đã hết hạn giữ, lượt khác nhận lại) thì bỏ qua.</li>
+ * </ol>
+ * At-least-once: SMTP đã nhận mà ghi kết quả không xong thì thư được gửi lại sau hạn giữ, cùng {@code Message-ID}.
  * <ul>
  * <li>Lỗi vĩnh viễn (không có địa chỉ, mẫu không có / sai kênh, thiếu biến bắt buộc, địa chỉ sai, máy chủ từ chối
  * người nhận) → {@code FAILED} ngay.</li>
- * <li>Lỗi tạm thời → lùi {@code initialBackoff × 2^attempts}; tới {@code maxAttempts} thì {@code FAILED}. Lỗi mức kết
- * nối / xác thực trả {@link DispatchResult#STOP_RUN} để lượt chạy dừng thay vì chờ timeout với từng dòng.</li>
+ * <li>Lỗi tạm thời → lùi {@code initialBackoff × 2^attempts}; tới {@code maxAttempts} thì {@code FAILED}.</li>
  * <li>Lỗi DB thoát ra ngoài: transaction rollback, dòng giữ nguyên, lượt sau làm lại.</li>
  * </ul>
  * Không log payload; email chỉ log dạng che.
@@ -56,16 +60,26 @@ public class NotificationDispatchService {
     public record DispatchPolicy(int maxAttempts, Duration initialBackoff, String mailFrom) {}
 
     /**
-     * Kết quả một lô NORMAL: {@code locked} dòng đã khóa ({@code 0} = hết dòng đến hạn), số dòng gửi được / hẹn thử lại /
-     * {@code FAILED}; dòng chưa thử (hết ngân sách, sau lỗi máy chủ) không đổi. {@code stopRun}: lỗi cấp máy chủ.
+     * Một thư đã nhận, chờ gửi ngoài transaction. {@code claimToken}: giá trị {@code next_attempt_at} đã đặt lúc nhận
+     * (vé); {@code dueAt}: hạn trước khi nhận, để trả dòng về hoặc đo độ trễ hàng đợi ở lần gửi đầu.
      */
-    public record BatchOutcome(int locked, int sent, int retried, int failed, boolean stopRun) {
-        public static final BatchOutcome NONE = new BatchOutcome(0, 0, 0, 0, false);
-    }
+    public record ClaimedMail(Long outboxId, Instant claimToken, Instant dueAt, boolean firstAttempt,
+            MimeMessage message) {}
 
     /**
-     * Postgres tự hủy transaction "idle in transaction" quá lâu (đang chờ SMTP). Lớn hơn tổng timeout SMTP
-     * (kết nối 5 s + đọc 10 s + ghi 10 s) để không hủy nhầm lần gửi đã thành công (docs/adr/0012).
+     * Kết quả bước nhận: {@code locked} dòng đã khóa ({@code 0} = hết dòng đến hạn), các thư cần gửi, và số dòng đã
+     * xử lý ngay vì dựng thư lỗi ({@code retried} hẹn thử lại, {@code failed} thành {@code FAILED}).
+     */
+    public record Claim(int locked, List<ClaimedMail> mails, int retried, int failed) {
+        public static final Claim NONE = new Claim(0, List.of(), 0, 0);
+    }
+
+    /** Kết quả bước ghi; {@code stale}: dòng có vé đã hết hiệu lực, không đổi gì. */
+    public record Settled(int sent, int retried, int failed, int stale) {}
+
+    /**
+     * Postgres tự hủy transaction "idle in transaction" quá lâu. SMTP đã ra ngoài transaction (docs/adr/0154); giới hạn
+     * này còn là lưới an toàn cho transaction nhận dòng.
      */
     static final String IDLE_IN_TRANSACTION_TIMEOUT = "60s";
     static final String MESSAGE_ID_DOMAIN = "petcare.local";
@@ -74,103 +88,84 @@ public class NotificationDispatchService {
     private final NotificationTemplateQueryApi templates;
     private final NotificationTemplateRenderer renderer;
     private final JavaMailSender mailSender;
-    private final SmtpBatchSender batchSender;
     private final MeterRegistry meters;
 
     public NotificationDispatchService(NotificationOutboxRepository outbox, NotificationTemplateQueryApi templates,
-            NotificationTemplateRenderer renderer, JavaMailSender mailSender, SmtpBatchSender batchSender,
-            MeterRegistry meters) {
+            NotificationTemplateRenderer renderer, JavaMailSender mailSender, MeterRegistry meters) {
         this.outbox = outbox;
         this.templates = templates;
         this.renderer = renderer;
         this.mailSender = mailSender;
-        this.batchSender = batchSender;
         this.meters = meters;
     }
 
+    /** Luồng HIGH: nhận một dòng đến hạn (OTP, mật khẩu tạm), giữ trong {@code lease}. */
     @Transactional
-    public DispatchResult dispatchNext(DeliveryLane lane, Instant now, DispatchPolicy policy) {
-        requireEmailLane(lane);
+    public Claim claimNextHigh(Instant now, DispatchPolicy policy, Duration lease) {
         outbox.limitIdleInTransaction(IDLE_IN_TRANSACTION_TIMEOUT);
-        Optional<NotificationOutbox> next = lane == DeliveryLane.HIGH
-                ? outbox.lockNextDueEmailIn(now, DeliveryLane.HIGH_TEMPLATES)
-                : outbox.lockNextDueEmailNotIn(now, DeliveryLane.HIGH_TEMPLATES);
-        if (next.isEmpty()) {
-            return DispatchResult.NONE;
-        }
-        NotificationOutbox row = next.get();
-        boolean firstAttempt = row.getAttempts() == 0;
-        Instant dueAt = row.getNextAttemptAt();
+        List<NotificationOutbox> rows = outbox.lockNextDueEmailIn(now, DeliveryLane.HIGH_TEMPLATES).stream().toList();
+        return claim(rows, DeliveryLane.HIGH, now, policy, lease);
+    }
 
-        MimeMessage message;
-        try {
-            message = compose(row, policy);
-        } catch (PermanentFailure e) {
-            return fail(row, lane, e.getMessage());
-        } catch (DataAccessException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            return retryOrFail(row, lane, now, policy, SmtpFailures.describe(e));
-        }
-
-        try {
-            mailSender.send(message);
-        } catch (DataAccessException e) {
-            throw e;
-        } catch (RuntimeException e) {
-            return handleSendFailure(row, lane, now, policy, e);
-        }
-
-        return markSent(row, lane, now, firstAttempt, dueAt);
+    /** Luồng NORMAL theo lô (docs/adr/0017): nhận tối đa {@code batchSize} dòng đến hạn, giữ trong {@code lease}. */
+    @Transactional
+    public Claim claimNextNormalBatch(Instant now, DispatchPolicy policy, int batchSize, Duration lease) {
+        outbox.limitIdleInTransaction(IDLE_IN_TRANSACTION_TIMEOUT);
+        List<NotificationOutbox> rows = outbox.lockNextDueEmailBatchNotIn(now, DeliveryLane.HIGH_TEMPLATES, batchSize);
+        return claim(rows, DeliveryLane.NORMAL, now, policy, lease);
     }
 
     /**
-     * Luồng NORMAL theo lô (docs/adr/0017): một transaction khóa tối đa {@code batchSize} dòng đến hạn
-     * ({@code SKIP LOCKED}), dựng thư từng dòng, gửi cả lô trên một kết nối SMTP ({@link SmtpBatchSender}, dừng khi hết
-     * {@code sendBudget}) rồi cập nhật từng dòng. Lỗi kết nối chỉ tính một lần thử cho dòng đầu (như gửi từng thư);
-     * dòng chưa thử giữ nguyên để lượt sau gửi.
+     * Kích gửi ngay sau commit (docs/adr/0154): nhận đúng dòng HIGH {@code outboxId} nếu nó còn đến hạn; dòng job HIGH
+     * đã nhận, đang bị khóa hay đã xử lý thì trả {@link Claim#NONE}.
      */
     @Transactional
-    public BatchOutcome dispatchNextBatch(Instant now, DispatchPolicy policy, int batchSize, Duration sendBudget) {
-        DeliveryLane lane = DeliveryLane.NORMAL;
+    public Claim claimHighById(Long outboxId, Instant now, DispatchPolicy policy, Duration lease) {
         outbox.limitIdleInTransaction(IDLE_IN_TRANSACTION_TIMEOUT);
-        List<NotificationOutbox> rows = outbox.lockNextDueEmailBatchNotIn(now, DeliveryLane.HIGH_TEMPLATES, batchSize);
-        if (rows.isEmpty()) {
-            return BatchOutcome.NONE;
-        }
-        int[] tally = new int[DispatchResult.values().length];
+        List<NotificationOutbox> rows = outbox.lockDueEmailById(outboxId, now, DeliveryLane.HIGH_TEMPLATES).stream()
+                .toList();
+        return claim(rows, DeliveryLane.HIGH, now, policy, lease);
+    }
 
-        List<NotificationOutbox> sendable = new ArrayList<>();
-        List<MimeMessage> messages = new ArrayList<>();
-        for (NotificationOutbox row : rows) {
-            try {
-                messages.add(compose(row, policy));
-                sendable.add(row);
-            } catch (PermanentFailure e) {
-                tally[fail(row, lane, e.getMessage()).ordinal()]++;
-            } catch (DataAccessException e) {
-                throw e;
-            } catch (RuntimeException e) {
-                tally[retryOrFail(row, lane, now, policy, SmtpFailures.describe(e)).ordinal()]++;
+    /** Ghi kết quả gửi; khóa theo {@code id} tăng dần để hai lượt ghi không chờ chéo nhau. */
+    @Transactional
+    public Settled settle(DeliveryLane lane, Instant now, DispatchPolicy policy, List<Delivery> deliveries) {
+        requireEmailLane(lane);
+        int sent = 0;
+        int retried = 0;
+        int failed = 0;
+        int stale = 0;
+        List<Delivery> ordered = deliveries.stream().sorted(Comparator.comparing(d -> d.mail().outboxId())).toList();
+        for (Delivery delivery : ordered) {
+            ClaimedMail mail = delivery.mail();
+            Optional<NotificationOutbox> locked = outbox.findByIdForUpdate(mail.outboxId());
+            if (locked.isEmpty() || !locked.get().isClaimedBy(mail.claimToken())) {
+                stale++;
+                log.warn("NOTIFICATION_SETTLE_STALE id={} lane={} outcome={}", mail.outboxId(), lane,
+                        delivery.outcome());
+                continue;
+            }
+            NotificationOutbox row = locked.get();
+            switch (delivery.outcome()) {
+                case SENT -> {
+                    markSent(row, lane, now, mail.firstAttempt(), mail.dueAt());
+                    sent++;
+                }
+                case NOT_ATTEMPTED -> row.release(mail.dueAt());
+                case FAILED -> {
+                    Exception error = delivery.error();
+                    DispatchResult result = SmtpFailures.isRejectedRecipient(error)
+                            ? fail(row, lane, SmtpFailures.describe(error))
+                            : retryOrFail(row, lane, now, policy, SmtpFailures.describe(error));
+                    if (result == DispatchResult.RETRY) {
+                        retried++;
+                    } else {
+                        failed++;
+                    }
+                }
             }
         }
-
-        BatchResult sent = batchSender.send(messages, sendBudget, lane);
-        for (int i = 0; i < sendable.size(); i++) {
-            NotificationOutbox row = sendable.get(i);
-            Attempt attempt = sent.attempts().get(i);
-            if (attempt.outcome() == Outcome.SENT) {
-                tally[markSent(row, lane, now, row.getAttempts() == 0, row.getNextAttemptAt()).ordinal()]++;
-            } else if (attempt.outcome() == Outcome.FAILED) {
-                Exception error = attempt.error();
-                DispatchResult result = SmtpFailures.isRejectedRecipient(error)
-                        ? fail(row, lane, SmtpFailures.describe(error))
-                        : retryOrFail(row, lane, now, policy, SmtpFailures.describe(error));
-                tally[result.ordinal()]++;
-            }
-        }
-        return new BatchOutcome(rows.size(), tally[DispatchResult.SENT.ordinal()],
-                tally[DispatchResult.RETRY.ordinal()], tally[DispatchResult.FAILED.ordinal()], sent.stopRun());
+        return new Settled(sent, retried, failed, stale);
     }
 
     /** Số dòng đến hạn chưa gửi của luồng — cho metrics và cảnh báo trễ (không khóa). */
@@ -180,6 +175,43 @@ public class NotificationDispatchService {
         return lane == DeliveryLane.HIGH
                 ? outbox.backlogIn(now, DeliveryLane.HIGH_TEMPLATES, OutboxStatus.PENDING, Channel.EMAIL)
                 : outbox.backlogNotIn(now, DeliveryLane.HIGH_TEMPLATES, OutboxStatus.PENDING, Channel.EMAIL);
+    }
+
+    /**
+     * Dựng thư từng dòng; dòng dựng được thì nhận với cùng một vé {@code now + lease} (cắt về micro giây như cột
+     * {@code timestamptz}, để vé đọc lại từ DB bằng đúng giá trị đã ghi).
+     */
+    private Claim claim(List<NotificationOutbox> rows, DeliveryLane lane, Instant now, DispatchPolicy policy,
+            Duration lease) {
+        if (rows.isEmpty()) {
+            return Claim.NONE;
+        }
+        Instant token = now.plus(lease).truncatedTo(ChronoUnit.MICROS);
+        List<ClaimedMail> mails = new ArrayList<>();
+        int retried = 0;
+        int failed = 0;
+        for (NotificationOutbox row : rows) {
+            MimeMessage message;
+            try {
+                message = compose(row, policy);
+            } catch (PermanentFailure e) {
+                fail(row, lane, e.getMessage());
+                failed++;
+                continue;
+            } catch (DataAccessException e) {
+                throw e;
+            } catch (RuntimeException e) {
+                if (retryOrFail(row, lane, now, policy, SmtpFailures.describe(e)) == DispatchResult.RETRY) {
+                    retried++;
+                } else {
+                    failed++;
+                }
+                continue;
+            }
+            mails.add(new ClaimedMail(row.getId(), token, row.getNextAttemptAt(), row.getAttempts() == 0, message));
+            row.claim(token);
+        }
+        return new Claim(rows.size(), List.copyOf(mails), retried, failed);
     }
 
     private MimeMessage compose(NotificationOutbox row, DispatchPolicy policy) throws PermanentFailure {
@@ -209,15 +241,6 @@ public class NotificationDispatchService {
         } catch (MessagingException e) {
             throw new PermanentFailure("Không dựng được thư: " + e.getMessage());
         }
-    }
-
-    private DispatchResult handleSendFailure(NotificationOutbox row, DeliveryLane lane, Instant now,
-            DispatchPolicy policy, RuntimeException error) {
-        if (SmtpFailures.isRejectedRecipient(error)) {
-            return fail(row, lane, SmtpFailures.describe(error));
-        }
-        DispatchResult result = retryOrFail(row, lane, now, policy, SmtpFailures.describe(error));
-        return SmtpFailures.isServerLevel(error) ? DispatchResult.STOP_RUN : result;
     }
 
     private DispatchResult markSent(NotificationOutbox row, DeliveryLane lane, Instant now, boolean firstAttempt,

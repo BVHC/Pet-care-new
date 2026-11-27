@@ -69,6 +69,8 @@ app:
       cron: "-"
       priority-cron: "-"
       in-app-cron: "-"
+      # Không gửi ngay sau commit: IT gọi job / runner và đọc GreenMail đồng bộ. Chỉ PriorityEmailKickIT bật lại.
+      kick-enabled: false
     notification-outbox-cleanup:
       cron: "-"
     refresh-token-cleanup:

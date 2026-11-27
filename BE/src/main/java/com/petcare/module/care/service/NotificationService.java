@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +18,8 @@ import com.petcare.module.care.repository.NotificationOutboxRepository;
  * Cài {@link NotificationApi}: chỉ ghi {@code notification_outbox} trong transaction của caller ({@code MANDATORY}),
  * worker ST20 gửi sau (06 §1, convention 07 §7.2). Caller chịu trách nhiệm payload đủ biến bắt buộc của mẫu
  * (BR-QT-14); mẫu không tồn tại thì FK {@code template_code} chặn. Request thiếu dữ liệu là lỗi lập trình →
- * {@link IllegalArgumentException}.
+ * {@link IllegalArgumentException}. Dòng email luồng HIGH (OTP, mật khẩu tạm) còn phát {@link PriorityEmailQueued}
+ * để gửi ngay sau commit (docs/adr/0154); dòng vẫn là nguồn sự thật, job HIGH quét bù.
  */
 @Service
 public class NotificationService implements NotificationApi {
@@ -27,10 +29,12 @@ public class NotificationService implements NotificationApi {
 
     private final NotificationOutboxRepository outbox;
     private final Clock clock;
+    private final ApplicationEventPublisher events;
 
-    public NotificationService(NotificationOutboxRepository outbox, Clock clock) {
+    public NotificationService(NotificationOutboxRepository outbox, Clock clock, ApplicationEventPublisher events) {
         this.outbox = outbox;
         this.clock = clock;
+        this.events = events;
     }
 
     @Override
@@ -61,8 +65,12 @@ public class NotificationService implements NotificationApi {
         if (request.linkUrl() != null) {
             payload.put(LINK_URL_KEY, request.linkUrl());
         }
-        outbox.save(NotificationOutbox.pending(request.channel(), request.templateCode(),
-                hasEmail ? request.recipientEmail() : null, request.recipientAccountId(), payload,
-                Instant.now(clock)));
+        NotificationOutbox row = NotificationOutbox.pending(request.channel(), request.templateCode(),
+                hasEmail ? request.recipientEmail() : null, request.recipientAccountId(), payload, Instant.now(clock));
+        // IDENTITY: persist chèn ngay nên row đã có id.
+        outbox.save(row);
+        if (request.channel() == Channel.EMAIL && DeliveryLane.HIGH_TEMPLATES.contains(request.templateCode())) {
+            events.publishEvent(new PriorityEmailQueued(row.getId()));
+        }
     }
 }

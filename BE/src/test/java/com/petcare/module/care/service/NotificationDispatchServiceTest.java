@@ -5,8 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -15,23 +14,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.net.ConnectException;
-import java.net.SocketTimeoutException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailSendException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -40,12 +36,12 @@ import com.petcare.module.care.api.NotificationApi.Channel;
 import com.petcare.module.care.entity.NotificationOutbox;
 import com.petcare.module.care.entity.OutboxStatus;
 import com.petcare.module.care.repository.NotificationOutboxRepository;
-import com.petcare.module.care.service.NotificationDispatchService.BatchOutcome;
+import com.petcare.module.care.service.NotificationDispatchService.Claim;
+import com.petcare.module.care.service.NotificationDispatchService.ClaimedMail;
 import com.petcare.module.care.service.NotificationDispatchService.DispatchPolicy;
-import com.petcare.module.care.service.NotificationDispatchService.DispatchResult;
-import com.petcare.module.care.service.SmtpBatchSender.Attempt;
-import com.petcare.module.care.service.SmtpBatchSender.BatchResult;
-import com.petcare.module.care.service.SmtpBatchSender.Outcome;
+import com.petcare.module.care.service.NotificationDispatchService.Settled;
+import com.petcare.module.care.service.OutboxMailSender.Delivery;
+import com.petcare.module.care.service.OutboxMailSender.Outcome;
 import com.petcare.module.identity.api.NotificationTemplateQueryApi;
 import com.petcare.module.identity.api.NotificationTemplateQueryApi.TemplateView;
 
@@ -58,119 +54,139 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 
 /**
- * Một lần gửi của ST20 (docs/adr/0012): chọn dòng theo luồng, dựng thư, phân loại lỗi vĩnh viễn / tạm thời / mức kết
- * nối, lùi lịch thử lại, xóa khóa nhạy cảm. Luồng NORMAL theo lô (docs/adr/0017): ma trận lỗi của lô.
+ * Phần CSDL của ST20 email (docs/adr/0012, docs/adr/0154): bước nhận dòng (chọn theo luồng, dựng thư, lỗi dựng thư,
+ * vé hạn giữ) và bước ghi kết quả (kiểm vé dưới khóa, phân loại lỗi, lùi lịch thử lại, trả dòng chưa thử, xóa khóa
+ * nhạy cảm). Không có SMTP ở lớp này.
  */
 class NotificationDispatchServiceTest {
 
     private static final Instant NOW = Instant.parse("2026-10-07T03:00:00Z");
+    private static final Instant LATER = NOW.plusSeconds(2);
+    private static final Duration LEASE = Duration.ofSeconds(60);
+    private static final Instant TOKEN = NOW.plus(LEASE);
     private static final DispatchPolicy POLICY = new DispatchPolicy(5, Duration.ofMinutes(1), "no-reply@petcare.local");
     private static final TemplateView OTP = new TemplateView("OTP_REGISTER", "EMAIL", "Mã xác thực",
             "Xin chào,\nMã: {ma_otp} ({thoi_han_phut} phút)", List.of("ten_khach", "ma_otp", "thoi_han_phut"),
             List.of("ma_otp"));
+    private static final TemplateView NOTICE = new TemplateView("IT_NOTICE", "EMAIL", "Thông báo {so}",
+            "Nội dung {so}", List.of("so"), List.of("so"));
 
     private final NotificationOutboxRepository outbox = mock(NotificationOutboxRepository.class);
     private final NotificationTemplateQueryApi templates = mock(NotificationTemplateQueryApi.class);
     private final JavaMailSender mailSender = mock(JavaMailSender.class);
-    private final SmtpBatchSender batchSender = mock(SmtpBatchSender.class);
     private final SimpleMeterRegistry meters = new SimpleMeterRegistry();
     private final NotificationDispatchService service = new NotificationDispatchService(outbox, templates,
-            new NotificationTemplateRenderer(), mailSender, batchSender, meters);
+            new NotificationTemplateRenderer(), mailSender, meters);
 
     @BeforeEach
     void setUp() {
         when(mailSender.createMimeMessage()).thenAnswer(inv -> new MimeMessage(Session.getInstance(new Properties())));
         when(templates.findTemplate("OTP_REGISTER")).thenReturn(Optional.of(OTP));
+        when(templates.findTemplate("IT_NOTICE")).thenReturn(Optional.of(NOTICE));
     }
 
-    private static NotificationOutbox row(String email, Map<String, Object> payload) {
-        NotificationOutbox row = NotificationOutbox.pending(Channel.EMAIL, "OTP_REGISTER", email, null, payload,
+    private static NotificationOutbox row(long id, String template, String email, Map<String, Object> payload) {
+        NotificationOutbox row = NotificationOutbox.pending(Channel.EMAIL, template, email, null, payload,
                 NOW.minusSeconds(4));
-        ReflectionTestUtils.setField(row, "id", 42L);
+        ReflectionTestUtils.setField(row, "id", id);
         return row;
     }
 
     private static NotificationOutbox otpRow() {
-        return row("an@petcare.test", Map.of("ma_otp", "123456", "thoi_han_phut", 5));
+        return row(42, "OTP_REGISTER", "an@petcare.test", Map.of("ma_otp", "123456", "thoi_han_phut", 5));
     }
 
-    private NotificationOutbox due(NotificationOutbox row) {
+    private static NotificationOutbox noticeRow(long id, String email) {
+        return row(id, "IT_NOTICE", email, Map.of("so", id));
+    }
+
+    private Claim claimHigh(NotificationOutbox row) {
         when(outbox.lockNextDueEmailIn(NOW, DeliveryLane.HIGH_TEMPLATES)).thenReturn(Optional.of(row));
-        return row;
+        return service.claimNextHigh(NOW, POLICY, LEASE);
     }
 
-    private DispatchResult dispatch() {
-        return service.dispatchNext(DeliveryLane.HIGH, NOW, POLICY);
+    private Claim claimBatch(NotificationOutbox... rows) {
+        when(outbox.lockNextDueEmailBatchNotIn(NOW, DeliveryLane.HIGH_TEMPLATES, 20)).thenReturn(List.of(rows));
+        return service.claimNextNormalBatch(NOW, POLICY, 20, LEASE);
     }
 
-    private MimeMessage sentMessage() throws MessagingException {
-        ArgumentCaptor<MimeMessage> captor = ArgumentCaptor.forClass(MimeMessage.class);
-        verify(mailSender).send(captor.capture());
-        MimeMessage message = captor.getValue();
-        message.saveChanges();
-        return message;
+    /** Dòng đang được ghi kết quả: {@code findByIdForUpdate} trả đúng dòng đã nhận (vé còn hiệu lực). */
+    private void lockedForSettle(NotificationOutbox... rows) {
+        for (NotificationOutbox row : rows) {
+            when(outbox.findByIdForUpdate(row.getId())).thenReturn(Optional.of(row));
+        }
     }
 
-    // ---------------------------------------------------------------- chọn dòng
-
-    /** Luồng IN_APP thuộc InAppNotificationDeliveryService (docs/adr/0014): gọi nhầm không được coi như NORMAL. */
-    @Test
-    void inAppLaneIsRejected() {
-        assertThatThrownBy(() -> service.dispatchNext(DeliveryLane.IN_APP, NOW, POLICY))
-                .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> service.backlog(DeliveryLane.IN_APP, NOW))
-                .isInstanceOf(IllegalArgumentException.class);
-        verify(outbox, never()).lockNextDueEmailNotIn(any(), anyCollection());
-        verify(mailSender, never()).send(any(MimeMessage.class));
+    private static ClaimedMail mail(NotificationOutbox row) {
+        return new ClaimedMail(row.getId(), TOKEN, NOW.minusSeconds(4), row.getAttempts() == 0, null);
     }
+
+    private Settled settle(DeliveryLane lane, Delivery... deliveries) {
+        return service.settle(lane, LATER, POLICY, List.of(deliveries));
+    }
+
+    // ================================================================ bước nhận dòng
 
     @Test
     void noDueRowMeansNone() {
         when(outbox.lockNextDueEmailIn(any(), anyCollection())).thenReturn(Optional.empty());
 
-        assertThat(dispatch()).isEqualTo(DispatchResult.NONE);
-        verify(mailSender, never()).send(any(MimeMessage.class));
+        assertThat(service.claimNextHigh(NOW, POLICY, LEASE)).isEqualTo(Claim.NONE);
     }
 
-    /** {@code SET LOCAL idle_in_transaction_session_timeout} chạy trước khi khóa dòng. */
+    /** {@code SET LOCAL idle_in_transaction_session_timeout} chạy trước khi khóa dòng, ở cả ba cách nhận. */
     @Test
-    void limitsIdleInTransactionBeforeLockingRow() {
+    void limitsIdleInTransactionBeforeLocking() {
         when(outbox.lockNextDueEmailIn(any(), anyCollection())).thenReturn(Optional.empty());
+        when(outbox.lockNextDueEmailBatchNotIn(any(), anyCollection(), anyInt())).thenReturn(List.of());
+        when(outbox.lockDueEmailById(anyLong(), any(), anyCollection())).thenReturn(Optional.empty());
 
-        dispatch();
+        service.claimNextHigh(NOW, POLICY, LEASE);
+        service.claimNextNormalBatch(NOW, POLICY, 20, LEASE);
+        service.claimHighById(9L, NOW, POLICY, LEASE);
 
         InOrder order = inOrder(outbox);
         order.verify(outbox).limitIdleInTransaction("60s");
         order.verify(outbox).lockNextDueEmailIn(NOW, DeliveryLane.HIGH_TEMPLATES);
+        order.verify(outbox).limitIdleInTransaction("60s");
+        order.verify(outbox).lockNextDueEmailBatchNotIn(NOW, DeliveryLane.HIGH_TEMPLATES, 20);
+        order.verify(outbox).limitIdleInTransaction("60s");
+        order.verify(outbox).lockDueEmailById(9L, NOW, DeliveryLane.HIGH_TEMPLATES);
     }
 
+    /**
+     * Nhận dòng: thư được dựng đủ (tiêu đề, nội dung, Message-ID theo dòng, người gửi, người nhận), dòng bị đẩy
+     * {@code next_attempt_at} tới hạn giữ (cắt micro giây) làm vé; trạng thái, số lần, payload chưa đổi.
+     */
     @Test
-    void normalLaneSelectsComplementOfHighTemplates() {
-        when(outbox.lockNextDueEmailNotIn(any(), anyCollection())).thenReturn(Optional.empty());
+    void claimComposesMessageAndPushesDueToLeaseWithoutChargingAttempt() throws Exception {
+        NotificationOutbox row = otpRow();
+        Instant nowWithNanos = NOW.plusNanos(1_234_567);
+        when(outbox.lockNextDueEmailIn(nowWithNanos, DeliveryLane.HIGH_TEMPLATES)).thenReturn(Optional.of(row));
 
-        assertThat(service.dispatchNext(DeliveryLane.NORMAL, NOW, POLICY)).isEqualTo(DispatchResult.NONE);
+        Claim claim = service.claimNextHigh(nowWithNanos, POLICY, LEASE);
 
-        verify(outbox).lockNextDueEmailNotIn(NOW, DeliveryLane.HIGH_TEMPLATES);
-        verify(outbox, never()).lockNextDueEmailIn(any(), anyCollection());
-    }
-
-    // ---------------------------------------------------------------- gửi được
-
-    @Test
-    void sendsRenderedMessageWithFixedMessageIdAndScrubsPayload() throws Exception {
-        NotificationOutbox row = due(otpRow());
-
-        assertThat(dispatch()).isEqualTo(DispatchResult.SENT);
-
-        MimeMessage message = sentMessage();
+        assertThat(claim.locked()).isEqualTo(1);
+        ClaimedMail mail = claim.mails().get(0);
+        Instant token = NOW.plus(LEASE).plusNanos(1_234_000);
+        assertThat(mail.outboxId()).isEqualTo(42L);
+        assertThat(mail.claimToken()).isEqualTo(token);
+        assertThat(mail.dueAt()).isEqualTo(NOW.minusSeconds(4));
+        assertThat(mail.firstAttempt()).isTrue();
+        MimeMessage message = mail.message();
+        message.saveChanges();
         assertThat(message.getSubject()).isEqualTo("Mã xác thực");
         assertThat((String) message.getContent()).isEqualTo("Xin chào,\nMã: 123456 (5 phút)");
         assertThat(message.getMessageID()).isEqualTo("<notification-42@petcare.local>");
         assertThat(message.getFrom()).extracting(Address::toString).containsExactly("no-reply@petcare.local");
         assertThat(message.getAllRecipients()).extracting(Address::toString).containsExactly("an@petcare.test");
-        assertThat(row.getStatus()).isEqualTo(OutboxStatus.SENT);
-        assertThat(row.getSentAt()).isEqualTo(NOW);
-        assertThat(row.getPayload()).doesNotContainKey("ma_otp").containsEntry("thoi_han_phut", 5);
+
+        assertThat(row.getNextAttemptAt()).isEqualTo(token);
+        assertThat(row.isClaimedBy(token)).isTrue();
+        assertThat(row.getStatus()).isEqualTo(OutboxStatus.PENDING);
+        assertThat(row.getAttempts()).isZero();
+        assertThat(row.getPayload()).containsKey("ma_otp");
+        verify(mailSender, never()).send(any(MimeMessage[].class));
     }
 
     /**
@@ -182,88 +198,205 @@ class NotificationDispatchServiceTest {
         when(templates.findTemplate("OTP_REGISTER")).thenReturn(Optional.of(new TemplateView("OTP_REGISTER", "EMAIL",
                 "Mã xác thực\r\nBcc: attacker@evil.test\nX-Injected: 1", OTP.body(), OTP.allowedVars(),
                 OTP.requiredVars())));
-        due(otpRow());
 
-        assertThat(dispatch()).isEqualTo(DispatchResult.SENT);
+        MimeMessage message = claimHigh(otpRow()).mails().get(0).message();
+        message.saveChanges();
 
-        MimeMessage message = sentMessage();
         assertThat(message.getHeader("Bcc")).isNull();
         assertThat(message.getHeader("X-Injected")).isNull();
         assertThat(message.getAllRecipients()).extracting(Address::toString).containsExactly("an@petcare.test");
         assertThat(message.getHeader("Subject")).hasSize(1);
     }
 
+    /** Lô NORMAL: mỗi dòng một thư theo đúng thứ tự, cùng một vé; dòng dựng lỗi vĩnh viễn FAILED ngay, không gửi. */
     @Test
-    void firstAttemptRecordsQueueLatency() {
-        due(otpRow());
+    void batchClaimsComposableRowsInOrderAndFailsBrokenOnes() throws Exception {
+        NotificationOutbox first = noticeRow(1, "a@petcare.test");
+        NotificationOutbox noEmail = noticeRow(2, null);
+        NotificationOutbox third = noticeRow(3, "c@petcare.test");
 
-        dispatch();
+        Claim claim = claimBatch(first, noEmail, third);
 
-        assertThat(meters.get("notification.outbox.queue.latency").tag("lane", "HIGH").timer().totalTime(
-                java.util.concurrent.TimeUnit.SECONDS)).isEqualTo(4.0);
+        assertThat(claim.locked()).isEqualTo(3);
+        assertThat(claim.failed()).isEqualTo(1);
+        assertThat(claim.retried()).isZero();
+        assertThat(claim.mails()).extracting(ClaimedMail::outboxId).containsExactly(1L, 3L);
+        assertThat(claim.mails()).extracting(ClaimedMail::claimToken).containsOnly(TOKEN);
+        for (ClaimedMail mail : claim.mails()) {
+            mail.message().saveChanges();
+        }
+        assertThat(claim.mails()).extracting(m -> m.message().getMessageID())
+                .containsExactly("<notification-1@petcare.local>", "<notification-3@petcare.local>");
+        assertThat(noEmail.getStatus()).isEqualTo(OutboxStatus.FAILED);
+        assertThat(List.of(first, third)).extracting(NotificationOutbox::getNextAttemptAt).containsOnly(TOKEN);
     }
 
-    // ---------------------------------------------------------------- lỗi vĩnh viễn: FAILED ngay, không gửi
+    /** Kích sau commit chỉ nhận đúng dòng HIGH của mình; dòng đã được job nhận (không còn đến hạn) thì NONE. */
+    @Test
+    void claimByIdUsesHighTemplatesAndReturnsNoneWhenTaken() {
+        when(outbox.lockDueEmailById(42L, NOW, DeliveryLane.HIGH_TEMPLATES)).thenReturn(Optional.empty());
+
+        assertThat(service.claimHighById(42L, NOW, POLICY, LEASE)).isEqualTo(Claim.NONE);
+
+        NotificationOutbox row = otpRow();
+        when(outbox.lockDueEmailById(42L, NOW, DeliveryLane.HIGH_TEMPLATES)).thenReturn(Optional.of(row));
+        assertThat(service.claimHighById(42L, NOW, POLICY, LEASE).mails()).extracting(ClaimedMail::outboxId)
+                .containsExactly(42L);
+        assertThat(row.getNextAttemptAt()).isEqualTo(TOKEN);
+    }
+
+    // ---------------------------------------------------------------- lỗi vĩnh viễn khi dựng thư: FAILED ngay
 
     @Test
-    void missingRecipientEmailFailsWithoutSending() {
-        NotificationOutbox row = due(row(null, Map.of("ma_otp", "1")));
-
-        assertPermanentFailure(row, "recipient_email");
+    void missingRecipientEmailFailsWithoutClaiming() {
+        assertPermanentFailure(row(42, "OTP_REGISTER", null, Map.of("ma_otp", "1")), "recipient_email");
     }
 
     @Test
-    void unknownTemplateFailsWithoutSending() {
+    void unknownTemplateFailsWithoutClaiming() {
         when(templates.findTemplate("OTP_REGISTER")).thenReturn(Optional.empty());
-        NotificationOutbox row = due(otpRow());
-
-        assertPermanentFailure(row, "Không có mẫu");
+        assertPermanentFailure(otpRow(), "Không có mẫu");
     }
 
     @Test
-    void templateOfOtherChannelFailsWithoutSending() {
+    void templateOfOtherChannelFailsWithoutClaiming() {
         when(templates.findTemplate("OTP_REGISTER")).thenReturn(Optional.of(
                 new TemplateView("OTP_REGISTER", "IN_APP", "s", "b", List.of(), List.of())));
-        NotificationOutbox row = due(otpRow());
-
-        assertPermanentFailure(row, "IN_APP");
+        assertPermanentFailure(otpRow(), "IN_APP");
     }
 
     @Test
-    void missingRequiredVariableFailsWithoutSending() {
-        NotificationOutbox row = due(row("an@petcare.test", Map.of("thoi_han_phut", 5)));
-
-        assertPermanentFailure(row, "ma_otp");
+    void missingRequiredVariableFailsWithoutClaiming() {
+        assertPermanentFailure(row(42, "OTP_REGISTER", "an@petcare.test", Map.of("thoi_han_phut", 5)), "ma_otp");
     }
 
     @Test
-    void malformedAddressFailsWithoutSending() {
-        NotificationOutbox row = due(row("not an email", Map.of("ma_otp", "1")));
+    void malformedAddressFailsWithoutClaiming() {
+        assertPermanentFailure(row(42, "OTP_REGISTER", "not an email", Map.of("ma_otp", "1")), "Không dựng được thư");
+    }
 
-        assertPermanentFailure(row, "Không dựng được thư");
+    private void assertPermanentFailure(NotificationOutbox row, String errorPart) {
+        Claim claim = claimHigh(row);
+
+        assertThat(claim.locked()).isEqualTo(1);
+        assertThat(claim.failed()).isEqualTo(1);
+        assertThat(claim.mails()).isEmpty();
+        assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
+        assertThat(row.getAttempts()).isEqualTo((short) 1);
+        assertThat(row.getLastError()).contains(errorPart);
+        assertThat(row.getPayload()).doesNotContainKey("ma_otp");
+    }
+
+    /** Lỗi DB khi dựng thư thoát ra để rollback cả bước nhận: không vé nào được ghi. */
+    @Test
+    void databaseErrorWhileComposingPropagates() {
+        doThrow(new DataAccessResourceFailureException("db down")).when(templates).findTemplate("IT_NOTICE");
+        NotificationOutbox row = noticeRow(1, "a@petcare.test");
+
+        assertThatThrownBy(() -> claimBatch(row)).isInstanceOf(DataAccessResourceFailureException.class);
+
+        assertThat(row.getAttempts()).isZero();
+        assertThat(row.getStatus()).isEqualTo(OutboxStatus.PENDING);
+    }
+
+    // ================================================================ bước ghi kết quả
+
+    /** Luồng IN_APP thuộc InAppNotificationDeliveryService (docs/adr/0014): gọi nhầm là lỗi lập trình. */
+    @Test
+    void inAppLaneIsRejected() {
+        assertThatThrownBy(() -> settle(DeliveryLane.IN_APP)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.backlog(DeliveryLane.IN_APP, NOW))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void sentMarksSentScrubsPayloadAndRecordsQueueLatencyOnFirstAttempt() {
+        NotificationOutbox row = otpRow();
+        row.claim(TOKEN);
+        lockedForSettle(row);
+
+        Settled settled = settle(DeliveryLane.HIGH, new Delivery(mail(row), Outcome.SENT, null));
+
+        assertThat(settled).isEqualTo(new Settled(1, 0, 0, 0));
+        assertThat(row.getStatus()).isEqualTo(OutboxStatus.SENT);
+        assertThat(row.getSentAt()).isEqualTo(LATER);
+        assertThat(row.getAttempts()).isEqualTo((short) 1);
+        assertThat(row.getPayload()).doesNotContainKey("ma_otp").containsEntry("thoi_han_phut", 5);
+        assertThat(meters.get("notification.outbox.queue.latency").tag("lane", "HIGH").timer()
+                .totalTime(TimeUnit.SECONDS)).isEqualTo(6.0);
+    }
+
+    /**
+     * Vé lệch: hạn giữ đã hết và lượt khác nhận lại dòng (vé mới), hoặc dòng đã vào trạng thái cuối. Bước ghi của lượt
+     * cũ không đổi gì, kể cả khi thư của nó đã tới máy chủ.
+     */
+    @Test
+    void staleTicketChangesNothing() {
+        NotificationOutbox reclaimed = noticeRow(1, "a@petcare.test");
+        reclaimed.claim(TOKEN.plusSeconds(600));
+        NotificationOutbox alreadySent = noticeRow(2, "b@petcare.test");
+        alreadySent.markSent(NOW);
+        when(outbox.findByIdForUpdate(3L)).thenReturn(Optional.empty());
+        lockedForSettle(reclaimed, alreadySent);
+
+        Settled settled = settle(DeliveryLane.NORMAL,
+                new Delivery(mail(reclaimed), Outcome.SENT, null),
+                new Delivery(new ClaimedMail(2L, TOKEN, NOW, true, null), Outcome.FAILED, new MessagingException("x")),
+                new Delivery(new ClaimedMail(3L, TOKEN, NOW, true, null), Outcome.SENT, null));
+
+        assertThat(settled).isEqualTo(new Settled(0, 0, 0, 3));
+        assertThat(reclaimed.getStatus()).isEqualTo(OutboxStatus.PENDING);
+        assertThat(reclaimed.getAttempts()).isZero();
+        assertThat(reclaimed.getNextAttemptAt()).isEqualTo(TOKEN.plusSeconds(600));
+        assertThat(alreadySent.getStatus()).isEqualTo(OutboxStatus.SENT);
+        assertThat(alreadySent.getAttempts()).isEqualTo((short) 1);
+    }
+
+    /** Khóa theo id tăng dần dù kết quả gửi đến theo thứ tự khác: hai lượt ghi không chờ chéo nhau. */
+    @Test
+    void settleLocksRowsInIdOrder() {
+        NotificationOutbox five = noticeRow(5, "e@petcare.test");
+        NotificationOutbox two = noticeRow(2, "b@petcare.test");
+        five.claim(TOKEN);
+        two.claim(TOKEN);
+        lockedForSettle(five, two);
+
+        settle(DeliveryLane.NORMAL, new Delivery(mail(five), Outcome.SENT, null),
+                new Delivery(mail(two), Outcome.SENT, null));
+
+        InOrder order = inOrder(outbox);
+        order.verify(outbox).findByIdForUpdate(2L);
+        order.verify(outbox).findByIdForUpdate(5L);
+    }
+
+    /** Thư chưa thử (lô dừng vì lỗi máy chủ): dòng về hạn cũ, không tính lần gửi. */
+    @Test
+    void notAttemptedReleasesRowToOriginalDue() {
+        NotificationOutbox row = noticeRow(1, "a@petcare.test");
+        row.claim(TOKEN);
+        lockedForSettle(row);
+
+        assertThat(settle(DeliveryLane.NORMAL, new Delivery(mail(row), Outcome.NOT_ATTEMPTED, null)))
+                .isEqualTo(new Settled(0, 0, 0, 0));
+
+        assertThat(row.getStatus()).isEqualTo(OutboxStatus.PENDING);
+        assertThat(row.getAttempts()).isZero();
+        assertThat(row.getNextAttemptAt()).isEqualTo(NOW.minusSeconds(4));
     }
 
     @Test
     void recipientRejectedByServerFails() throws Exception {
-        NotificationOutbox row = due(otpRow());
+        NotificationOutbox row = otpRow();
+        row.claim(TOKEN);
+        lockedForSettle(row);
         SendFailedException rejected = new SendFailedException("550 user unknown", null, null, null,
                 new Address[] {new InternetAddress("an@petcare.test")});
-        Map<Object, Exception> failed = new HashMap<>();
-        failed.put(new Object(), rejected);
-        doThrow(new MailSendException(failed)).when(mailSender).send(any(MimeMessage.class));
 
-        assertThat(dispatch()).isEqualTo(DispatchResult.FAILED);
+        assertThat(settle(DeliveryLane.HIGH, new Delivery(mail(row), Outcome.FAILED, rejected)))
+                .isEqualTo(new Settled(0, 0, 1, 0));
+
         assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
-        assertThat(row.getPayload()).doesNotContainKey("ma_otp");
-    }
-
-    private void assertPermanentFailure(NotificationOutbox row, String errorPart) {
-        assertThat(dispatch()).isEqualTo(DispatchResult.FAILED);
-
-        verify(mailSender, never()).send(any(MimeMessage.class));
-        assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
-        assertThat(row.getAttempts()).isEqualTo((short) 1);
-        assertThat(row.getLastError()).contains(errorPart);
+        assertThat(row.getLastError()).contains("550 user unknown");
         assertThat(row.getPayload()).doesNotContainKey("ma_otp");
     }
 
@@ -271,245 +404,59 @@ class NotificationDispatchServiceTest {
 
     @ParameterizedTest(name = "attempts={0} → lùi {1} phút")
     @CsvSource({"0, 1", "1, 2", "2, 4", "3, 8"})
-    void transientErrorBacksOffExponentially(short attemptsBefore, long minutes) {
-        NotificationOutbox row = due(otpRow());
+    void transientErrorBacksOffExponentiallyFromSettleTime(short attemptsBefore, long minutes) {
+        NotificationOutbox row = otpRow();
         ReflectionTestUtils.setField(row, "attempts", attemptsBefore);
-        doThrow(new MailSendException("451 try again later")).when(mailSender).send(any(MimeMessage.class));
+        row.claim(TOKEN);
+        lockedForSettle(row);
 
-        assertThat(dispatch()).isEqualTo(DispatchResult.RETRY);
+        assertThat(settle(DeliveryLane.HIGH, new Delivery(mail(row), Outcome.FAILED,
+                new MessagingException("451 try again later")))).isEqualTo(new Settled(0, 1, 0, 0));
 
         assertThat(row.getStatus()).isEqualTo(OutboxStatus.PENDING);
         assertThat(row.getAttempts()).isEqualTo((short) (attemptsBefore + 1));
-        assertThat(row.getNextAttemptAt()).isEqualTo(NOW.plus(Duration.ofMinutes(minutes)));
+        assertThat(row.getNextAttemptAt()).isEqualTo(LATER.plus(Duration.ofMinutes(minutes)));
         assertThat(row.getLastError()).contains("451 try again later");
         assertThat(row.getPayload()).containsKey("ma_otp");
     }
 
     @Test
     void fifthTransientFailureMarksFailedAndScrubs() {
-        NotificationOutbox row = due(otpRow());
+        NotificationOutbox row = otpRow();
         ReflectionTestUtils.setField(row, "attempts", (short) 4);
-        doThrow(new MailSendException("451 try again later")).when(mailSender).send(any(MimeMessage.class));
+        row.claim(TOKEN);
+        lockedForSettle(row);
 
-        assertThat(dispatch()).isEqualTo(DispatchResult.FAILED);
+        assertThat(settle(DeliveryLane.HIGH, new Delivery(mail(row), Outcome.FAILED,
+                new MailSendException("451 try again later")))).isEqualTo(new Settled(0, 0, 1, 0));
 
         assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
         assertThat(row.getAttempts()).isEqualTo((short) 5);
         assertThat(row.getPayload()).doesNotContainKey("ma_otp");
     }
 
-    // ---------------------------------------------------------------- lỗi mức máy chủ: dừng lượt
-
+    /** Lỗi kết nối được ghi kèm gốc lỗi để chẩn đoán; dòng lùi lịch như lỗi tạm. */
     @Test
-    void connectionRefusedSchedulesRetryAndStopsRun() {
-        NotificationOutbox row = due(otpRow());
-        doThrow(new MailSendException("Mail server connection failed",
-                new MessagingException("connect", new ConnectException("Connection refused"))))
-                .when(mailSender).send(any(MimeMessage.class));
+    void connectionFailureIsRetriedWithRootCauseInLastError() {
+        NotificationOutbox row = otpRow();
+        row.claim(TOKEN);
+        lockedForSettle(row);
 
-        assertThat(dispatch()).isEqualTo(DispatchResult.STOP_RUN);
+        settle(DeliveryLane.HIGH, new Delivery(mail(row), Outcome.FAILED,
+                new MessagingException("connect", new ConnectException("Connection refused"))));
 
         assertThat(row.getStatus()).isEqualTo(OutboxStatus.PENDING);
-        assertThat(row.getNextAttemptAt()).isEqualTo(NOW.plus(Duration.ofMinutes(1)));
+        assertThat(row.getNextAttemptAt()).isEqualTo(LATER.plus(Duration.ofMinutes(1)));
         assertThat(row.getLastError()).contains("ConnectException");
     }
 
     @Test
-    void readTimeoutInsidePerMessageFailureStopsRun() {
-        NotificationOutbox row = due(otpRow());
-        Map<Object, Exception> failed = new HashMap<>();
-        failed.put(new Object(), new MessagingException("read", new SocketTimeoutException("Read timed out")));
-        doThrow(new MailSendException(failed)).when(mailSender).send(any(MimeMessage.class));
+    void databaseErrorWhileSettlingPropagates() {
+        doThrow(new DataAccessResourceFailureException("db down")).when(outbox).findByIdForUpdate(1L);
+        NotificationOutbox row = noticeRow(1, "a@petcare.test");
 
-        assertThat(dispatch()).isEqualTo(DispatchResult.STOP_RUN);
-        assertThat(row.getStatus()).isEqualTo(OutboxStatus.PENDING);
-    }
-
-    @Test
-    void authenticationFailureStopsRun() {
-        due(otpRow());
-        doThrow(new MailAuthenticationException("535 bad credentials")).when(mailSender).send(any(MimeMessage.class));
-
-        assertThat(dispatch()).isEqualTo(DispatchResult.STOP_RUN);
-    }
-
-    /** Hết lượt đúng lúc SMTP sập: vẫn FAILED, vẫn dừng lượt. */
-    @Test
-    void connectionFailureOnLastAttemptFailsAndStopsRun() {
-        NotificationOutbox row = due(otpRow());
-        ReflectionTestUtils.setField(row, "attempts", (short) 4);
-        doThrow(new MailSendException("Mail server connection failed",
-                new MessagingException("connect", new ConnectException("refused"))))
-                .when(mailSender).send(any(MimeMessage.class));
-
-        assertThat(dispatch()).isEqualTo(DispatchResult.STOP_RUN);
-        assertThat(row.getStatus()).isEqualTo(OutboxStatus.FAILED);
-    }
-
-    // ---------------------------------------------------------------- lỗi DB: thoát ra để rollback
-
-    @Test
-    void databaseErrorPropagatesAndLeavesRowUntouched() {
-        NotificationOutbox row = due(otpRow());
-        when(templates.findTemplate("OTP_REGISTER")).thenThrow(new DataAccessResourceFailureException("db down"));
-
-        assertThatThrownBy(this::dispatch).isInstanceOf(DataAccessResourceFailureException.class);
-
-        assertThat(row.getStatus()).isEqualTo(OutboxStatus.PENDING);
-        assertThat(row.getAttempts()).isZero();
-        verify(mailSender, never()).send(any(MimeMessage.class));
-    }
-
-    // ---------------------------------------------------------------- luồng NORMAL theo lô (docs/adr/0017)
-
-    private static final Duration SEND_BUDGET = Duration.ofSeconds(10);
-    private static final TemplateView NOTICE = new TemplateView("IT_NOTICE", "EMAIL", "Thông báo {so}",
-            "Nội dung {so}", List.of("so"), List.of("so"));
-
-    private static NotificationOutbox noticeRow(long id, String email) {
-        NotificationOutbox row = NotificationOutbox.pending(Channel.EMAIL, "IT_NOTICE", email, null,
-                Map.of("so", id), NOW.minusSeconds(30));
-        ReflectionTestUtils.setField(row, "id", id);
-        return row;
-    }
-
-    private List<NotificationOutbox> dueBatch(NotificationOutbox... rows) {
-        when(templates.findTemplate("IT_NOTICE")).thenReturn(Optional.of(NOTICE));
-        when(outbox.lockNextDueEmailBatchNotIn(NOW, DeliveryLane.HIGH_TEMPLATES, 20)).thenReturn(List.of(rows));
-        return List.of(rows);
-    }
-
-    private void smtpAnswers(boolean stopRun, Attempt... attempts) {
-        when(batchSender.send(anyList(), eq(SEND_BUDGET), eq(DeliveryLane.NORMAL)))
-                .thenReturn(new BatchResult(List.of(attempts), stopRun));
-    }
-
-    private BatchOutcome dispatchBatch() {
-        return service.dispatchNextBatch(NOW, POLICY, 20, SEND_BUDGET);
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<MimeMessage> batchMessages() {
-        ArgumentCaptor<List<MimeMessage>> captor = ArgumentCaptor.forClass(List.class);
-        verify(batchSender).send(captor.capture(), eq(SEND_BUDGET), eq(DeliveryLane.NORMAL));
-        return captor.getValue();
-    }
-
-    private static Attempt failedWith(Exception error) {
-        return new Attempt(Outcome.FAILED, error);
-    }
-
-    @Test
-    void batchLimitsIdleInTransactionBeforeLockingUpToBatchSize() {
-        when(outbox.lockNextDueEmailBatchNotIn(any(), anyCollection(), anyInt())).thenReturn(List.of());
-
-        assertThat(dispatchBatch()).isEqualTo(BatchOutcome.NONE);
-
-        InOrder order = inOrder(outbox);
-        order.verify(outbox).limitIdleInTransaction("60s");
-        order.verify(outbox).lockNextDueEmailBatchNotIn(NOW, DeliveryLane.HIGH_TEMPLATES, 20);
-        verify(batchSender, never()).send(anyList(), any(), any());
-    }
-
-    /**
-     * Dòng thiếu email không được gửi (FAILED ngay); các dòng khác đi chung một lô theo đúng thứ tự, mỗi thư giữ
-     * {@code Message-ID} theo id dòng; dòng chưa thử (hết ngân sách) giữ nguyên để lượt sau gửi.
-     */
-    @Test
-    void composesEachRowSendsOneBatchAndMarksRowsByOutcome() throws Exception {
-        List<NotificationOutbox> rows = dueBatch(noticeRow(1, "a@petcare.test"), noticeRow(2, null),
-                noticeRow(3, "c@petcare.test"), noticeRow(4, "d@petcare.test"));
-        smtpAnswers(false, Attempt.SENT, Attempt.SENT, Attempt.NOT_ATTEMPTED);
-
-        assertThat(dispatchBatch()).isEqualTo(new BatchOutcome(4, 2, 0, 1, false));
-
-        List<MimeMessage> messages = batchMessages();
-        assertThat(messages).hasSize(3);
-        for (MimeMessage message : messages) {
-            message.saveChanges();
-        }
-        assertThat(messages).extracting(MimeMessage::getMessageID).containsExactly(
-                "<notification-1@petcare.local>", "<notification-3@petcare.local>", "<notification-4@petcare.local>");
-        assertThat(rows).extracting(NotificationOutbox::getStatus).containsExactly(OutboxStatus.SENT,
-                OutboxStatus.FAILED, OutboxStatus.SENT, OutboxStatus.PENDING);
-        assertThat(rows.get(3).getAttempts()).as("chưa thử: không tính lần").isZero();
-        assertThat(rows.get(3).getNextAttemptAt()).isEqualTo(NOW.minusSeconds(30));
-        assertThat(meters.get("notification.outbox.queue.latency").tag("lane", "NORMAL").timer().count())
-                .isEqualTo(2);
-    }
-
-    /** Không kết nối được: chỉ dòng đầu bị tính một lần thử (như gửi từng thư), các dòng khác nguyên vẹn; dừng lượt. */
-    @Test
-    void connectionFailureChargesOnlyFirstRowAndStopsRun() {
-        List<NotificationOutbox> rows = dueBatch(noticeRow(1, "a@petcare.test"), noticeRow(2, "b@petcare.test"),
-                noticeRow(3, "c@petcare.test"));
-        smtpAnswers(true, failedWith(new MessagingException("connect", new ConnectException("refused"))),
-                Attempt.NOT_ATTEMPTED, Attempt.NOT_ATTEMPTED);
-
-        assertThat(dispatchBatch()).isEqualTo(new BatchOutcome(3, 0, 1, 0, true));
-
-        assertThat(rows.get(0).getStatus()).isEqualTo(OutboxStatus.PENDING);
-        assertThat(rows.get(0).getAttempts()).isEqualTo((short) 1);
-        assertThat(rows.get(0).getNextAttemptAt()).isEqualTo(NOW.plus(Duration.ofMinutes(1)));
-        assertThat(rows.subList(1, 3)).allSatisfy(row -> {
-            assertThat(row.getAttempts()).isZero();
-            assertThat(row.getNextAttemptAt()).isEqualTo(NOW.minusSeconds(30));
-        });
-    }
-
-    @Test
-    void rejectedRecipientFailsOnlyThatRow() throws Exception {
-        List<NotificationOutbox> rows = dueBatch(noticeRow(1, "a@petcare.test"), noticeRow(2, "b@petcare.test"),
-                noticeRow(3, "c@petcare.test"));
-        smtpAnswers(false, Attempt.SENT, failedWith(new SendFailedException("550 user unknown", null, null, null,
-                new Address[] {new InternetAddress("b@petcare.test")})), Attempt.SENT);
-
-        assertThat(dispatchBatch()).isEqualTo(new BatchOutcome(3, 2, 0, 1, false));
-
-        assertThat(rows).extracting(NotificationOutbox::getStatus).containsExactly(OutboxStatus.SENT,
-                OutboxStatus.FAILED, OutboxStatus.SENT);
-    }
-
-    /** Lỗi tạm của riêng một thư (4xx): dòng đó lùi lịch theo backoff, lô vẫn tiếp. */
-    @Test
-    void transientErrorOfOneMessageSchedulesRetry() {
-        List<NotificationOutbox> rows = dueBatch(noticeRow(1, "a@petcare.test"), noticeRow(2, "b@petcare.test"));
-        smtpAnswers(false, failedWith(new MessagingException("451 try again later")), Attempt.SENT);
-
-        assertThat(dispatchBatch()).isEqualTo(new BatchOutcome(2, 1, 1, 0, false));
-
-        assertThat(rows.get(0).getStatus()).isEqualTo(OutboxStatus.PENDING);
-        assertThat(rows.get(0).getAttempts()).isEqualTo((short) 1);
-        assertThat(rows.get(0).getLastError()).contains("451");
-    }
-
-    /** Timeout giữa lô ở lần thử cuối: dòng đó FAILED, các dòng sau chưa thử; lô báo dừng lượt. */
-    @Test
-    void serverErrorOnLastAttemptFailsThatRowAndKeepsTheRest() {
-        NotificationOutbox first = noticeRow(1, "a@petcare.test");
-        NotificationOutbox second = noticeRow(2, "b@petcare.test");
-        ReflectionTestUtils.setField(second, "attempts", (short) 4);
-        NotificationOutbox third = noticeRow(3, "c@petcare.test");
-        dueBatch(first, second, third);
-        smtpAnswers(true, Attempt.SENT,
-                failedWith(new MessagingException("read", new SocketTimeoutException("Read timed out"))),
-                Attempt.NOT_ATTEMPTED);
-
-        assertThat(dispatchBatch()).isEqualTo(new BatchOutcome(3, 1, 0, 1, true));
-
-        assertThat(second.getStatus()).isEqualTo(OutboxStatus.FAILED);
-        assertThat(third.getStatus()).isEqualTo(OutboxStatus.PENDING);
-        assertThat(third.getAttempts()).isZero();
-    }
-
-    @Test
-    void databaseErrorInBatchPropagatesBeforeSending() {
-        dueBatch(noticeRow(1, "a@petcare.test"));
-        when(templates.findTemplate("IT_NOTICE")).thenThrow(new DataAccessResourceFailureException("db down"));
-
-        assertThatThrownBy(this::dispatchBatch).isInstanceOf(DataAccessResourceFailureException.class);
-
-        verify(batchSender, never()).send(anyList(), any(), any());
+        assertThatThrownBy(() -> settle(DeliveryLane.NORMAL, new Delivery(mail(row), Outcome.SENT, null)))
+                .isInstanceOf(DataAccessResourceFailureException.class);
     }
 
     @Test
